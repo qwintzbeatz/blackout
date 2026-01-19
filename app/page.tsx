@@ -35,6 +35,11 @@ import {
 import { useEffect, useState, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
+import PhotoSelectionModal from '@/components/ui/PhotoSelectionModal';
+import DropPopup from '@/components/map/DropPopup';
+import { uploadImageToImgBB } from '@/lib/services/imgbb';
+import { saveDropToFirestore, loadAllDrops } from '@/lib/firebase/drops';
+import { Drop } from '@/lib/utils/types';
 
 const HIPHOP_TRACKS = [
   "https://soundcloud.com/90s-hiphopclassics/2pac-california-love",
@@ -434,9 +439,12 @@ export default function Home() {
   // User profile states
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [showProfileSetup, setShowProfileSetup] = useState(false);
+  const [loadingUserProfile, setLoadingUserProfile] = useState(false);
   const [profileUsername, setProfileUsername] = useState('');
   const [profileGender, setProfileGender] = useState<'male' | 'female' | 'other' | 'prefer-not-to-say'>('prefer-not-to-say');
   const [profileLoading, setProfileLoading] = useState(false);
+  const [profileCrewChoice, setProfileCrewChoice] = useState<'crew' | 'solo'>('crew');
+  const [profileCrewName, setProfileCrewName] = useState('');
   
   // Marker color states
   const [selectedMarkerColor, setSelectedMarkerColor] = useState('#10b981');
@@ -448,6 +456,16 @@ export default function Home() {
   
   // REP Notification state
   const [repNotification, setRepNotification] = useState<{ show: boolean, amount: number, message: string } | null>(null);
+  
+  // Drop states
+  const [drops, setDrops] = useState<Drop[]>([]);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [pendingDropPosition, setPendingDropPosition] = useState<{ lat: number; lng: number } | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  
+  // Crew states
+  const [nearbyCrewMembers, setNearbyCrewMembers] = useState<Array<{ uid: string; username: string; distance: number }>>([]);
+  const [expandedRadius, setExpandedRadius] = useState(50); // Base 50m, expands by 50m per crew member
   
   // Last marker date for streak bonus
   const [lastMarkerDate, setLastMarkerDate] = useState<string | null>(null);
@@ -645,6 +663,44 @@ export default function Home() {
     try {
       const profilePicUrl = generateAvatarUrl(user.uid, profileUsername.trim(), profileGender);
       
+      // Handle crew creation or solo choice
+      let crewId: string | null = null;
+      let crewName: string | null = null;
+      const isSolo = profileCrewChoice === 'solo';
+      
+      if (!isSolo && profileCrewName.trim()) {
+        // Create or join crew
+        const crewNameLower = profileCrewName.trim().toLowerCase();
+        const crewsRef = collection(db, 'crews');
+        const crewQuery = query(crewsRef, where('nameLower', '==', crewNameLower));
+        const crewSnapshot = await getDocs(crewQuery);
+        
+        if (crewSnapshot.empty) {
+          // Create new crew
+          const newCrewRef = doc(crewsRef);
+          crewId = newCrewRef.id;
+          await setDoc(newCrewRef, {
+            name: profileCrewName.trim(),
+            nameLower: crewNameLower,
+            members: [user.uid],
+            createdAt: Timestamp.now(),
+            createdBy: user.uid
+          });
+          crewName = profileCrewName.trim();
+        } else {
+          // Join existing crew
+          const crewDoc = crewSnapshot.docs[0];
+          crewId = crewDoc.id;
+          crewName = crewDoc.data().name;
+          const currentMembers = crewDoc.data().members || [];
+          if (!currentMembers.includes(user.uid)) {
+            await updateDoc(doc(db, 'crews', crewId), {
+              members: [...currentMembers, user.uid]
+            });
+          }
+        }
+      }
+      
       const userProfileData = {
         uid: user.uid,
         email: user.email || '',
@@ -657,7 +713,10 @@ export default function Home() {
         totalMarkers: 0,
         favoriteColor: selectedMarkerColor,
         createdAt: Timestamp.now(),
-        lastActive: Timestamp.now()
+        lastActive: Timestamp.now(),
+        crewId: crewId,
+        crewName: crewName,
+        isSolo: isSolo
       };
       
       const userRef = doc(db, 'users', user.uid);
@@ -684,7 +743,7 @@ export default function Home() {
   };
 
   // Function to load user profile
-  const loadUserProfile = async (currentUser: any) => {
+  const loadUserProfile = async (currentUser: any): Promise<boolean> => {
     try {
       const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
       if (userDoc.exists()) {
@@ -710,13 +769,21 @@ export default function Home() {
           totalMarkers: data.totalMarkers || 0,
           favoriteColor: favoriteColor,
           createdAt: data.createdAt?.toDate() || new Date(),
-          lastActive: data.lastActive?.toDate() || new Date()
+          lastActive: data.lastActive?.toDate() || new Date(),
+          crewId: data.crewId || null,
+          crewName: data.crewName || null,
+          isSolo: data.isSolo || false
         });
+        setShowProfileSetup(false);
+        return true;
       } else {
         setShowProfileSetup(true);
+        setUserProfile(null);
+        return false;
       }
     } catch (error) {
       console.error('Error loading user profile:', error);
+      return false;
     }
   };
   
@@ -806,6 +873,17 @@ export default function Home() {
     }
   }, []);
 
+  // Load drops from Firestore
+  const loadDrops = useCallback(async () => {
+    try {
+      const loadedDrops = await loadAllDrops();
+      setDrops(loadedDrops);
+      console.log(`Loaded ${loadedDrops.length} drops`);
+    } catch (error) {
+      console.error('Error loading drops:', error);
+    }
+  }, []);
+
   // Check auth state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -813,23 +891,107 @@ export default function Home() {
       setLoadingAuth(false);
       
       if (currentUser) {
-        await loadUserProfile(currentUser);
-        await loadTopPlayers();
-        
-        if (!showProfileSetup) {
-          await loadAllMarkers(); // Load ALL markers
+        setLoadingUserProfile(true);
+        try {
+          const hasProfile = await loadUserProfile(currentUser);
+          await loadTopPlayers();
+
+          if (hasProfile) {
+            await loadAllMarkers(); // Load ALL markers
+            await loadDrops(); // Load ALL drops
+          }
+        } finally {
+          setLoadingUserProfile(false);
         }
       } else {
         setUserProfile(null);
         setUserMarkers([]);
+        setDrops([]);
         setTopPlayers([]);
         setShowProfileSetup(false);
         setNextMarkerNumber(1);
+        setLoadingUserProfile(false);
       }
     });
     
     return () => unsubscribe();
   }, []);
+
+  // Load drops on component mount (for all users)
+  useEffect(() => {
+    loadDrops();
+  }, [loadDrops]);
+
+  // Detect nearby crew members and calculate expanded radius
+  useEffect(() => {
+    if (!gpsPosition || !userProfile || !user || userProfile.isSolo || !userProfile.crewId) {
+      setExpandedRadius(50);
+      setNearbyCrewMembers([]);
+      return;
+    }
+
+    const detectNearbyCrewMembers = async () => {
+      try {
+        // Get all members of the same crew
+        const crewDoc = await getDoc(doc(db, 'crews', userProfile.crewId!));
+        if (!crewDoc.exists()) {
+          setExpandedRadius(50);
+          setNearbyCrewMembers([]);
+          return;
+        }
+
+        const crewData = crewDoc.data();
+        const crewMemberIds = crewData.members || [];
+        
+        // Filter out current user
+        const otherMemberIds = crewMemberIds.filter((uid: string) => uid !== user.uid);
+        
+        if (otherMemberIds.length === 0) {
+          setExpandedRadius(50);
+          setNearbyCrewMembers([]);
+          return;
+        }
+
+        // Get positions of other crew members from topPlayers (they have position data)
+        const nearbyMembers: Array<{ uid: string; username: string; distance: number }> = [];
+        
+        topPlayers.forEach((player) => {
+          if (otherMemberIds.includes(player.uid) && player.position) {
+            const distance = calculateDistance(
+              gpsPosition[0],
+              gpsPosition[1],
+              player.position[0],
+              player.position[1]
+            );
+            
+            // If within 200m, consider them "nearby" for radius expansion
+            if (distance <= 200) {
+              nearbyMembers.push({
+                uid: player.uid,
+                username: player.username,
+                distance: Math.round(distance)
+              });
+            }
+          }
+        });
+
+        // Calculate expanded radius: base 50m + 50m per nearby crew member
+        const newRadius = 50 + (nearbyMembers.length * 50);
+        setExpandedRadius(newRadius);
+        setNearbyCrewMembers(nearbyMembers);
+      } catch (error) {
+        console.error('Error detecting nearby crew members:', error);
+        setExpandedRadius(50);
+        setNearbyCrewMembers([]);
+      }
+    };
+
+    detectNearbyCrewMembers();
+    
+    // Check every 5 seconds
+    const interval = setInterval(detectNearbyCrewMembers, 5000);
+    return () => clearInterval(interval);
+  }, [gpsPosition, userProfile, user, topPlayers]);
 
   // Set initial map center to GPS position when available
   useEffect(() => {
@@ -924,69 +1086,97 @@ export default function Home() {
     }
   };
 
-  // Handle map click to add marker
+  // Handle photo upload and drop creation
+  const handlePhotoSelected = useCallback(async (file: File) => {
+    if (!user || !userProfile || !pendingDropPosition) {
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+    try {
+      // Upload photo to ImgBB
+      const photoUrl = await uploadImageToImgBB(file);
+
+      // Create drop
+      const newDrop: Drop = {
+        lat: pendingDropPosition.lat,
+        lng: pendingDropPosition.lng,
+        photoUrl,
+        createdBy: user.uid,
+        timestamp: new Date(),
+        likes: [],
+        username: userProfile.username,
+        userProfilePic: userProfile.profilePicUrl,
+      };
+
+      // Save to Firestore
+      const dropId = await saveDropToFirestore(newDrop);
+      
+      if (dropId) {
+        // Award REP for placing a photo drop (simpler fixed REP for now)
+        const repEarned = 10;
+        const newRep = (userProfile.rep || 0) + repEarned;
+        const newRank = calculateRank(newRep);
+        const newLevel = calculateLevel(newRep);
+
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, {
+          rep: newRep,
+          rank: newRank,
+          level: newLevel,
+          lastActive: Timestamp.now()
+        });
+
+        setUserProfile(prev => prev ? {
+          ...prev,
+          rep: newRep,
+          rank: newRank,
+          level: newLevel
+        } : prev);
+
+        // Add to local state
+        setDrops(prev => [{ ...newDrop, firestoreId: dropId, id: `drop-${dropId}` }, ...prev]);
+        
+        // Close modal and reset
+        setShowPhotoModal(false);
+        setPendingDropPosition(null);
+
+        // Notify player
+        alert(`Drop placed successfully! 📸\n\n+${repEarned} REP\nNew Rank: ${newRank}`);
+      } else {
+        throw new Error('Failed to save drop');
+      }
+    } catch (error) {
+      console.error('Error creating drop:', error);
+      alert(`Failed to create drop: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  }, [user, userProfile, pendingDropPosition]);
+
+  // Handle map click to add drop (with photo)
   const handleMapClick = useCallback(async (e: any) => {
-    if (!user || !userProfile) {
+    if (!user) {
+      alert('Please sign in first!');
+      return;
+    }
+
+    if (loadingUserProfile) {
+      alert('Loading your profile—try again in a moment.');
+      return;
+    }
+
+    if (showProfileSetup || !userProfile) {
       alert('Please complete your profile first!');
       return;
     }
     
     const { lat, lng } = e.latlng;
-    const clickedPosition: [number, number] = [lat, lng];
     
-    let distanceFromCenter = null;
-    if (gpsPosition) {
-      distanceFromCenter = calculateDistance(
-        gpsPosition[0], gpsPosition[1],
-        lat, lng
-      );
-    }
-    
-    const isWithin50m = show50mRadius && gpsPosition && distanceFromCenter && distanceFromCenter <= 50;
-    
-    const defaultName: MarkerName = 'Pole';
-    const defaultDescription: MarkerDescription = 'Sticker/Slap';
-    
-    const newMarker: UserMarker = {
-      id: `user-marker-${Date.now()}`,
-      position: clickedPosition,
-      name: defaultName,
-      description: defaultDescription,
-      color: selectedMarkerColor,
-      timestamp: new Date(),
-      distanceFromCenter: distanceFromCenter || undefined,
-      userId: user.uid,
-      username: userProfile.username,
-      userProfilePic: userProfile.profilePicUrl
-    };
-    
-    setUserMarkers(prev => [...prev, newMarker]);
-    setNextMarkerNumber(prev => prev + 1);
-    
-    const firestoreId = await saveMarkerToFirestore(newMarker);
-    if (firestoreId) {
-      setUserMarkers(prev => 
-        prev.map(m => 
-          m.id === newMarker.id ? { ...m, firestoreId } : m
-        )
-      );
-    }
-    
-    const repEarned = calculateRepForMarker(distanceFromCenter || null, defaultDescription);
-    const streakBonus = calculateStreakBonus();
-    const totalRep = repEarned + streakBonus;
-    
-    let alertMessage = `New ${defaultName} marker created!\nColor: ${selectedMarkerColor}\nType: ${defaultDescription}\n\n`;
-    alertMessage += `🎉 +${totalRep} REP Earned!\n`;
-    if (streakBonus > 0) {
-      alertMessage += `🔥 +${streakBonus} Daily Streak Bonus!\n`;
-    }
-    alertMessage += isWithin50m ? '✓ This marker is within the 50m radius!' : '';
-    
-    setTimeout(() => {
-      alert(alertMessage);
-    }, 100);
-  }, [gpsPosition, show50mRadius, nextMarkerNumber, user, userProfile, selectedMarkerColor]);
+    // Store the clicked position and show photo selection modal
+    setPendingDropPosition({ lat, lng });
+    setShowPhotoModal(true);
+  }, [user, userProfile, loadingUserProfile, showProfileSetup]);
 
   const toggleTracking = () => {
     if (isTracking) {
@@ -1808,9 +1998,103 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Crew Selection */}
+            <div style={{ marginBottom: '25px' }}>
+              <div style={{ fontSize: '14px', color: '#374151', marginBottom: '10px', textAlign: 'left' }}>
+                Choose Your Path:
+              </div>
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                <label 
+                  style={{ 
+                    flex: 1,
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    padding: '12px',
+                    backgroundColor: profileCrewChoice === 'crew' ? '#e0f2fe' : '#f9fafb',
+                    borderRadius: '8px',
+                    border: `2px solid ${profileCrewChoice === 'crew' ? '#4dabf7' : '#e5e7eb'}`
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="crewChoice"
+                    value="crew"
+                    checked={profileCrewChoice === 'crew'}
+                    onChange={() => setProfileCrewChoice('crew')}
+                    style={{ marginRight: '8px' }}
+                  />
+                  <span style={{ fontSize: '13px', fontWeight: '500' }}>
+                    👥 Join/Create Crew
+                  </span>
+                </label>
+                <label 
+                  style={{ 
+                    flex: 1,
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    padding: '12px',
+                    backgroundColor: profileCrewChoice === 'solo' ? '#e0f2fe' : '#f9fafb',
+                    borderRadius: '8px',
+                    border: `2px solid ${profileCrewChoice === 'solo' ? '#4dabf7' : '#e5e7eb'}`
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="crewChoice"
+                    value="solo"
+                    checked={profileCrewChoice === 'solo'}
+                    onChange={() => setProfileCrewChoice('solo')}
+                    style={{ marginRight: '8px' }}
+                  />
+                  <span style={{ fontSize: '13px', fontWeight: '500' }}>
+                    🎯 Go Solo
+                  </span>
+                </label>
+              </div>
+              
+              {profileCrewChoice === 'crew' && (
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Enter crew name (or join existing)"
+                    value={profileCrewName}
+                    onChange={(e) => setProfileCrewName(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '12px 15px',
+                      border: '2px solid #d1d5db',
+                      borderRadius: '8px',
+                      fontSize: '14px'
+                    }}
+                    maxLength={30}
+                  />
+                  <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '5px', textAlign: 'left' }}>
+                    💡 Tip: If crew exists, you'll join it. Otherwise, a new crew is created.
+                  </div>
+                </div>
+              )}
+              
+              {profileCrewChoice === 'solo' && (
+                <div style={{ 
+                  fontSize: '12px', 
+                  color: '#6b7280', 
+                  padding: '10px',
+                  backgroundColor: '#f0f9ff',
+                  borderRadius: '8px',
+                  textAlign: 'left'
+                }}>
+                  🎯 Solo players can join a crew later from their profile.
+                </div>
+              )}
+            </div>
+
             <button
               type="submit"
-              disabled={profileLoading}
+              disabled={profileLoading || (profileCrewChoice === 'crew' && !profileCrewName.trim())}
               style={{
                 backgroundColor: '#4dabf7',
                 color: 'white',
@@ -1819,12 +2103,12 @@ export default function Home() {
                 borderRadius: '8px',
                 fontSize: '14px',
                 fontWeight: 'bold',
-                cursor: 'pointer',
+                cursor: (profileLoading || (profileCrewChoice === 'crew' && !profileCrewName.trim())) ? 'not-allowed' : 'pointer',
                 width: '100%',
-                opacity: profileLoading ? 0.7 : 1
+                opacity: (profileLoading || (profileCrewChoice === 'crew' && !profileCrewName.trim())) ? 0.7 : 1
               }}
             >
-              {profileLoading ? 'Creating Profile...' : 'Join the Crew! 🎯'}
+              {profileLoading ? 'Creating Profile...' : profileCrewChoice === 'crew' ? 'Join the Crew! 👥' : 'Go Solo! 🎯'}
             </button>
             
             <div style={{ 
@@ -2064,17 +2348,17 @@ export default function Home() {
               </Popup>
             </Marker>
 
-            {/* 50-meter radius circle */}
+            {/* Radius circle (expands with crew members) */}
             {show50mRadius && (
               <Circle
                 center={gpsPosition}
-                radius={50}
+                radius={expandedRadius}
                 pathOptions={{
-                  color: '#ef4444',
-                  fillColor: '#ef4444',
+                  color: nearbyCrewMembers.length > 0 ? '#10b981' : '#ef4444',
+                  fillColor: nearbyCrewMembers.length > 0 ? '#10b981' : '#ef4444',
                   fillOpacity: 0.1,
                   weight: 2,
-                  opacity: 0.5
+                  opacity: nearbyCrewMembers.length > 0 ? 0.7 : 0.5
                 }}
                 eventHandlers={{
                   click: (e) => {
@@ -2084,10 +2368,29 @@ export default function Home() {
               >
                 <Popup>
                   <div style={{ textAlign: 'center' }}>
-                    <strong>📏 50-Meter Radius</strong>
+                    <strong>
+                      {nearbyCrewMembers.length > 0 
+                        ? `👥 Crew Boost: ${expandedRadius}m Radius` 
+                        : `📏 ${expandedRadius}m Radius`}
+                    </strong>
+                    {nearbyCrewMembers.length > 0 && (
+                      <div style={{ fontSize: '12px', color: '#10b981', marginTop: '5px', fontWeight: 'bold' }}>
+                        {nearbyCrewMembers.length} crew member{nearbyCrewMembers.length > 1 ? 's' : ''} nearby!
+                      </div>
+                    )}
                     <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-                      Click inside this circle to place markers within 50m of your location
+                      Click inside this circle to place drops within {expandedRadius}m
                     </div>
+                    {nearbyCrewMembers.length > 0 && (
+                      <div style={{ fontSize: '11px', color: '#666', marginTop: '8px', textAlign: 'left' }}>
+                        <strong>Nearby crew:</strong>
+                        {nearbyCrewMembers.map((member, idx) => (
+                          <div key={member.uid} style={{ marginTop: '4px' }}>
+                            👤 {member.username} ({member.distance}m away)
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </Popup>
               </Circle>
@@ -2419,11 +2722,11 @@ export default function Home() {
                       
                       {marker.distanceFromCenter && gpsPosition && (
                         <div style={{ 
-                          color: marker.distanceFromCenter <= 50 ? '#10b981' : '#f59e0b',
+                          color: marker.distanceFromCenter <= expandedRadius ? '#10b981' : '#f59e0b',
                           marginTop: '5px'
                         }}>
                           Distance from you: {Math.round(marker.distanceFromCenter)}m
-                          {marker.distanceFromCenter <= 50 && ' (within 50m radius ✓)'}
+                          {marker.distanceFromCenter <= expandedRadius && ` (within ${expandedRadius}m radius ✓)`}
                         </div>
                       )}
                       
@@ -2527,6 +2830,75 @@ export default function Home() {
           })
         }
 
+        {/* Drops with photos */}
+        {drops.map((drop) => {
+          const dropIcon = typeof window !== 'undefined' ? 
+            new (require('leaflet').DivIcon)({
+              html: `
+                <div style="
+                  width: 32px;
+                  height: 32px;
+                  background-color: #ef4444;
+                  border: 3px solid white;
+                  border-radius: 50%;
+                  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  color: white;
+                  font-weight: bold;
+                  font-size: 18px;
+                  position: relative;
+                ">
+                  📸
+                  ${drop.likes && drop.likes.length > 0 ? `
+                    <div style="
+                      position: absolute;
+                      top: -5px;
+                      right: -5px;
+                      background-color: #ef4444;
+                      color: white;
+                      border-radius: 50%;
+                      width: 18px;
+                      height: 18px;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      font-size: 10px;
+                      font-weight: bold;
+                      border: 2px solid white;
+                    ">
+                      ${drop.likes.length}
+                    </div>
+                  ` : ''}
+                </div>
+              `,
+              iconSize: [32, 32],
+              iconAnchor: [16, 16],
+              popupAnchor: [0, -16]
+            }) : undefined;
+
+          return (
+            <Marker 
+              key={drop.id || drop.firestoreId}
+              position={[drop.lat, drop.lng]}
+              icon={dropIcon}
+            >
+              <DropPopup 
+                drop={drop}
+                user={user}
+                onLikeUpdate={(dropId, newLikes) => {
+                  setDrops(prev => 
+                    prev.map(d => 
+                      d.firestoreId === dropId ? { ...d, likes: newLikes } : d
+                    )
+                  );
+                }}
+              />
+            </Marker>
+          );
+        })}
+
         {/* East Auckland location markers */}
         {(!gpsPosition || !isTracking) && Object.entries(eastAucklandLocations).map(([name, info]) => (
           <Marker 
@@ -2564,6 +2936,17 @@ export default function Home() {
           </Marker>
         ))}
       </MapContainer>
+
+      {/* Photo Selection Modal */}
+      <PhotoSelectionModal
+        isOpen={showPhotoModal}
+        onClose={() => {
+          setShowPhotoModal(false);
+          setPendingDropPosition(null);
+        }}
+        onPhotoSelected={handlePhotoSelected}
+        isUploading={isUploadingPhoto}
+      />
 
       {/* ========== DUAL CONTROL PANELS ========== */}
       <div style={{
@@ -2732,6 +3115,193 @@ export default function Home() {
                 </div>
                 <div style={{ fontSize: '11px', color: '#aaa' }}>Rank</div>
               </div>
+            </div>
+
+            {/* Crew Status */}
+            <div style={{
+              background: 'rgba(255,255,255,0.06)',
+              padding: '12px',
+              borderRadius: '8px',
+              border: '1px solid #444',
+              marginBottom: '12px'
+            }}>
+              <div style={{
+                fontSize: '13px',
+                fontWeight: 'bold',
+                color: '#4dabf7',
+                marginBottom: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                {userProfile?.isSolo ? '🎯 Solo Player' : userProfile?.crewName ? `👥 ${userProfile.crewName}` : '👥 No Crew'}
+              </div>
+              
+              {nearbyCrewMembers.length > 0 && (
+                <div style={{
+                  fontSize: '11px',
+                  color: '#10b981',
+                  marginBottom: '8px',
+                  padding: '6px',
+                  background: 'rgba(16,185,129,0.1)',
+                  borderRadius: '4px'
+                }}>
+                  ✨ {nearbyCrewMembers.length} crew member{nearbyCrewMembers.length > 1 ? 's' : ''} nearby!
+                  <br />
+                  <span style={{ fontSize: '10px', color: '#aaa' }}>
+                    Radius expanded to {expandedRadius}m
+                  </span>
+                </div>
+              )}
+
+              {userProfile?.isSolo && (
+                <div style={{ marginTop: '8px' }}>
+                  <input
+                    type="text"
+                    placeholder="Enter crew name to join"
+                    id="joinCrewInput"
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #555',
+                      borderRadius: '4px',
+                      background: 'rgba(255,255,255,0.05)',
+                      color: '#e0e0e0',
+                      fontSize: '12px',
+                      marginBottom: '6px'
+                    }}
+                  />
+                  <button
+                    onClick={async () => {
+                      const input = document.getElementById('joinCrewInput') as HTMLInputElement;
+                      const crewName = input?.value.trim();
+                      if (!crewName || !user) return;
+                      
+                      try {
+                        const crewNameLower = crewName.toLowerCase();
+                        const crewsRef = collection(db, 'crews');
+                        const crewQuery = query(crewsRef, where('nameLower', '==', crewNameLower));
+                        const crewSnapshot = await getDocs(crewQuery);
+                        
+                        let crewId: string;
+                        let finalCrewName: string;
+                        
+                        if (crewSnapshot.empty) {
+                          // Create new crew
+                          const newCrewRef = doc(crewsRef);
+                          crewId = newCrewRef.id;
+                          await setDoc(newCrewRef, {
+                            name: crewName,
+                            nameLower: crewNameLower,
+                            members: [user.uid],
+                            createdAt: Timestamp.now(),
+                            createdBy: user.uid
+                          });
+                          finalCrewName = crewName;
+                        } else {
+                          // Join existing crew
+                          const crewDoc = crewSnapshot.docs[0];
+                          crewId = crewDoc.id;
+                          finalCrewName = crewDoc.data().name;
+                          const currentMembers = crewDoc.data().members || [];
+                          if (!currentMembers.includes(user.uid)) {
+                            await updateDoc(doc(db, 'crews', crewId), {
+                              members: [...currentMembers, user.uid]
+                            });
+                          }
+                        }
+                        
+                        // Update user profile
+                        const userRef = doc(db, 'users', user.uid);
+                        await updateDoc(userRef, {
+                          crewId: crewId,
+                          crewName: finalCrewName,
+                          isSolo: false
+                        });
+                        
+                        setUserProfile(prev => prev ? {
+                          ...prev,
+                          crewId: crewId,
+                          crewName: finalCrewName,
+                          isSolo: false
+                        } : null);
+                        
+                        if (input) input.value = '';
+                        alert(`Joined crew: ${finalCrewName}! 👥`);
+                      } catch (error: any) {
+                        alert(`Failed to join crew: ${error.message}`);
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      background: '#4dabf7',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    Join Crew 👥
+                  </button>
+                </div>
+              )}
+
+              {userProfile?.crewName && !userProfile?.isSolo && (
+                <button
+                  onClick={async () => {
+                    if (!user || !userProfile?.crewId) return;
+                    if (!confirm(`Leave ${userProfile.crewName}?`)) return;
+                    
+                    try {
+                      // Remove from crew
+                      const crewDoc = await getDoc(doc(db, 'crews', userProfile.crewId));
+                      if (crewDoc.exists()) {
+                        const currentMembers = crewDoc.data().members || [];
+                        const updatedMembers = currentMembers.filter((uid: string) => uid !== user.uid);
+                        await updateDoc(doc(db, 'crews', userProfile.crewId), {
+                          members: updatedMembers
+                        });
+                      }
+                      
+                      // Update user profile
+                      const userRef = doc(db, 'users', user.uid);
+                      await updateDoc(userRef, {
+                        crewId: null,
+                        crewName: null,
+                        isSolo: true
+                      });
+                      
+                      setUserProfile(prev => prev ? {
+                        ...prev,
+                        crewId: null,
+                        crewName: null,
+                        isSolo: true
+                      } : null);
+                      
+                      alert('Left crew. You are now solo. 🎯');
+                    } catch (error: any) {
+                      alert(`Failed to leave crew: ${error.message}`);
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    background: '#ef4444',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    marginTop: '8px'
+                  }}
+                >
+                  Leave Crew 🎯
+                </button>
+              )}
             </div>
 
             {/* Filter Toggle */}

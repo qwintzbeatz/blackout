@@ -36,6 +36,24 @@ export interface UserProfile {
   favoriteColor?: string;
   createdAt: Date;
   lastActive: Date;
+  // Crew fields
+  crewId?: string | null;
+  crewName?: string | null;
+  isSolo?: boolean; // true if user chose to go solo
+}
+
+// Drop interface for GPS game with photos and social interaction
+export interface Drop {
+  id?: string;
+  firestoreId?: string;
+  lat: number;
+  lng: number;
+  photoUrl: string;
+  createdBy: string; // User UID
+  timestamp: Date;
+  likes: string[]; // Array of user UIDs who liked
+  username?: string; // Optional username for display
+  userProfilePic?: string; // Optional profile pic for display
 }
 
 // Marker colors
