@@ -1,0 +1,148 @@
+<svg viewBox="0 0 600 300" xmlns="http://www.w3.org/2000/svg">
+  <!-- Main plate background -->
+  <rect width="600" height="300" fill="#000000" rx="12"/>
+  
+  <!-- Outer border -->
+  <rect x="8" y="8" width="584" height="284" fill="none" stroke="#2a2a2a" stroke-width="3" rx="10"/>
+  
+  <!-- Reflective strips effect -->
+  <rect x="20" y="20" width="560" height="260" fill="url(#plateGradient)" rx="8"/>
+  
+  <!-- Gradient definition -->
+  <defs>
+    <linearGradient id="plateGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a1a;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#0a0a0a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a1a1a;stop-opacity:1" />
+    </linearGradient>
+    
+    <filter id="emboss">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.5"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Mounting bolts -->
+  <defs>
+    <radialGradient id="boltGradient">
+      <stop offset="0%" style="stop-color:#4a4a4a;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#2a2a2a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a1a1a;stop-opacity:1" />
+    </radialGradient>
+    <radialGradient id="boltCenter">
+      <stop offset="0%" style="stop-color:#0a0a0a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a1a1a;stop-opacity:1" />
+    </radialGradient>
+  </defs>
+  
+  <!-- Top left bolt -->
+  <circle cx="50" cy="50" r="15" fill="url(#boltGradient)"/>
+  <circle cx="48" cy="48" r="14" fill="url(#boltGradient)" opacity="0.3"/>
+  <circle cx="50" cy="50" r="9" fill="url(#boltCenter)"/>
+  <line x1="50" y1="44" x2="50" y2="56" stroke="#050505" stroke-width="2" stroke-linecap="round"/>
+  <line x1="44" y1="50" x2="56" y2="50" stroke="#050505" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Top right bolt -->
+  <circle cx="550" cy="50" r="15" fill="url(#boltGradient)"/>
+  <circle cx="548" cy="48" r="14" fill="url(#boltGradient)" opacity="0.3"/>
+  <circle cx="550" cy="50" r="9" fill="url(#boltCenter)"/>
+  <line x1="550" y1="44" x2="550" y2="56" stroke="#050505" stroke-width="2" stroke-linecap="round"/>
+  <line x1="544" y1="50" x2="556" y2="50" stroke="#050505" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Bottom left bolt -->
+  <circle cx="50" cy="250" r="15" fill="url(#boltGradient)"/>
+  <circle cx="48" cy="248" r="14" fill="url(#boltGradient)" opacity="0.3"/>
+  <circle cx="50" cy="250" r="9" fill="url(#boltCenter)"/>
+  <line x1="50" y1="244" x2="50" y2="256" stroke="#050505" stroke-width="2" stroke-linecap="round"/>
+  <line x1="44" y1="250" x2="56" y2="250" stroke="#050505" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Bottom right bolt -->
+  <circle cx="550" cy="250" r="15" fill="url(#boltGradient)"/>
+  <circle cx="548" cy="248" r="14" fill="url(#boltGradient)" opacity="0.3"/>
+  <circle cx="550" cy="250" r="9" fill="url(#boltCenter)"/>
+  <line x1="550" y1="244" x2="550" y2="256" stroke="#050505" stroke-width="2" stroke-linecap="round"/>
+  <line x1="544" y1="250" x2="556" y2="250" stroke="#050505" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Shadow/offset text - multiple directions for outline effect -->
+  <text x="298" y="178" 
+        font-family="'Arial Narrow', 'Arial', 'Helvetica Narrow', sans-serif" 
+        font-size="110" 
+        font-weight="900"
+        fill="#000000"
+        text-anchor="middle"
+        letter-spacing="2"
+        font-stretch="condensed"
+        transform="scale(1, 1.6) translate(0, -50)"
+        opacity="0.8">BLAQWT</text>
+  <text x="302" y="178" 
+        font-family="'Arial Narrow', 'Arial', 'Helvetica Narrow', sans-serif" 
+        font-size="110" 
+        font-weight="900"
+        fill="#000000"
+        text-anchor="middle"
+        letter-spacing="2"
+        font-stretch="condensed"
+        transform="scale(1, 1.6) translate(0, -50)"
+        opacity="0.8">BLAQWT</text>
+  <text x="298" y="182" 
+        font-family="'Arial Narrow', 'Arial', 'Helvetica Narrow', sans-serif" 
+        font-size="110" 
+        font-weight="900"
+        fill="#000000"
+        text-anchor="middle"
+        letter-spacing="2"
+        font-stretch="condensed"
+        transform="scale(1, 1.6) translate(0, -50)"
+        opacity="0.8">BLAQWT</text>
+  <text x="302" y="182" 
+        font-family="'Arial Narrow', 'Arial', 'Helvetica Narrow', sans-serif" 
+        font-size="110" 
+        font-weight="900"
+        fill="#000000"
+        text-anchor="middle"
+        letter-spacing="2"
+        font-stretch="condensed"
+        transform="scale(1, 1.6) translate(0, -50)"
+        opacity="0.8">BLAQWT</text>
+  
+  <!-- Main text with embossed effect -->
+  <text x="300" y="180" 
+        font-family="'Arial Narrow', 'Arial', 'Helvetica Narrow', sans-serif" 
+        font-size="110" 
+        font-weight="900"
+        fill="#ffffff"
+        text-anchor="middle"
+        letter-spacing="2"
+        font-stretch="condensed"
+        transform="scale(1, 1.6) translate(0, -50)"
+        filter="url(#emboss)">BLAQWT</text>
+  
+  <!-- Shine effect on text -->
+  <text x="300" y="175" 
+        font-family="'Arial Narrow', 'Arial', 'Helvetica Narrow', sans-serif" 
+        font-size="110" 
+        font-weight="900"
+        fill="url(#textShine)"
+        text-anchor="middle"
+        letter-spacing="2"
+        font-stretch="condensed"
+        transform="scale(1, 1.6) translate(0, -50)"
+        opacity="0.15">BLAQWT</text>
+  
+  <defs>
+    <linearGradient id="textShine" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Bottom edge highlight -->
+  <line x1="100" y1="270" x2="500" y2="270" stroke="#2a2a2a" stroke-width="1" opacity="0.5"/>
+</svg>

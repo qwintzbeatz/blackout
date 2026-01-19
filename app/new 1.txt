@@ -1,0 +1,284 @@
+'use client';
+
+// Add this import at the top with your existing imports
+import { useState, useEffect, useRef } from 'react';
+
+// ... rest of your imports remain the same ...
+
+export default function Home() {
+  // ... existing states remain the same ...
+  
+  // Add these new states for audio
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(0.5); // Default volume 50%
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // ... existing code remains the same until the login/signup section ...
+
+  // ========== AUDIO PLAYER FUNCTIONS ==========
+  
+  // Initialize audio when component mounts
+  useEffect(() => {
+    // Create audio element
+    audioRef.current = new Audio('/Blackout   #Classic at Western Heights Rotovegas.mp3');
+    audioRef.current.loop = true; // Loop the audio
+    audioRef.current.volume = volume;
+    
+    // Cleanup on unmount
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+  
+  // Update volume when volume state changes
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+    }
+  }, [volume]);
+  
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play().catch(error => {
+        console.error('Error playing audio:', error);
+        // If autoplay is blocked, show a message
+        alert('Click the play button again to start the music. Some browsers require user interaction for audio playback.');
+      });
+    }
+    setIsPlaying(!isPlaying);
+  };
+  
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newVolume = parseFloat(e.target.value);
+    setVolume(newVolume);
+  };
+
+  // ... rest of your existing code until the login/signup section ...
+
+  // Login/Signup overlay - MODIFY THIS SECTION
+  if (!user) {
+    return (
+      <div style={{
+        height: '100vh',
+        width: '100vw',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'flex-end',
+        paddingBottom: '0px',
+        backgroundColor: '#f0f0f0',
+        backgroundImage: 'radial-gradient(#e5e7eb 1px, transparent 1px)',
+        backgroundSize: '20px 20px',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        {/* Animated background elements */}
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57, #ff9ff3)',
+          backgroundSize: '400% 400%',
+          animation: 'gradientBG 15s ease infinite',
+          opacity: 0.1,
+          zIndex: 1
+        }}></div>
+        
+        {/* Audio player */}
+        <div style={{
+          position: 'absolute',
+          top: 20,
+          right: 20,
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          padding: '15px',
+          borderRadius: '12px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+          zIndex: 2,
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          minWidth: '250px'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            marginBottom: '12px'
+          }}>
+            <button
+              onClick={togglePlay}
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                backgroundColor: isPlaying ? '#ef4444' : '#10b981',
+                border: 'none',
+                color: 'white',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '18px',
+                boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
+              }}
+            >
+              {isPlaying ? '⏸️' : '▶️'}
+            </button>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#374151' }}>
+                Blackout - Classic
+              </div>
+              <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                #Classic at Western Heights Rotovegas
+              </div>
+            </div>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '12px', color: '#374151' }}>🔈</span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={volume}
+              onChange={handleVolumeChange}
+              style={{
+                flex: 1,
+                height: '6px',
+                borderRadius: '3px',
+                backgroundColor: '#e5e7eb',
+                outline: 'none',
+                WebkitAppearance: 'none',
+                cursor: 'pointer'
+              }}
+            />
+            <span style={{ fontSize: '12px', color: '#374151' }}>
+              {Math.round(volume * 100)}%
+            </span>
+          </div>
+          
+          <div style={{
+            marginTop: '8px',
+            fontSize: '10px',
+            color: '#6b7280',
+            textAlign: 'center',
+            padding: '4px',
+            backgroundColor: '#f3f4f6',
+            borderRadius: '4px'
+          }}>
+            {isPlaying ? '🎵 Music playing...' : 'Click play to start the vibe'}
+          </div>
+        </div>
+
+        {/* Main login card */}
+        <div style={{
+          backgroundColor: 'white',
+          padding: '40px',
+          borderRadius: '16px',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
+          width: '100%',
+          maxWidth: '400px',
+          textAlign: 'center',
+          zIndex: 2,
+          position: 'relative',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          backdropFilter: 'blur(10px)',
+          margin: '20px'
+        }}>
+          <div style={{ marginBottom: '30px' }}>
+            {/* Enhanced License Plate SVG with music theme */}
+            <div style={{ 
+              width: '250px', 
+              height: '110px', 
+              margin: '0 auto 15px auto',
+              position: 'relative'
+            }}>
+              <svg 
+                width="250" 
+                height="110" 
+                viewBox="0 0 250 110" 
+                fill="none" 
+                xmlns="http://www.w3.org/2000/svg"
+                style={{ display: 'block' }}
+              >
+                <defs>
+                  <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style={{stopColor:'#ff6b6b', stopOpacity:1}} />
+                    <stop offset="50%" style={{stopColor:'#4ecdc4', stopOpacity:1}} />
+                    <stop offset="100%" style={{stopColor:'#45b7d1', stopOpacity:1}} />
+                  </linearGradient>
+                </defs>
+                <rect x="0" y="0" width="250" height="110" rx="15" fill="black"/>
+                <rect x="5" y="5" width="240" height="100" rx="12" fill="url(#grad1)" stroke="white" strokeWidth="2"/>
+                <rect x="15" y="15" width="220" height="25" rx="5" fill="white"/>
+                <text x="125" y="32" textAnchor="middle" fill="black" fontFamily="Arial, sans-serif" fontWeight="bold" fontSize="14">
+                  🎵 GRAFFITI GPS TRACKING 🎵
+                </text>
+                <text x="125" y="75" textAnchor="middle" fill="white" fontFamily="'Courier New', monospace" fontWeight="800" fontSize="42" letterSpacing="5">
+                  BLAQWT
+                </text>
+                {/* Music notes */}
+                <text x="50" y="98" textAnchor="middle" fill="white" fontFamily="Arial" fontSize="20">♪</text>
+                <text x="200" y="98" textAnchor="middle" fill="white" fontFamily="Arial" fontSize="20">♫</text>
+              </svg>
+            </div>
+            
+            <p style={{ 
+              color: '#6b7280', 
+              fontSize: '14px', 
+              marginTop: '10px',
+              backgroundColor: '#f3f4f6',
+              padding: '8px',
+              borderRadius: '8px'
+            }}>
+              Sign in to access the interactive graffiti GPS tracking with music vibe
+            </p>
+          </div>
+
+          {/* Rest of the login/signup forms remain the same */}
+          {/* ... existing login/signup forms code ... */}
+          
+        </div>
+        
+        {/* Add the CSS animation */}
+        <style>{`
+          @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+          }
+          
+          /* Style the volume slider */
+          input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #4dabf7;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+          }
+          
+          input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #4dabf7;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  // ... rest of your existing code ...
