@@ -389,6 +389,10 @@ interface UserProfile {
   favoriteColor?: string;
   createdAt: Date;
   lastActive: Date;
+  isSolo?: boolean;      // Add this
+  crewName?: string;    // Add this
+  crewId?: string;      // Add this
+  isLeader?: boolean;   // Add this
 }
 
 // Top Player interface
@@ -1475,18 +1479,20 @@ export default function Home() {
           backdropFilter: 'blur(20px)',
           margin: '20px'
         }}>
-          <div style={{ marginBottom: '30px' }}>
-            <img 
-              src="/BOTitle.webp" 
-              alt="Graffiti GPS Tracker" 
-              style={{
-                width: '300px',
-                height: 'auto',
-                margin: '0 auto 20px auto',
-                display: 'block',
-                filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.3))'
-              }}
-            />
+          
+          <div style={{
+            height: '30vh',
+            width: '80vw',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundImage: 'linear-gradient(rgba(15, 23, 42, 0.8), rgba(15, 23, 42, 0.9)), url(/BOBackground.jpg)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundBlendMode: 'overlay',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
             
             <p style={{ 
               color: '#cbd5e1', 

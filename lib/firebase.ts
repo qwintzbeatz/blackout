@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from "firebase/auth"; // <--- Make sure this is here
 
-import { getAuth } from 'firebase/auth';
+//import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore'; // Add this import
 import { getStorage } from 'firebase/storage';
 
