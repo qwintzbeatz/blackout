@@ -1257,8 +1257,10 @@ export default function Home() {
   const centerOnGPS = useCallback(() => {
     if (gpsPosition && mapRef.current) {
       setMapCenter(gpsPosition);
-      setZoom(15);
-      mapRef.current.setView(gpsPosition, 15);
+      setZoom(17); // Higher zoom for better location visibility
+      mapRef.current.setView(gpsPosition, 17);
+    } else {
+      alert('GPS location not available. Please enable location services.');
     }
   }, [gpsPosition]);
 
@@ -4322,16 +4324,18 @@ export default function Home() {
         zIndex: 1100,
         boxShadow: '0 -4px 20px rgba(0,0,0,0.4)'
       }}>
-        {/* Map - Hides Both Panels */}
+        {/* Map - Zooms to GPS Location */}
         <button
           onClick={() => {
+            centerOnGPS();
             setShowProfilePanel(false);
             setShowPhotosPanel(false);
+            setShowMessagesPanel(false);
           }}
           style={{
             background: 'none',
             border: 'none',
-            color: (showProfilePanel || showPhotosPanel) ? '#cbd5e1' : '#4dabf7',
+            color: '#4dabf7',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -4344,11 +4348,11 @@ export default function Home() {
         >
           <div style={{
             fontSize: '24px',
-            transform: (showProfilePanel || showPhotosPanel) ? 'scale(1)' : 'scale(1.1)'
+            transform: 'scale(1.1)'
           }}>
-            🗺️
+            📍
           </div>
-          Map
+          Location
         </button>
 
         {/* Blackbook - Toggles Left Panel Only */}
