@@ -464,6 +464,7 @@ export default function Home() {
   // Drop states
   const [drops, setDrops] = useState<Drop[]>([]);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [showDropTypeModal, setShowDropTypeModal] = useState(false);
   const [pendingDropPosition, setPendingDropPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   
@@ -484,6 +485,7 @@ export default function Home() {
   // NEW: Panel control states
   const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [showPhotosPanel, setShowPhotosPanel] = useState(false);
+  const [showMessagesPanel, setShowMessagesPanel] = useState(false);
 
   // Initialize audio
   useEffect(() => {
@@ -1158,7 +1160,68 @@ export default function Home() {
     }
   }, [user, userProfile, pendingDropPosition]);
 
-  // Handle map click to add drop (with photo)
+  // Handle marker-only drop placement
+  const handleMarkerDrop = useCallback(async () => {
+    if (!user || !userProfile || !pendingDropPosition) {
+      return;
+    }
+
+    try {
+      // Create marker drop (no photo)
+      const newDrop: Drop = {
+        lat: pendingDropPosition.lat,
+        lng: pendingDropPosition.lng,
+        createdBy: user.uid,
+        timestamp: new Date(),
+        likes: [],
+        username: userProfile.username,
+        userProfilePic: userProfile.profilePicUrl,
+      };
+
+      // Save to Firestore
+      const dropId = await saveDropToFirestore(newDrop);
+
+      if (dropId) {
+        // Award REP for placing a marker drop
+        const repEarned = 5; // Less REP than photo drops
+        const newRep = (userProfile.rep || 0) + repEarned;
+        const newRank = calculateRank(newRep);
+        const newLevel = calculateLevel(newRep);
+
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, {
+          rep: newRep,
+          level: newLevel,
+          rank: newRank,
+        });
+
+        // Update local state
+        setUserProfile(prev => prev ? { ...prev, rep: newRep, level: newLevel, rank: newRank } : null);
+
+        // Show REP notification
+        setRepNotification({ show: true, amount: repEarned, message: 'Marker placed!' });
+
+        // Reload drops
+        await loadDrops();
+      }
+
+      // Close modal and reset state
+      setShowDropTypeModal(false);
+      setPendingDropPosition(null);
+
+    } catch (error) {
+      console.error('Error creating marker drop:', error);
+      alert(`Failed to create marker drop: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, [user, userProfile, pendingDropPosition]);
+
+  // Handle photo drop selection
+  const handlePhotoDrop = useCallback(() => {
+    setShowDropTypeModal(false);
+    setShowPhotoModal(true);
+  }, []);
+
+  // Handle map click to add drop
   const handleMapClick = useCallback(async (e: any) => {
     if (!user) {
       alert('Please sign in first!');
@@ -1174,12 +1237,12 @@ export default function Home() {
       alert('Please complete your profile first!');
       return;
     }
-    
+
     const { lat, lng } = e.latlng;
-    
-    // Store the clicked position and show photo selection modal
+
+    // Store the clicked position and show drop type selection modal
     setPendingDropPosition({ lat, lng });
-    setShowPhotoModal(true);
+    setShowDropTypeModal(true);
   }, [user, userProfile, loadingUserProfile, showProfileSetup]);
 
   const toggleTracking = () => {
@@ -2943,6 +3006,166 @@ export default function Home() {
         ))}
       </MapContainer>
 
+      {/* Drop Type Selection Modal */}
+      {showDropTypeModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            backdropFilter: 'blur(4px)'
+          }}
+          onClick={() => {
+            setShowDropTypeModal(false);
+            setPendingDropPosition(null);
+          }}
+        >
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #1e293b, #0f172a)',
+              borderRadius: '20px',
+              padding: '30px',
+              maxWidth: '400px',
+              width: '90%',
+              border: '2px solid rgba(59, 130, 246, 0.3)',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
+              animation: 'popIn 0.3s ease-out'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{
+              color: '#f1f5f9',
+              fontSize: '24px',
+              fontWeight: 'bold',
+              textAlign: 'center',
+              marginBottom: '8px',
+              background: 'linear-gradient(135deg, #60a5fa, #3b82f6)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text'
+            }}>
+              🚀 Drop Type
+            </h3>
+            <p style={{
+              color: '#94a3b8',
+              textAlign: 'center',
+              marginBottom: '30px',
+              fontSize: '14px'
+            }}>
+              Choose what type of drop you want to place
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              {/* Marker Option */}
+              <button
+                onClick={handleMarkerDrop}
+                style={{
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '18px',
+                  color: 'white',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  transition: 'all 0.3s ease',
+                  boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 8px 25px rgba(16, 185, 129, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 15px rgba(16, 185, 129, 0.3)';
+                }}
+              >
+                <span style={{ fontSize: '24px' }}>📍</span>
+                <div style={{ textAlign: 'left' }}>
+                  <div>Place Marker</div>
+                  <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: 'normal' }}>
+                    Quick marker drop (+5 REP)
+                  </div>
+                </div>
+              </button>
+
+              {/* Photo Option */}
+              <button
+                onClick={handlePhotoDrop}
+                style={{
+                  background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '18px',
+                  color: 'white',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  transition: 'all 0.3s ease',
+                  boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 8px 25px rgba(139, 92, 246, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 15px rgba(139, 92, 246, 0.3)';
+                }}
+              >
+                <span style={{ fontSize: '24px' }}>📸</span>
+                <div style={{ textAlign: 'left' }}>
+                  <div>Place Photo</div>
+                  <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: 'normal' }}>
+                    Upload a photo (+10 REP)
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowDropTypeModal(false);
+                setPendingDropPosition(null);
+              }}
+              style={{
+                marginTop: '20px',
+                background: 'none',
+                border: '1px solid rgba(148, 163, 184, 0.3)',
+                borderRadius: '8px',
+                padding: '10px 20px',
+                color: '#94a3b8',
+                cursor: 'pointer',
+                width: '100%',
+                fontSize: '14px',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(148, 163, 184, 0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Photo Selection Modal */}
       <PhotoSelectionModal
         isOpen={showPhotoModal}
@@ -3863,6 +4086,223 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {/* Messages Panel */}
+        {showMessagesPanel && (
+          <div style={{
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            color: '#e0e0e0',
+            padding: '16px',
+            borderRadius: '8px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
+            width: '320px',
+            maxHeight: '80vh',
+            overflowY: 'auto',
+            border: '1px solid #333',
+            display: 'flex',
+            flexDirection: 'column',
+            animation: 'slideInRight 0.3s ease-out'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '10px',
+              paddingBottom: '10px',
+              borderBottom: '1px solid rgba(16, 185, 129, 0.3)'
+            }}>
+              <h3 style={{
+                margin: 0,
+                color: '#10b981',
+                fontSize: '18px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <span>📱</span>
+                MESSAGES
+              </h3>
+              <button
+                onClick={() => setShowMessagesPanel(false)}
+                style={{
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  color: '#10b981',
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Crew Members Section */}
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{
+                fontSize: '16px',
+                color: '#10b981',
+                fontWeight: 'bold',
+                marginBottom: '12px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <span>👥 Crew Members</span>
+                <span style={{ fontSize: '12px', color: '#aaa' }}>
+                  {nearbyCrewMembers.length}/{nearbyCrewMembers.length}
+                </span>
+              </div>
+
+              {nearbyCrewMembers.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {nearbyCrewMembers.map((member) => (
+                    <div
+                      key={member.uid}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px',
+                        background: 'rgba(16, 185, 129, 0.1)',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(16, 185, 129, 0.3)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          background: 'linear-gradient(135deg, #10b981, #059669)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '16px'
+                        }}>
+                          👤
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                            {member.username}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#aaa' }}>
+                            {member.distance}m away
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => alert(`Message ${member.username} (coming soon!)`)}
+                        style={{
+                          background: 'rgba(16, 185, 129, 0.2)',
+                          border: '1px solid #10b981',
+                          color: '#10b981',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '12px'
+                        }}
+                      >
+                        💬
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '30px 20px',
+                  background: 'rgba(255,255,255,0.03)',
+                  borderRadius: '8px',
+                  border: '1px dashed #444'
+                }}>
+                  <div style={{ fontSize: '48px', marginBottom: '10px' }}>👥</div>
+                  <div style={{ color: '#aaa', marginBottom: '15px' }}>
+                    No crew members nearby
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>
+                    Get within 200m of other writers to see them here
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Friends Section */}
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{
+                fontSize: '16px',
+                color: '#8b5cf6',
+                fontWeight: 'bold',
+                marginBottom: '12px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <span>👫 Friends</span>
+                <span style={{ fontSize: '12px', color: '#aaa' }}>0/∞</span>
+              </div>
+
+              <div style={{
+                textAlign: 'center',
+                padding: '30px 20px',
+                background: 'rgba(255,255,255,0.03)',
+                borderRadius: '8px',
+                border: '1px dashed #444'
+              }}>
+                <div style={{ fontSize: '48px', marginBottom: '10px' }}>👫</div>
+                <div style={{ color: '#aaa', marginBottom: '15px' }}>
+                  No friends added yet
+                </div>
+                <button
+                  onClick={() => alert('Friend system coming soon!')}
+                  style={{
+                    background: 'rgba(139, 92, 246, 0.2)',
+                    color: '#8b5cf6',
+                    border: '1px solid #8b5cf6',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Add Friends
+                </button>
+              </div>
+            </div>
+
+            {/* Recent Messages */}
+            <div>
+              <div style={{
+                fontSize: '16px',
+                color: '#f59e0b',
+                fontWeight: 'bold',
+                marginBottom: '12px'
+              }}>
+                💬 Recent Messages
+              </div>
+
+              <div style={{
+                textAlign: 'center',
+                padding: '20px',
+                background: 'rgba(245, 158, 11, 0.1)',
+                borderRadius: '8px',
+                border: '1px solid rgba(245, 158, 11, 0.3)'
+              }}>
+                <div style={{ fontSize: '32px', marginBottom: '10px' }}>💬</div>
+                <div style={{ color: '#aaa' }}>
+                  No messages yet
+                </div>
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                  Start chatting with crew members!
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       {/* ========== END DUAL CONTROL PANELS ========== */}
 
@@ -3989,20 +4429,21 @@ export default function Home() {
           Camera
         </button>
 
-        {/* Most Wanted - Toggles Top Players */}
+        {/* Messages - Crew & Friends */}
         <button
           onClick={() => {
-            setShowTopPlayers(!showTopPlayers);
-            // If top players is being shown, also show profile panel
-            if (!showTopPlayers) {
-              setShowProfilePanel(true);
+            setShowMessagesPanel(!showMessagesPanel);
+            // Close other panels when opening messages
+            if (!showMessagesPanel) {
+              setShowProfilePanel(false);
               setShowPhotosPanel(false);
+              setShowTopPlayers(false);
             }
           }}
           style={{
-            background: showTopPlayers ? 'rgba(251, 191, 36, 0.2)' : 'none',
-            border: showTopPlayers ? '1px solid rgba(251, 191, 36, 0.3)' : 'none',
-            color: showTopPlayers ? '#fbbf24' : '#cbd5e1',
+            background: showMessagesPanel ? 'rgba(16, 185, 129, 0.2)' : 'none',
+            border: showMessagesPanel ? '1px solid rgba(16, 185, 129, 0.3)' : 'none',
+            color: showMessagesPanel ? '#10b981' : '#cbd5e1',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -4016,11 +4457,11 @@ export default function Home() {
         >
           <div style={{
             fontSize: '24px',
-            transform: showTopPlayers ? 'scale(1.1)' : 'scale(1)'
+            transform: showMessagesPanel ? 'scale(1.1)' : 'scale(1)'
           }}>
-            {showTopPlayers ? '👑' : '🔥'}
+            📱
           </div>
-          {showTopPlayers ? 'Top 3' : 'Wanted'}
+          Messages
         </button>
       </div>
 
