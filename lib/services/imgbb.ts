@@ -7,9 +7,9 @@ import imageCompression from 'browser-image-compression';
  */
 export async function uploadImageToImgBB(file: File): Promise<string> {
   const apiKey = process.env.NEXT_PUBLIC_IMGBB_API_KEY;
-  
+
   if (!apiKey) {
-    throw new Error('ImgBB API key is not configured. Please set NEXT_PUBLIC_IMGBB_API_KEY in your .env file.');
+    throw new Error('ImgBB API key is not configured. Please set NEXT_PUBLIC_IMGBB_API_KEY in your environment variables.');
   }
 
   try {
@@ -22,7 +22,7 @@ export async function uploadImageToImgBB(file: File): Promise<string> {
     };
 
     const compressedFile = await imageCompression(file, options);
-    
+
     // Convert compressed file to base64
     const base64 = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -52,7 +52,7 @@ export async function uploadImageToImgBB(file: File): Promise<string> {
     }
 
     const data = await response.json();
-    
+
     if (!data.success || !data.data?.url) {
       throw new Error('ImgBB upload failed: Invalid response');
     }
