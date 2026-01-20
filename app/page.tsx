@@ -217,8 +217,8 @@ const useGPSTracker = () => {
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
+        timeout: 15000,
+        maximumAge: 5000  // Allow cached positions up to 5 seconds old
       }
     );
   }, []);
@@ -254,7 +254,7 @@ const useGPSTracker = () => {
           (err) => {
             console.error('GPS watch error:', err);
             let errorMessage = 'GPS tracking failed';
-            
+
             if (err && err.message) {
               errorMessage = err.message;
             } else if (err && err.code) {
@@ -263,24 +263,28 @@ const useGPSTracker = () => {
                   errorMessage = 'Location permission denied';
                   break;
                 case err.POSITION_UNAVAILABLE:
-                  errorMessage = 'Location information unavailable';
+                  errorMessage = 'Location information unavailable. Check your GPS signal.';
                   break;
                 case err.TIMEOUT:
-                  errorMessage = 'Location request timed out';
+                  errorMessage = 'Location request timed out. GPS signal may be weak.';
                   break;
                 default:
                   errorMessage = 'Unknown GPS error';
               }
             }
-            
-            setError(errorMessage);
-            stopTracking();
+
+            // Don't stop tracking on timeout - just log the error and continue
+            if (err && err.code !== err.TIMEOUT) {
+              setError(errorMessage);
+              stopTracking();
+            } else {
+              console.warn('GPS timeout, continuing to watch...');
+            }
           },
           {
             enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0,
-            distanceFilter: 1
+            timeout: 15000, // Increased timeout to 15 seconds
+            maximumAge: 5000  // Allow cached positions up to 5 seconds old
           }
         );
         
@@ -316,7 +320,7 @@ const useGPSTracker = () => {
       {
         enableHighAccuracy: true,
         timeout: 15000,
-        maximumAge: 0
+        maximumAge: 5000  // Allow cached positions up to 5 seconds old
       }
     );
   }, []);
