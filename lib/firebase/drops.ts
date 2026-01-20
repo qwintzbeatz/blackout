@@ -20,7 +20,7 @@ import { Drop } from '@/lib/utils/types';
 export const saveDropToFirestore = async (drop: {
   lat: number;
   lng: number;
-  photoUrl: string;
+  photoUrl?: string; // Optional - marker drops don't have photos
   createdBy: string;
   timestamp: Date;
   likes?: string[];
@@ -28,16 +28,20 @@ export const saveDropToFirestore = async (drop: {
   userProfilePic?: string;
 }): Promise<string | null> => {
   try {
-    const dropData = {
+    const dropData: any = {
       lat: drop.lat,
       lng: drop.lng,
-      photoUrl: drop.photoUrl,
       createdBy: drop.createdBy,
       timestamp: Timestamp.fromDate(drop.timestamp),
       likes: drop.likes || [],
       username: drop.username,
       userProfilePic: drop.userProfilePic,
     };
+
+    // Only add photoUrl if it exists (for photo drops)
+    if (drop.photoUrl) {
+      dropData.photoUrl = drop.photoUrl;
+    }
 
     const docRef = await addDoc(collection(db, 'drops'), dropData);
     return docRef.id;
@@ -68,7 +72,7 @@ export const loadAllDrops = async (): Promise<Drop[]> => {
         firestoreId: doc.id,
         lat: data.lat,
         lng: data.lng,
-        photoUrl: data.photoUrl,
+        photoUrl: data.photoUrl || undefined, // Optional field
         createdBy: data.createdBy,
         timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(),
         likes: data.likes || [],

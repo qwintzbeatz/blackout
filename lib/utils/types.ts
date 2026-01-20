@@ -48,7 +48,7 @@ export interface Drop {
   firestoreId?: string;
   lat: number;
   lng: number;
-  photoUrl: string;
+  photoUrl?: string; // Optional - marker drops don't have photos
   createdBy: string; // User UID
   timestamp: Date;
   likes: string[]; // Array of user UIDs who liked

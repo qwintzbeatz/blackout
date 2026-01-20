@@ -2906,8 +2906,8 @@ export default function Home() {
         }
 
         {/* Drops with photos */}
-        {drops.map((drop) => {
-          const dropIcon = typeof window !== 'undefined' ? 
+        {drops.filter(drop => drop.photoUrl).map((drop) => {
+          const dropIcon = typeof window !== 'undefined' ?
             new (require('leaflet').DivIcon)({
               html: `
                 <div style="
@@ -2954,17 +2954,86 @@ export default function Home() {
             }) : undefined;
 
           return (
-            <Marker 
+            <Marker
               key={drop.id || drop.firestoreId}
               position={[drop.lat, drop.lng]}
               icon={dropIcon}
             >
-              <DropPopup 
+              <DropPopup
                 drop={drop}
                 user={user}
                 onLikeUpdate={(dropId, newLikes) => {
-                  setDrops(prev => 
-                    prev.map(d => 
+                  setDrops(prev =>
+                    prev.map(d =>
+                      d.firestoreId === dropId ? { ...d, likes: newLikes } : d
+                    )
+                  );
+                }}
+              />
+            </Marker>
+          );
+        })}
+
+        {/* Marker drops (no photos) */}
+        {drops.filter(drop => !drop.photoUrl).map((drop) => {
+          const markerIcon = typeof window !== 'undefined' ?
+            new (require('leaflet').DivIcon)({
+              html: `
+                <div style="
+                  width: 28px;
+                  height: 28px;
+                  background-color: #10b981;
+                  border: 3px solid white;
+                  border-radius: 50%;
+                  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  color: white;
+                  font-weight: bold;
+                  font-size: 16px;
+                  position: relative;
+                ">
+                  📍
+                  ${drop.likes && drop.likes.length > 0 ? `
+                    <div style="
+                      position: absolute;
+                      top: -5px;
+                      right: -5px;
+                      background-color: #10b981;
+                      color: white;
+                      border-radius: 50%;
+                      width: 16px;
+                      height: 16px;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      font-size: 9px;
+                      font-weight: bold;
+                      border: 2px solid white;
+                    ">
+                      ${drop.likes.length}
+                    </div>
+                  ` : ''}
+                </div>
+              `,
+              iconSize: [28, 28],
+              iconAnchor: [14, 14],
+              popupAnchor: [0, -14]
+            }) : undefined;
+
+          return (
+            <Marker
+              key={drop.id || drop.firestoreId}
+              position={[drop.lat, drop.lng]}
+              icon={markerIcon}
+            >
+              <DropPopup
+                drop={drop}
+                user={user}
+                onLikeUpdate={(dropId, newLikes) => {
+                  setDrops(prev =>
+                    prev.map(d =>
                       d.firestoreId === dropId ? { ...d, likes: newLikes } : d
                     )
                   );
@@ -4328,10 +4397,10 @@ export default function Home() {
         zIndex: 1100,
         boxShadow: '0 -4px 20px rgba(0,0,0,0.4)'
       }}>
-        {/* Map - Zooms to GPS Location */}
+        {/* Map - Toggle Map View */}
         <button
           onClick={() => {
-            centerOnGPS();
+            // Toggle map view (user will add functionality later)
             setShowProfilePanel(false);
             setShowPhotosPanel(false);
             setShowMessagesPanel(false);
@@ -4354,18 +4423,19 @@ export default function Home() {
             fontSize: '24px',
             transform: 'scale(1.1)'
           }}>
-            📍
+            🗺️
           </div>
-          Location
+          Map
         </button>
 
-        {/* Blackbook - Toggles Left Panel Only */}
+        {/* Blackbook - Toggles Profile Panel */}
         <button
           onClick={() => {
             setShowProfilePanel(!showProfilePanel);
-            // Close photos panel if opening profile panel
-            if (!showProfilePanel && showPhotosPanel) {
+            // Close other panels when opening profile panel
+            if (!showProfilePanel) {
               setShowPhotosPanel(false);
+              setShowMessagesPanel(false);
             }
           }}
           style={{
@@ -4392,19 +4462,20 @@ export default function Home() {
           Blackbook
         </button>
 
-        {/* Camera - Toggles Right Panel Only */}
+        {/* Camera - Toggles Photos Panel */}
         <button
           onClick={() => {
             setShowPhotosPanel(!showPhotosPanel);
-            // Close profile panel if opening photos panel
-            if (!showPhotosPanel && showProfilePanel) {
+            // Close other panels when opening photos panel
+            if (!showPhotosPanel) {
               setShowProfilePanel(false);
+              setShowMessagesPanel(false);
             }
           }}
           style={{
-            background: 'none',
-            border: 'none',
-            color: '#cbd5e1',
+            background: showPhotosPanel ? 'rgba(77, 171, 247, 0.2)' : 'none',
+            border: showPhotosPanel ? '1px solid rgba(77, 171, 247, 0.3)' : 'none',
+            color: showPhotosPanel ? '#4dabf7' : '#cbd5e1',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -4412,27 +4483,15 @@ export default function Home() {
             gap: '3px',
             padding: '6px 12px',
             cursor: 'pointer',
-            transform: 'translateY(-8px)'
+            borderRadius: '8px',
+            transition: 'all 0.3s ease'
           }}
         >
           <div style={{
-            width: '56px',
-            height: '56px',
-            background: showPhotosPanel ? 
-              'linear-gradient(135deg, #4dabf7, #3b82f6)' : 
-              'linear-gradient(135deg, #6b7280, #4b5563)',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: showPhotosPanel ? 
-              '0 6px 20px rgba(59,130,246,0.5)' : 
-              '0 6px 20px rgba(0,0,0,0.3)',
-            border: '3px solid rgba(15,23,42,0.9)',
-            transition: 'all 0.3s ease',
-            transform: showPhotosPanel ? 'scale(1.05)' : 'scale(1)'
+            fontSize: '24px',
+            transform: showPhotosPanel ? 'scale(1.1)' : 'scale(1)'
           }}>
-            <span style={{ fontSize: '32px', color: 'white' }}>📸</span>
+            📸
           </div>
           Camera
         </button>
@@ -4445,7 +4504,6 @@ export default function Home() {
             if (!showMessagesPanel) {
               setShowProfilePanel(false);
               setShowPhotosPanel(false);
-              setShowTopPlayers(false);
             }
           }}
           style={{

@@ -72,40 +72,63 @@ export default function DropPopup({ drop, user, onLikeUpdate }: DropPopupProps) 
   return (
     <Popup maxWidth={400} className="drop-popup">
       <div style={{ textAlign: 'center', minWidth: '300px' }}>
-        {/* Photo */}
-        {!imageError ? (
-          <div
-            style={{
-              marginBottom: '12px',
-              borderRadius: '8px',
-              overflow: 'hidden',
-              border: '1px solid #e5e7eb',
-            }}
-          >
-            <img
-              src={drop.photoUrl}
-              alt="Drop photo"
+        {/* Photo or Marker Icon */}
+        {drop.photoUrl ? (
+          !imageError ? (
+            <div
               style={{
-                width: '100%',
-                height: 'auto',
-                display: 'block',
-                maxHeight: '400px',
-                objectFit: 'cover',
+                marginBottom: '12px',
+                borderRadius: '8px',
+                overflow: 'hidden',
+                border: '1px solid #e5e7eb',
               }}
-              onError={() => setImageError(true)}
-            />
-          </div>
+            >
+              <img
+                src={drop.photoUrl}
+                alt="Drop photo"
+                style={{
+                  width: '100%',
+                  height: 'auto',
+                  display: 'block',
+                  maxHeight: '400px',
+                  objectFit: 'cover',
+                }}
+                onError={() => setImageError(true)}
+              />
+            </div>
+          ) : (
+            <div
+              style={{
+                padding: '40px',
+                backgroundColor: '#f3f4f6',
+                borderRadius: '8px',
+                marginBottom: '12px',
+                color: '#6b7280',
+              }}
+            >
+              Failed to load image
+            </div>
+          )
         ) : (
+          // Marker drop (no photo)
           <div
             style={{
               padding: '40px',
-              backgroundColor: '#f3f4f6',
+              backgroundColor: 'linear-gradient(135deg, #10b981, #059669)',
               borderRadius: '8px',
               marginBottom: '12px',
-              color: '#6b7280',
+              color: 'white',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '12px',
             }}
           >
-            Failed to load image
+            <div style={{ fontSize: '48px' }}>📍</div>
+            <div style={{ fontSize: '18px', fontWeight: 'bold' }}>Marker Drop</div>
+            <div style={{ fontSize: '14px', opacity: 0.9 }}>
+              Quick tag placed here
+            </div>
           </div>
         )}
 
