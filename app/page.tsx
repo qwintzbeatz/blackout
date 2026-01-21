@@ -235,9 +235,6 @@ const useGPSTracker = () => {
         setGpsStatus('tracking');
         setIsLoading(false);
 
-        // Save last known position for offline mode
-        setLastKnownPosition([pos.coords.latitude, pos.coords.longitude]);
-
         // Check if within NZ bounds
         const [lat, lng] = [pos.coords.latitude, pos.coords.longitude];
         const withinNZ = lat >= NZ_BOUNDS[0][0] && lat <= NZ_BOUNDS[1][0] &&
@@ -3404,6 +3401,10 @@ export default function Home() {
             if (gpsPosition) {
               setLastKnownPosition(gpsPosition);
               console.log('Switching to offline mode, saved position:', gpsPosition);
+              alert('Switched to offline mode! Use the joystick at bottom-right to explore.');
+            } else {
+              alert('No GPS position available. Please get GPS location first before going offline.');
+              return;
             }
             setIsOfflineMode(true);
             stopTracking(); // Stop GPS tracking
@@ -3587,13 +3588,14 @@ export default function Home() {
 
               // Move map based on joystick position
               if (lastKnownPosition && mapRef.current) {
-                const moveSpeed = 0.00001;
+                const moveSpeed = 0.001; // Increased movement speed for better responsiveness
                 const newLat = lastKnownPosition[0] + (joystickPosition.y * moveSpeed);
                 const newLng = lastKnownPosition[1] + (joystickPosition.x * moveSpeed);
 
                 const clampedLat = Math.max(NZ_BOUNDS[0][0], Math.min(NZ_BOUNDS[1][0], newLat));
                 const clampedLng = Math.max(NZ_BOUNDS[0][1], Math.min(NZ_BOUNDS[1][1], newLng));
 
+                console.log('Touch joystick move:', { x: joystickPosition.x, y: joystickPosition.y, newLat, newLng, clampedLat, clampedLng });
                 setLastKnownPosition([clampedLat, clampedLng]);
                 mapRef.current.setView([clampedLat, clampedLng], mapRef.current.getZoom());
               }
@@ -4808,33 +4810,45 @@ export default function Home() {
         {/* GPS - Location & Tracking */}
         <button
           onClick={async () => {
-            console.log('GPS button clicked');
+            console.log('🗺️ GPS button clicked at', new Date().toLocaleTimeString());
+            alert('GPS button clicked! Check console for details.');
+
             const permissionStatus = await checkGPSPermission();
-            console.log('Current GPS permission:', permissionStatus);
+            console.log('📡 GPS permission status:', permissionStatus);
 
             if (permissionStatus === 'denied') {
               alert('GPS permission is blocked. Please enable location access in your browser settings and refresh the page.');
+              console.log('❌ GPS permission denied');
               return;
             }
 
             if (gpsPosition) {
-              console.log('GPS position exists, centering on it');
+              console.log('✅ GPS position exists, centering on it:', gpsPosition);
               centerOnGPS();
+              alert('Map centered on your location!');
             } else if (gpsStatus === 'error') {
-              console.log('GPS in error state, retrying location request');
+              console.log('🔄 GPS in error state, retrying location request');
+              alert('Retrying GPS location...');
               setError(null);
               setGpsStatus('acquiring');
               getInitialLocation();
               setTimeout(() => {
-                if (!gpsPosition) startTracking();
+                if (!gpsPosition) {
+                  console.log('🔄 Starting GPS tracking');
+                  startTracking();
+                }
               }, 500);
             } else {
-              console.log('No GPS position, requesting location');
+              console.log('📍 No GPS position, requesting location');
+              alert('Requesting your location...');
               setError(null);
               setGpsStatus('acquiring');
               getInitialLocation();
               setTimeout(() => {
-                if (!gpsPosition) startTracking();
+                if (!gpsPosition) {
+                  console.log('🔄 Starting GPS tracking');
+                  startTracking();
+                }
               }, 500);
             }
           }}
