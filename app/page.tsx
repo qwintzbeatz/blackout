@@ -235,6 +235,9 @@ const useGPSTracker = () => {
         setGpsStatus('tracking');
         setIsLoading(false);
 
+        // Save last known position for offline mode
+        setLastKnownPosition([pos.coords.latitude, pos.coords.longitude]);
+
         // Check if within NZ bounds
         const [lat, lng] = [pos.coords.latitude, pos.coords.longitude];
         const withinNZ = lat >= NZ_BOUNDS[0][0] && lat <= NZ_BOUNDS[1][0] &&
@@ -591,6 +594,12 @@ export default function Home() {
   const [userMarkers, setUserMarkers] = useState<UserMarker[]>([]);
   const [nextMarkerNumber, setNextMarkerNumber] = useState(1);
   const mapRef = useRef<any>(null);
+
+  // Offline/Online mode states
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [lastKnownPosition, setLastKnownPosition] = useState<[number, number] | null>(null);
+  const [joystickPosition, setJoystickPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const joystickRef = useRef<any>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
@@ -1398,6 +1407,11 @@ export default function Home() {
 
   // Handle map click to add drop
   const handleMapClick = useCallback(async (e: any) => {
+    if (isOfflineMode) {
+      alert('Cannot place markers in offline mode. Switch to online mode to place drops.');
+      return;
+    }
+
     if (!user) {
       alert('Please sign in first!');
       return;
@@ -1418,7 +1432,7 @@ export default function Home() {
     // Store the clicked position and show drop type selection modal
     setPendingDropPosition({ lat, lng });
     setShowDropTypeModal(true);
-  }, [user, userProfile, loadingUserProfile, showProfileSetup]);
+  }, [user, userProfile, loadingUserProfile, showProfileSetup, isOfflineMode]);
 
   const toggleTracking = () => {
     if (isTracking) {
@@ -2494,7 +2508,10 @@ export default function Home() {
       </button>
 
       <MapContainer
-        center={mapCenter || NZ_CENTER}
+        center={
+          isOfflineMode && lastKnownPosition ? lastKnownPosition :
+          mapCenter || NZ_CENTER
+        }
         zoom={mapCenter ? zoom : NZ_DEFAULT_ZOOM}
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom={true}
@@ -2508,7 +2525,7 @@ export default function Home() {
           mapInstance.setMaxBounds(NZ_BOUNDS);
         }}
         eventHandlers={{
-          click: handleMapClick
+          click: isOfflineMode ? undefined : handleMapClick // Disable map clicks in offline mode
         }}
       >
         <TileLayer
@@ -2562,37 +2579,45 @@ export default function Home() {
             {/* Radius circle (expands with crew members) */}
             {show50mRadius && (
               <Circle
-                center={gpsPosition}
+                center={isOfflineMode && lastKnownPosition ? lastKnownPosition : gpsPosition}
                 radius={expandedRadius}
                 pathOptions={{
-                  color: nearbyCrewMembers.length > 0 ? '#10b981' : '#ef4444',
-                  fillColor: nearbyCrewMembers.length > 0 ? '#10b981' : '#ef4444',
+                  color: isOfflineMode ? '#ef4444' : (nearbyCrewMembers.length > 0 ? '#10b981' : '#ef4444'),
+                  fillColor: isOfflineMode ? '#ef4444' : (nearbyCrewMembers.length > 0 ? '#10b981' : '#ef4444'),
                   fillOpacity: 0.1,
                   weight: 2,
                   opacity: nearbyCrewMembers.length > 0 ? 0.7 : 0.5
                 }}
                 eventHandlers={{
-                  click: (e) => {
-                    handleMapClick(e);
-                  }
+                  click: isOfflineMode ? undefined : (e) => handleMapClick(e) // Disable in offline mode
                 }}
               >
                 <Popup>
                   <div style={{ textAlign: 'center' }}>
                     <strong>
-                      {nearbyCrewMembers.length > 0 
-                        ? `👥 Crew Boost: ${expandedRadius}m Radius` 
+                      {isOfflineMode
+                        ? `🔴 Offline Mode: ${expandedRadius}m Radius`
+                        : nearbyCrewMembers.length > 0
+                        ? `👥 Crew Boost: ${expandedRadius}m Radius`
                         : `📏 ${expandedRadius}m Radius`}
                     </strong>
-                    {nearbyCrewMembers.length > 0 && (
+                    {isOfflineMode && (
+                      <div style={{ fontSize: '12px', color: '#ef4444', marginTop: '5px', fontWeight: 'bold' }}>
+                        📍 Using last known location
+                      </div>
+                    )}
+                    {nearbyCrewMembers.length > 0 && !isOfflineMode && (
                       <div style={{ fontSize: '12px', color: '#10b981', marginTop: '5px', fontWeight: 'bold' }}>
                         {nearbyCrewMembers.length} crew member{nearbyCrewMembers.length > 1 ? 's' : ''} nearby!
                       </div>
                     )}
                     <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-                      Click inside this circle to place drops within {expandedRadius}m
+                      {isOfflineMode
+                        ? 'Use joystick to explore the map'
+                        : 'Click inside this circle to place drops within ' + expandedRadius + 'm'
+                      }
                     </div>
-                    {nearbyCrewMembers.length > 0 && (
+                    {nearbyCrewMembers.length > 0 && !isOfflineMode && (
                       <div style={{ fontSize: '11px', color: '#666', marginTop: '8px', textAlign: 'left' }}>
                         <strong>Nearby crew:</strong>
                         {nearbyCrewMembers.map((member, idx) => (
@@ -3388,6 +3413,46 @@ export default function Home() {
         isUploading={isUploadingPhoto}
       />
 
+      {/* Offline/Online Mode Toggle */}
+      <button
+        onClick={() => {
+          if (!isOfflineMode) {
+            // Switching to offline mode - save current position
+            if (gpsPosition) {
+              setLastKnownPosition(gpsPosition);
+              console.log('Switching to offline mode, saved position:', gpsPosition);
+            }
+            setIsOfflineMode(true);
+            stopTracking(); // Stop GPS tracking
+          } else {
+            // Switching to online mode - resume GPS
+            setIsOfflineMode(false);
+            setJoystickPosition({ x: 0, y: 0 }); // Reset joystick
+            if (!isTracking) {
+              startTracking(); // Resume GPS tracking
+            }
+            console.log('Switching to online mode');
+          }
+        }}
+        style={{
+          position: 'absolute',
+          top: 25,
+          left: 50,
+          backgroundColor: isOfflineMode ? '#ef4444' : '#10b981',
+          color: 'white',
+          padding: '10px 15px',
+          borderRadius: '8px',
+          border: 'none',
+          cursor: 'pointer',
+          fontWeight: 'bold',
+          zIndex: 1001,
+          transition: 'all 0.3s ease',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+        }}
+      >
+        {isOfflineMode ? 'OFFLINE' : 'ONLINE'}
+      </button>
+
       {/* Profile Stats Display - Top Right */}
       {userProfile && (
         <div style={{
@@ -3439,6 +3504,152 @@ export default function Home() {
               {userMarkers.filter(m => m.userId === user?.uid).length} drops
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Joystick for Offline Mode */}
+      {isOfflineMode && (
+        <div
+          ref={joystickRef}
+          style={{
+            position: 'absolute',
+            bottom: 120,
+            right: 20,
+            width: 100,
+            height: 100,
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            borderRadius: '50%',
+            border: '2px solid #ef4444',
+            zIndex: 1001,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'grab',
+            touchAction: 'none'
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            const rect = joystickRef.current?.getBoundingClientRect();
+            if (!rect) return;
+
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+
+            const handleMouseMove = (moveEvent: MouseEvent) => {
+              const deltaX = moveEvent.clientX - centerX;
+              const deltaY = moveEvent.clientY - centerY;
+              const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+              const maxDistance = 35; // Maximum joystick movement
+
+              if (distance > maxDistance) {
+                const angle = Math.atan2(deltaY, deltaX);
+                setJoystickPosition({
+                  x: Math.cos(angle) * maxDistance,
+                  y: Math.sin(angle) * maxDistance
+                });
+              } else {
+                setJoystickPosition({ x: deltaX, y: deltaY });
+              }
+
+              // Move map based on joystick position
+              if (lastKnownPosition && mapRef.current) {
+                const moveSpeed = 0.00001; // Adjust movement speed
+                const newLat = lastKnownPosition[0] + (joystickPosition.y * moveSpeed);
+                const newLng = lastKnownPosition[1] + (joystickPosition.x * moveSpeed);
+
+                // Keep within NZ bounds
+                const clampedLat = Math.max(NZ_BOUNDS[0][0], Math.min(NZ_BOUNDS[1][0], newLat));
+                const clampedLng = Math.max(NZ_BOUNDS[0][1], Math.min(NZ_BOUNDS[1][1], newLng));
+
+                setLastKnownPosition([clampedLat, clampedLng]);
+                mapRef.current.setView([clampedLat, clampedLng], mapRef.current.getZoom());
+              }
+            };
+
+            const handleMouseUp = () => {
+              setJoystickPosition({ x: 0, y: 0 });
+              document.removeEventListener('mousemove', handleMouseMove);
+              document.removeEventListener('mouseup', handleMouseUp);
+            };
+
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+          }}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = joystickRef.current?.getBoundingClientRect();
+            if (!rect) return;
+
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+
+            const handleTouchMove = (moveEvent: TouchEvent) => {
+              moveEvent.preventDefault();
+              const moveTouch = moveEvent.touches[0];
+              const deltaX = moveTouch.clientX - centerX;
+              const deltaY = moveTouch.clientY - centerY;
+              const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+              const maxDistance = 35;
+
+              if (distance > maxDistance) {
+                const angle = Math.atan2(deltaY, deltaX);
+                setJoystickPosition({
+                  x: Math.cos(angle) * maxDistance,
+                  y: Math.sin(angle) * maxDistance
+                });
+              } else {
+                setJoystickPosition({ x: deltaX, y: deltaY });
+              }
+
+              // Move map based on joystick position
+              if (lastKnownPosition && mapRef.current) {
+                const moveSpeed = 0.00001;
+                const newLat = lastKnownPosition[0] + (joystickPosition.y * moveSpeed);
+                const newLng = lastKnownPosition[1] + (joystickPosition.x * moveSpeed);
+
+                const clampedLat = Math.max(NZ_BOUNDS[0][0], Math.min(NZ_BOUNDS[1][0], newLat));
+                const clampedLng = Math.max(NZ_BOUNDS[0][1], Math.min(NZ_BOUNDS[1][1], newLng));
+
+                setLastKnownPosition([clampedLat, clampedLng]);
+                mapRef.current.setView([clampedLat, clampedLng], mapRef.current.getZoom());
+              }
+            };
+
+            const handleTouchEnd = () => {
+              setJoystickPosition({ x: 0, y: 0 });
+              document.removeEventListener('touchmove', handleTouchMove);
+              document.removeEventListener('touchend', handleTouchEnd);
+            };
+
+            document.addEventListener('touchmove', handleTouchMove);
+            document.addEventListener('touchend', handleTouchEnd);
+          }}
+        >
+          {/* Joystick Handle */}
+          <div
+            style={{
+              width: 30,
+              height: 30,
+              backgroundColor: '#ef4444',
+              borderRadius: '50%',
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              transform: `translate(-50%, -50%) translate(${joystickPosition.x}px, ${joystickPosition.y}px)`,
+              transition: 'none',
+              border: '2px solid white',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+            }}
+          />
+          {/* Joystick Base */}
+          <div style={{
+            width: 20,
+            height: 20,
+            backgroundColor: 'rgba(255,255,255,0.3)',
+            borderRadius: '50%',
+            position: 'absolute'
+          }} />
         </div>
       )}
 
@@ -4759,12 +4970,12 @@ export default function Home() {
         backdropFilter: 'blur(4px)',
         maxWidth: '250px'
       }}>
-        <div>📍 Your location (NZ only)</div>
+        <div>📍 Your location {isOfflineMode ? '(Offline)' : '(NZ only)'}</div>
         <div style={{color: selectedMarkerColor}}>● All drops (blue dot = yours)</div>
-        <div>🔴 50m radius</div>
-        <div>🎯 GPS accuracy</div>
-        <div style={{fontSize: '10px', color: '#60a5fa', marginTop: '4px'}}>
-          🗺️ Blackout NZ - Street art across Aotearoa
+        <div>{isOfflineMode ? '🔴' : '🔴'} 50m radius {isOfflineMode ? '(Offline Mode)' : ''}</div>
+        <div>🎯 GPS accuracy {isOfflineMode ? '(Disabled)' : ''}</div>
+        <div style={{fontSize: '10px', color: isOfflineMode ? '#ef4444' : '#60a5fa', marginTop: '4px'}}>
+          {isOfflineMode ? '🎮 Offline Mode - Explore with joystick' : '🗺️ Blackout NZ - Street art across Aotearoa'}
         </div>
         <div style={{
           marginTop: '8px',
@@ -4774,6 +4985,7 @@ export default function Home() {
                  gpsStatus === 'error' ? '#ef4444' : '#6b7280'
         }}>
           📡 GPS: {
+            isOfflineMode ? 'Offline Mode' :
             gpsStatus === 'tracking' ? 'Active' :
             gpsStatus === 'acquiring' ? 'Acquiring...' :
             gpsStatus === 'error' ? 'Error' : 'Initializing'
