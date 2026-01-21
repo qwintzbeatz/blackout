@@ -644,6 +644,7 @@ export default function Home() {
   // Top players state
   const [topPlayers, setTopPlayers] = useState<TopPlayer[]>([]);
   const [showTopPlayers, setShowTopPlayers] = useState(true);
+  const [showLegend, setShowLegend] = useState(true);
   
   // Filter toggle
   const [showOnlyMyDrops, setShowOnlyMyDrops] = useState(false);
@@ -652,6 +653,7 @@ export default function Home() {
   const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [showPhotosPanel, setShowPhotosPanel] = useState(false);
   const [showMessagesPanel, setShowMessagesPanel] = useState(false);
+  const [showMapPanel, setShowMapPanel] = useState(false);
 
   // Initialize audio
   useEffect(() => {
@@ -4652,6 +4654,243 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* Map Control Panel */}
+      {showMapPanel && (
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          backgroundColor: 'rgba(0,0,0,0.9)',
+          color: '#e0e0e0',
+          padding: '20px',
+          borderRadius: '12px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          zIndex: 1200,
+          backdropFilter: 'blur(10px)',
+          minWidth: '320px',
+          maxWidth: '90vw'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '20px',
+            borderBottom: '1px solid rgba(255,255,255,0.1)',
+            paddingBottom: '12px'
+          }}>
+            <h3 style={{ margin: 0, color: '#4dabf7', fontSize: '18px' }}>🗺️ Map Controls</h3>
+            <button
+              onClick={() => setShowMapPanel(false)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#cbd5e1',
+                cursor: 'pointer',
+                fontSize: '20px',
+                padding: '4px',
+                borderRadius: '4px'
+              }}
+            >
+              ×
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+
+            {/* Legend Toggle */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+              <button
+                onClick={() => setShowLegend(!showLegend)}
+                style={{
+                  backgroundColor: showLegend ? 'rgba(77, 171, 247, 0.2)' : 'rgba(75, 85, 99, 0.5)',
+                  border: showLegend ? '1px solid #4dabf7' : '1px solid #6b7280',
+                  color: showLegend ? '#4dabf7' : '#cbd5e1',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  width: '100%',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                📋 Legend {showLegend ? 'ON' : 'OFF'}
+              </button>
+              <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
+                Show/hide map legend
+              </span>
+            </div>
+
+            {/* 50m Radius Toggle */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+              <button
+                onClick={() => setShow50mRadius(!show50mRadius)}
+                style={{
+                  backgroundColor: show50mRadius ? 'rgba(77, 171, 247, 0.2)' : 'rgba(75, 85, 99, 0.5)',
+                  border: show50mRadius ? '1px solid #4dabf7' : '1px solid #6b7280',
+                  color: show50mRadius ? '#4dabf7' : '#cbd5e1',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  width: '100%',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                🎯 50m Radius {show50mRadius ? 'ON' : 'OFF'}
+              </button>
+              <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
+                Show/hide 50m action radius
+              </span>
+            </div>
+
+            {/* Top Players Toggle */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+              <button
+                onClick={() => setShowTopPlayers(!showTopPlayers)}
+                style={{
+                  backgroundColor: showTopPlayers ? 'rgba(77, 171, 247, 0.2)' : 'rgba(75, 85, 99, 0.5)',
+                  border: showTopPlayers ? '1px solid #4dabf7' : '1px solid #6b7280',
+                  color: showTopPlayers ? '#4dabf7' : '#cbd5e1',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  width: '100%',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                🏆 Top Players {showTopPlayers ? 'ON' : 'OFF'}
+              </button>
+              <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
+                Show/hide leaderboard markers
+              </span>
+            </div>
+
+            {/* Refresh Drops */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+              <button
+                onClick={() => {
+                  // Refresh all markers/drops
+                  loadMarkers();
+                  loadTopPlayers();
+                  console.log('Refreshing all drops and players...');
+                }}
+                style={{
+                  backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                  border: '1px solid #10b981',
+                  color: '#10b981',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  width: '100%',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                🔄 Refresh Drops
+              </button>
+              <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
+                Reload all markers & players
+              </span>
+            </div>
+
+            {/* Center on GPS */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+              <button
+                onClick={() => {
+                  if (gpsPosition) {
+                    centerMap(gpsPosition, 17);
+                  } else {
+                    alert('GPS location not available');
+                  }
+                }}
+                style={{
+                  backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                  border: '1px solid #f59e0b',
+                  color: '#f59e0b',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  width: '100%',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                📍 Center on GPS
+              </button>
+              <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
+                Zoom to your location
+              </span>
+            </div>
+
+            {/* Show All Drops */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+              <button
+                onClick={() => {
+                  // This would show all drops - maybe zoom out to show all
+                  if (userMarkers.length > 0) {
+                    // Calculate bounds of all markers and fit map to them
+                    const bounds = userMarkers.reduce((bounds, marker) => {
+                      return bounds.extend([marker.position.lat, marker.position.lng]);
+                    }, mapRef.current.getBounds());
+                    mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+                  }
+                }}
+                style={{
+                  backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                  border: '1px solid #8b5cf6',
+                  color: '#8b5cf6',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  width: '100%',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                👁️ Show All Drops
+              </button>
+              <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
+                Fit map to all markers
+              </span>
+            </div>
+
+          </div>
+
+          {/* Status Info */}
+          <div style={{
+            marginTop: '20px',
+            padding: '12px',
+            backgroundColor: 'rgba(255,255,255,0.05)',
+            borderRadius: '8px',
+            fontSize: '12px',
+            color: '#cbd5e1'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <span>Drops visible:</span>
+              <span style={{ color: '#4dabf7' }}>{userMarkers.length}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <span>Top players:</span>
+              <span style={{ color: '#f59e0b' }}>{topPlayers.length}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>GPS status:</span>
+              <span style={{
+                color: gpsStatus === 'tracking' ? '#10b981' :
+                       gpsStatus === 'acquiring' ? '#f59e0b' : '#ef4444'
+              }}>
+                {gpsStatus === 'tracking' ? 'Active' :
+                 gpsStatus === 'acquiring' ? 'Acquiring...' : 'Error'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ========== END DUAL CONTROL PANELS ========== */}
 
       {/* Bottom Navigation */}
@@ -4671,18 +4910,21 @@ export default function Home() {
         boxShadow: '0 -4px 20px rgba(0,0,0,0.4)'
       }}>
 
-        {/* Map - Toggle Map View */}
+        {/* Map - Toggle Map Control Panel */}
         <button
           onClick={() => {
-            // Toggle map view (user will add functionality later)
-            setShowProfilePanel(false);
-            setShowPhotosPanel(false);
-            setShowMessagesPanel(false);
+            setShowMapPanel(!showMapPanel);
+            // Close other panels when opening map panel
+            if (!showMapPanel) {
+              setShowProfilePanel(false);
+              setShowPhotosPanel(false);
+              setShowMessagesPanel(false);
+            }
           }}
           style={{
-            background: 'none',
-            border: 'none',
-            color: '#4dabf7',
+            background: showMapPanel ? 'rgba(77, 171, 247, 0.2)' : 'none',
+            border: showMapPanel ? '1px solid rgba(77, 171, 247, 0.3)' : 'none',
+            color: showMapPanel ? '#4dabf7' : '#cbd5e1',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -4690,12 +4932,13 @@ export default function Home() {
             gap: '3px',
             padding: '6px 12px',
             cursor: 'pointer',
+            borderRadius: '8px',
             transition: 'all 0.3s ease'
           }}
         >
           <div style={{
             fontSize: '24px',
-            transform: 'scale(1.1)'
+            transform: showMapPanel ? 'scale(1.1)' : 'scale(1)'
           }}>
             🗺️
           </div>
@@ -4806,7 +5049,8 @@ export default function Home() {
       </div>
 
       {/* Legend */}
-      <div className="legend" style={{
+      {showLegend && (
+        <div className="legend" style={{
         position: 'absolute',
         bottom: 20,
         left: 20,
@@ -4867,6 +5111,7 @@ export default function Home() {
           Total drops: {userMarkers.length}
         </div>
       </div>
+      )}
 
       <style>{`
         @keyframes popIn {
