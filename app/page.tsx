@@ -2411,78 +2411,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* User Info Button */}
-      <div style={{
-        position: 'absolute',
-        top: 20,
-        right: 20,
-        backgroundColor: 'white',
-        padding: '10px 15px',
-        borderRadius: '8px',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-        zIndex: 1001,
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        cursor: 'pointer'
-      }} onClick={() => {
-        alert(`Profile: ${userProfile?.username || 'Not set'}\nRank: ${userProfile?.rank || 'TOY'}\nREP: ${userProfile?.rep || 0}\nColor: ${selectedMarkerColor}\n\nTotal drops on map: ${userMarkers.length}\nYour drops: ${userMarkers.filter(m => m.userId === user?.uid).length}`);
-      }}>
-        <div style={{
-          width: '36px',
-          height: '36px',
-          borderRadius: '50%',
-          overflow: 'hidden',
-          backgroundColor: '#f3f4f6'
-        }}>
-          {userProfile?.profilePicUrl ? (
-            <img 
-              src={userProfile.profilePicUrl} 
-              alt={userProfile.username}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          ) : (
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              height: '100%',
-              fontSize: '16px',
-              color: '#6b7280'
-            }}>
-              {userProfile?.gender === 'male' ? '👨' : 
-               userProfile?.gender === 'female' ? '👩' : '👤'}
-            </div>
-          )}
-        </div>
-        <div style={{ fontSize: '12px', color: '#374151' }}>
-          <div style={{ fontWeight: 'bold' }}>{userProfile?.username || 'Setting up...'}</div>
-          <div style={{ 
-            fontSize: '10px', 
-            color: userProfile?.rank === 'TOY' ? '#808080' : 
-                   userProfile?.rank === 'VANDAL' ? '#FF6B6B' : '#4ECDC4'
-          }}>
-            {userProfile?.rank || 'TOY'}
-          </div>
-        </div>
-        <button
-          onClick={() => {
-            alert(`Profile:\n@${userProfile?.username || '—'}\nRank: ${userProfile?.rank || 'TOY'}\nREP: ${userProfile?.rep || 0}\nMarkers: ${userMarkers.filter(m => m.userId === user?.uid).length}\nColor: ${selectedMarkerColor}\n\nTotal drops visible: ${userMarkers.length}`);
-          }}
-          style={{
-            backgroundColor: '#4b5563',
-            color: 'white',
-            border: 'none',
-            padding: '4px 12px',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '11px',
-            marginLeft: '8px'
-          }}
-        >
-          Profile
-        </button>
-      </div>
 
 
       <MapContainer
@@ -4743,6 +4671,37 @@ export default function Home() {
         boxShadow: '0 -4px 20px rgba(0,0,0,0.4)'
       }}>
 
+        {/* Map - Toggle Map View */}
+        <button
+          onClick={() => {
+            // Toggle map view (user will add functionality later)
+            setShowProfilePanel(false);
+            setShowPhotosPanel(false);
+            setShowMessagesPanel(false);
+          }}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#4dabf7',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            fontSize: '11px',
+            gap: '3px',
+            padding: '6px 12px',
+            cursor: 'pointer',
+            transition: 'all 0.3s ease'
+          }}
+        >
+          <div style={{
+            fontSize: '24px',
+            transform: 'scale(1.1)'
+          }}>
+            🗺️
+          </div>
+          Map
+        </button>
+
         {/* Blackbook - Toggles Profile Panel */}
         <button
           onClick={() => {
@@ -4775,37 +4734,6 @@ export default function Home() {
             📓
           </div>
           Blackbook
-        </button>
-
-        {/* Map - Toggle Map View */}
-        <button
-          onClick={() => {
-            // Toggle map view (user will add functionality later)
-            setShowProfilePanel(false);
-            setShowPhotosPanel(false);
-            setShowMessagesPanel(false);
-          }}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#4dabf7',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            fontSize: '11px',
-            gap: '3px',
-            padding: '6px 12px',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease'
-          }}
-        >
-          <div style={{
-            fontSize: '24px',
-            transform: 'scale(1.1)'
-          }}>
-            🗺️
-          </div>
-          Map
         </button>
 
         {/* Camera - Toggles Photos Panel */}
