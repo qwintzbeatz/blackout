@@ -2563,11 +2563,11 @@ export default function Home() {
                 center={isOfflineMode && lastKnownPosition ? lastKnownPosition : gpsPosition}
                 radius={expandedRadius}
                 pathOptions={{
-                  color: isOfflineMode ? '#ef4444' : (nearbyCrewMembers.length > 0 ? '#10b981' : '#ef4444'),
-                  fillColor: isOfflineMode ? '#ef4444' : (nearbyCrewMembers.length > 0 ? '#10b981' : '#ef4444'),
+                  color: isOfflineMode ? '#ef4444' : '#10b981', // Green for online, red for offline
+                  fillColor: isOfflineMode ? '#ef4444' : '#10b981',
                   fillOpacity: 0.1,
                   weight: 2,
-                  opacity: nearbyCrewMembers.length > 0 ? 0.7 : 0.5
+                  opacity: 0.7
                 }}
                 eventHandlers={{
                   click: isOfflineMode ? undefined : (e) => handleMapClick(e) // Disable in offline mode
@@ -2578,18 +2578,20 @@ export default function Home() {
                     <strong>
                       {isOfflineMode
                         ? `🔴 Offline Mode: ${expandedRadius}m Radius`
-                        : nearbyCrewMembers.length > 0
-                        ? `👥 Crew Boost: ${expandedRadius}m Radius`
-                        : `📏 ${expandedRadius}m Radius`}
+                        : `🟢 Online Mode: ${expandedRadius}m Radius`}
                     </strong>
                     {isOfflineMode && (
                       <div style={{ fontSize: '12px', color: '#ef4444', marginTop: '5px', fontWeight: 'bold' }}>
                         📍 Using last known location
                       </div>
                     )}
-                    {nearbyCrewMembers.length > 0 && !isOfflineMode && (
+                    {!isOfflineMode && nearbyCrewMembers.length > 0 && (
                       <div style={{ fontSize: '12px', color: '#10b981', marginTop: '5px', fontWeight: 'bold' }}>
-                        {nearbyCrewMembers.length} crew member{nearbyCrewMembers.length > 1 ? 's' : ''} nearby!
+                        👥 {nearbyCrewMembers.length} crew member{nearbyCrewMembers.length > 1 ? 's' : ''} nearby!
+                        <br />
+                        <span style={{ fontSize: '11px', fontWeight: 'normal' }}>
+                          Radius expanded to {expandedRadius}m
+                        </span>
                       </div>
                     )}
                     <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
@@ -4953,7 +4955,7 @@ export default function Home() {
       }}>
         <div>📍 Your location {isOfflineMode ? '(Offline)' : '(NZ only)'}</div>
         <div style={{color: selectedMarkerColor}}>● All drops (blue dot = yours)</div>
-        <div>{isOfflineMode ? '🔴' : '🔴'} 50m radius {isOfflineMode ? '(Offline Mode)' : ''}</div>
+        <div>{isOfflineMode ? '🔴' : '🟢'} 50m radius {isOfflineMode ? '(Offline Mode)' : '(Online Mode)'}</div>
         <div>🎯 GPS accuracy {isOfflineMode ? '(Disabled)' : ''}</div>
         <div style={{fontSize: '10px', color: isOfflineMode ? '#ef4444' : '#60a5fa', marginTop: '4px'}}>
           {isOfflineMode ? '🎮 Offline Mode - Explore with joystick' : '🗺️ Blackout NZ - Street art across Aotearoa'}
