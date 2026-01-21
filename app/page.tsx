@@ -4777,61 +4777,18 @@ export default function Home() {
           Blackbook
         </button>
 
-        {/* GPS - Location & Tracking */}
+        {/* Map - Toggle Map View */}
         <button
-          onClick={async () => {
-            console.log('🗺️ GPS button clicked at', new Date().toLocaleTimeString());
-            alert('GPS button clicked! Check console for details.');
-
-            const permissionStatus = await checkGPSPermission();
-            console.log('📡 GPS permission status:', permissionStatus);
-
-            if (permissionStatus === 'denied') {
-              alert('GPS permission is blocked. Please enable location access in your browser settings and refresh the page.');
-              console.log('❌ GPS permission denied');
-              return;
-            }
-
-            if (gpsPosition) {
-              console.log('✅ GPS position exists, centering on it:', gpsPosition);
-              centerOnGPS();
-              alert('Map centered on your location!');
-            } else if (gpsStatus === 'error') {
-              console.log('🔄 GPS in error state, retrying location request');
-              alert('Retrying GPS location...');
-              setError(null);
-              setGpsStatus('acquiring');
-              getInitialLocation();
-              setTimeout(() => {
-                if (!gpsPosition) {
-                  console.log('🔄 Starting GPS tracking');
-                  startTracking();
-                }
-              }, 500);
-            } else {
-              console.log('📍 No GPS position, requesting location');
-              alert('Requesting your location...');
-              setError(null);
-              setGpsStatus('acquiring');
-              getInitialLocation();
-              setTimeout(() => {
-                if (!gpsPosition) {
-                  console.log('🔄 Starting GPS tracking');
-                  startTracking();
-                }
-              }, 500);
-            }
+          onClick={() => {
+            // Toggle map view (user will add functionality later)
+            setShowProfilePanel(false);
+            setShowPhotosPanel(false);
+            setShowMessagesPanel(false);
           }}
           style={{
-            background: gpsPosition ? 'rgba(16, 185, 129, 0.2)' :
-                     (gpsStatus === 'error' ? 'rgba(239, 68, 68, 0.2)' :
-                     (isTracking || gpsStatus === 'acquiring') ? 'rgba(245, 158, 11, 0.2)' : 'none'),
-            border: gpsPosition ? '1px solid rgba(16, 185, 129, 0.3)' :
-                   (gpsStatus === 'error' ? '1px solid rgba(239, 68, 68, 0.3)' :
-                   (isTracking || gpsStatus === 'acquiring') ? '1px solid rgba(245, 158, 11, 0.3)' : 'none'),
-            color: gpsPosition ? '#10b981' :
-                  (gpsStatus === 'error' ? '#ef4444' :
-                  (isTracking || gpsStatus === 'acquiring') ? '#f59e0b' : '#cbd5e1'),
+            background: 'none',
+            border: 'none',
+            color: '#4dabf7',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -4839,7 +4796,6 @@ export default function Home() {
             gap: '3px',
             padding: '6px 12px',
             cursor: 'pointer',
-            borderRadius: '8px',
             transition: 'all 0.3s ease'
           }}
         >
@@ -4847,11 +4803,9 @@ export default function Home() {
             fontSize: '24px',
             transform: 'scale(1.1)'
           }}>
-            {gpsStatus === 'error' ? '❌' :
-             gpsPosition ? '📍' :
-             (isTracking || gpsStatus === 'acquiring') ? '🔄' : '📍'}
+            🗺️
           </div>
-          GPS
+          Map
         </button>
 
         {/* Camera - Toggles Photos Panel */}
