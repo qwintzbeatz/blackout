@@ -3252,6 +3252,60 @@ export default function Home() {
         isUploading={isUploadingPhoto}
       />
 
+      {/* Profile Stats Display - Top Right */}
+      {userProfile && (
+        <div style={{
+          position: 'absolute',
+          top: 20,
+          right: 20,
+          background: 'rgba(0,0,0,0.85)',
+          color: '#e0e0e0',
+          padding: '12px',
+          borderRadius: '8px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          zIndex: 1001,
+          minWidth: '200px',
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            marginBottom: '8px'
+          }}>
+            <img
+              src={userProfile.profilePicUrl}
+              alt="Profile"
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                border: '2px solid #ff6b6b',
+                objectFit: 'cover'
+              }}
+            />
+            <div>
+              <div style={{ fontWeight: 'bold', fontSize: '14px' }}>{userProfile.username}</div>
+              <div style={{ color: '#ff6b6b', fontSize: '12px' }}>{userProfile.rank} • Lv {userProfile.level}</div>
+            </div>
+          </div>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            fontSize: '12px'
+          }}>
+            <div style={{ color: '#4dabf7' }}>
+              REP: {userProfile.rep || 0}
+            </div>
+            <div style={{ color: '#10b981' }}>
+              {userMarkers.filter(m => m.userId === user?.uid).length} drops
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ========== DUAL CONTROL PANELS ========== */}
       <div style={{
         position: 'absolute',
