@@ -167,8 +167,16 @@ const useGPSTracker = () => {
   const watchIdRef = useRef<number | null>(null);
 
   const getInitialLocation = useCallback(() => {
+    console.log('getInitialLocation called');
+    console.log('navigator.geolocation available:', !!navigator.geolocation);
+    console.log('protocol:', window.location.protocol);
+    console.log('hostname:', window.location.hostname);
+
     if (!navigator.geolocation) {
-      setError('Geolocation not supported in this browser. Please use a modern browser with GPS support.');
+      const errorMsg = 'Geolocation not supported in this browser. Please use Chrome, Firefox, Safari, or Edge.';
+      console.error(errorMsg);
+      setError(errorMsg);
+      setGpsStatus('error');
       setIsLoading(false);
       return;
     }
@@ -176,7 +184,10 @@ const useGPSTracker = () => {
     if (window.location.protocol === 'http:' &&
         window.location.hostname !== 'localhost' &&
         window.location.hostname !== '127.0.0.1') {
-      setError('GPS requires HTTPS. Use localhost for development or deploy to production.');
+      const httpsError = 'GPS requires HTTPS. For local development, use http://localhost or http://127.0.0.1. For production, the site must be served over HTTPS.';
+      console.error('HTTPS required for GPS:', httpsError);
+      setError(httpsError);
+      setGpsStatus('error');
       setIsLoading(false);
       return;
     }
@@ -383,14 +394,17 @@ const useGPSTracker = () => {
   }, [position]);
 
   useEffect(() => {
+    console.log('GPS useEffect triggered, calling getInitialLocation');
     getInitialLocation();
-    
+
     setTimeout(() => {
+      console.log('Starting GPS tracking after 1 second delay');
       startTracking();
     }, 1000);
 
     return () => {
       if (watchIdRef.current !== null) {
+        console.log('Cleaning up GPS watch');
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
     };
@@ -4524,6 +4538,43 @@ export default function Home() {
           Blackbook
         </button>
 
+        {/* GPS - Location & Tracking */}
+        <button
+          onClick={() => {
+            console.log('GPS button clicked');
+            if (gpsPosition) {
+              console.log('GPS position exists, centering on it');
+              centerOnGPS();
+            } else {
+              console.log('No GPS position, requesting location');
+              getInitialLocation();
+              setTimeout(() => startTracking(), 500);
+            }
+          }}
+          style={{
+            background: gpsPosition ? 'rgba(16, 185, 129, 0.2)' : (isTracking ? 'rgba(245, 158, 11, 0.2)' : 'none'),
+            border: gpsPosition ? '1px solid rgba(16, 185, 129, 0.3)' : (isTracking ? '1px solid rgba(245, 158, 11, 0.3)' : 'none'),
+            color: gpsPosition ? '#10b981' : (isTracking ? '#f59e0b' : '#cbd5e1'),
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            fontSize: '11px',
+            gap: '3px',
+            padding: '6px 12px',
+            cursor: 'pointer',
+            borderRadius: '8px',
+            transition: 'all 0.3s ease'
+          }}
+        >
+          <div style={{
+            fontSize: '24px',
+            transform: 'scale(1.1)'
+          }}>
+            📍
+          </div>
+          GPS
+        </button>
+
         {/* Camera - Toggles Photos Panel */}
         <button
           onClick={() => {
@@ -4623,6 +4674,22 @@ export default function Home() {
             gpsStatus === 'acquiring' ? 'Acquiring...' :
             gpsStatus === 'error' ? 'Error' : 'Initializing'
           }
+          {gpsPosition && (
+            <div style={{ fontSize: '9px', marginTop: '2px', opacity: 0.8 }}>
+              {gpsPosition[0].toFixed(4)}, {gpsPosition[1].toFixed(4)}
+            </div>
+          )}
+          {gpsError && (
+            <div style={{
+              fontSize: '9px',
+              marginTop: '2px',
+              color: '#ef4444',
+              maxWidth: '200px',
+              wordWrap: 'break-word'
+            }}>
+              {gpsError}
+            </div>
+          )}
         </div>
         {showTopPlayers && (
           <>
