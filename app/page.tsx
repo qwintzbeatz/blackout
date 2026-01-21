@@ -163,81 +163,103 @@ const useGPSTracker = () => {
   const [error, setError] = useState<string | null>(null);
   const [isTracking, setIsTracking] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [gpsStatus, setGpsStatus] = useState<'initializing' | 'acquiring' | 'tracking' | 'error'>('initializing');
   const watchIdRef = useRef<number | null>(null);
 
   const getInitialLocation = useCallback(() => {
     if (!navigator.geolocation) {
-      setError('Geolocation not supported in this browser');
+      setError('Geolocation not supported in this browser. Please use a modern browser with GPS support.');
       setIsLoading(false);
       return;
     }
 
-    if (window.location.protocol === 'http:' && 
-        window.location.hostname !== 'localhost' && 
+    if (window.location.protocol === 'http:' &&
+        window.location.hostname !== 'localhost' &&
         window.location.hostname !== '127.0.0.1') {
-      setError('GPS requires HTTPS. Use localhost or deploy to production.');
+      setError('GPS requires HTTPS. Use localhost for development or deploy to production.');
+      setIsLoading(false);
+      return;
+    }
+
+    // Check if we already have a cached position
+    if (position && accuracy) {
+      console.log('Using cached GPS position');
+      setGpsStatus('tracking');
       setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
+    setError(null); // Clear any previous errors
+    setGpsStatus('acquiring');
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        console.log('GPS position acquired:', pos.coords);
         setPosition([pos.coords.latitude, pos.coords.longitude]);
         setAccuracy(pos.coords.accuracy);
+        setError(null); // Clear any errors on success
+        setGpsStatus('tracking');
         setIsLoading(false);
       },
       (err) => {
         console.error('GPS initial error:', err);
         let errorMessage = 'Failed to get location';
-        
+
         if (err && err.message) {
           errorMessage = err.message;
         } else if (err && err.code) {
           switch(err.code) {
             case 1:
-              errorMessage = 'Location permission denied. Please enable location services.';
+              errorMessage = 'Location permission denied. Please enable location services in your browser settings and refresh the page.';
               break;
             case 2:
-              errorMessage = 'Location information unavailable. Check your GPS signal.';
+              errorMessage = 'Location information unavailable. Check your GPS signal or try moving to an open area.';
               break;
             case 3:
-              errorMessage = 'Location request timed out. Please try again.';
+              errorMessage = 'Location request timed out. GPS signal may be weak. Please try again.';
               break;
             default:
-              errorMessage = 'Unable to get your location. Please check your device settings.';
+              errorMessage = 'Unable to get your location. Please check your device settings and GPS signal.';
           }
         } else {
-          errorMessage = 'Could not access location. Please ensure location services are enabled.';
+          errorMessage = 'Could not access location. Please ensure location services are enabled and try refreshing the page.';
         }
-        
+
         setError(errorMessage);
+        setGpsStatus('error');
         setIsLoading(false);
       },
       {
         enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 5000  // Allow cached positions up to 5 seconds old
+        timeout: 20000, // Increased to 20 seconds for better GPS acquisition
+        maximumAge: 10000  // Allow cached positions up to 10 seconds old
       }
     );
-  }, []);
+  }, [position, accuracy]);
 
   const startTracking = useCallback(() => {
     if (!navigator.geolocation) {
-      setError('Geolocation not supported in this browser');
+      setError('Geolocation not supported in this browser. Please use a modern browser.');
       return;
     }
 
-    if (window.location.protocol === 'http:' && 
-        window.location.hostname !== 'localhost' && 
+    if (window.location.protocol === 'http:' &&
+        window.location.hostname !== 'localhost' &&
         window.location.hostname !== '127.0.0.1') {
-      setError('GPS requires HTTPS. Use localhost or deploy to production.');
+      setError('GPS requires HTTPS. Use localhost for development or deploy to production.');
+      return;
+    }
+
+    // Check if already tracking
+    if (isTracking && watchIdRef.current !== null) {
+      console.log('GPS tracking already active');
       return;
     }
 
     setIsTracking(true);
     setError(null);
+    setGpsStatus('acquiring');
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -246,10 +268,13 @@ const useGPSTracker = () => {
         
         const watchId = navigator.geolocation.watchPosition(
           (watchPos) => {
+            console.log('GPS watch update:', watchPos.coords);
             setPosition([watchPos.coords.latitude, watchPos.coords.longitude]);
             setAccuracy(watchPos.coords.accuracy);
             setSpeed(watchPos.coords.speed || null);
             setHeading(watchPos.coords.heading || null);
+            setError(null); // Clear any errors when position updates successfully
+            setGpsStatus('tracking');
           },
           (err) => {
             console.error('GPS watch error:', err);
@@ -260,31 +285,42 @@ const useGPSTracker = () => {
             } else if (err && err.code) {
               switch(err.code) {
                 case err.PERMISSION_DENIED:
-                  errorMessage = 'Location permission denied';
+                  errorMessage = 'Location permission denied. Please enable location services.';
                   break;
                 case err.POSITION_UNAVAILABLE:
-                  errorMessage = 'Location information unavailable. Check your GPS signal.';
+                  errorMessage = 'Location information unavailable. Check your GPS signal or try moving outdoors.';
                   break;
                 case err.TIMEOUT:
-                  errorMessage = 'Location request timed out. GPS signal may be weak.';
+                  errorMessage = 'Location request timed out. GPS signal may be weak or blocked.';
                   break;
                 default:
-                  errorMessage = 'Unknown GPS error';
+                  errorMessage = 'Unknown GPS error occurred.';
               }
             }
 
-            // Don't stop tracking on timeout - just log the error and continue
-            if (err && err.code !== err.TIMEOUT) {
+            // Only stop tracking for critical errors, not timeouts
+            if (err && err.code === err.PERMISSION_DENIED) {
               setError(errorMessage);
               stopTracking();
+            } else if (err && err.code === err.POSITION_UNAVAILABLE) {
+              setError(errorMessage);
+              // Try to restart tracking after a delay for position unavailable
+              setTimeout(() => {
+                if (isTracking) {
+                  console.log('Attempting to restart GPS tracking...');
+                  stopTracking();
+                  setTimeout(() => startTracking(), 2000);
+                }
+              }, 5000);
             } else {
-              console.warn('GPS timeout, continuing to watch...');
+              // For timeouts and other errors, just log and continue
+              console.warn('GPS watch error, continuing to monitor:', errorMessage);
             }
           },
           {
             enableHighAccuracy: true,
-            timeout: 15000, // Increased timeout to 15 seconds
-            maximumAge: 5000  // Allow cached positions up to 5 seconds old
+            timeout: 20000, // Increased to 20 seconds for better acquisition
+            maximumAge: 10000  // Allow cached positions up to 10 seconds old
           }
         );
         
@@ -311,16 +347,26 @@ const useGPSTracker = () => {
               errorMessage = 'Unable to get your location. Please check your device settings.';
           }
         } else {
-          errorMessage = 'Could not access location. Please ensure location services are enabled and try again.';
+          errorMessage = 'Could not access location. Please ensure location services are enabled and try refreshing the page.';
         }
-        
+
         setError(errorMessage);
         setIsTracking(false);
+
+        // For timeout errors, offer to retry
+        if (err && err.code === 3) {
+          setTimeout(() => {
+            if (window.confirm('GPS timed out. Would you like to try again?')) {
+              setError(null);
+              startTracking();
+            }
+          }, 1000);
+        }
       },
       {
         enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 5000  // Allow cached positions up to 5 seconds old
+        timeout: 20000, // Increased to 20 seconds for better GPS acquisition
+        maximumAge: 10000  // Allow cached positions up to 10 seconds old
       }
     );
   }, []);
@@ -333,7 +379,8 @@ const useGPSTracker = () => {
     setIsTracking(false);
     setSpeed(null);
     setHeading(null);
-  }, []);
+    setGpsStatus(position ? 'tracking' : 'error'); // Keep status if we have a position
+  }, [position]);
 
   useEffect(() => {
     getInitialLocation();
@@ -4562,6 +4609,19 @@ export default function Home() {
         <div style={{color: selectedMarkerColor}}>● All drops (blue dot = yours)</div>
         <div>🔴 50m radius</div>
         <div>🎯 GPS accuracy</div>
+        <div style={{
+          marginTop: '8px',
+          fontSize: '11px',
+          color: gpsStatus === 'tracking' ? '#10b981' :
+                 gpsStatus === 'acquiring' ? '#f59e0b' :
+                 gpsStatus === 'error' ? '#ef4444' : '#6b7280'
+        }}>
+          📡 GPS: {
+            gpsStatus === 'tracking' ? 'Active' :
+            gpsStatus === 'acquiring' ? 'Acquiring...' :
+            gpsStatus === 'error' ? 'Error' : 'Initializing'
+          }
+        </div>
         {showTopPlayers && (
           <>
             <div style={{marginTop: '8px', color: '#fbbf24'}}>🥇 Top Writer</div>
