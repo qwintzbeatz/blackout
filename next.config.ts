@@ -2,12 +2,9 @@
 const nextConfig = {
   typescript: {
     // This ignores the Leaflet and UserProfile errors you saw
-    ignoreBuildErrors: true, 
+    ignoreBuildErrors: true,
   },
-  eslint: {
-    // This ignores the linting errors
-    ignoreDuringBuilds: true,
-  },
+  // ESLint configuration moved to separate eslint.config.mjs
   // Ensure the build can finish even with some missing env vars locally
   images: {
     unoptimized: true,
