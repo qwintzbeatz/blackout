@@ -274,7 +274,14 @@ const useGPSTracker = () => {
         // For timeout errors, offer to retry
         if (err.code === 3) {
           setTimeout(() => {
-            if (window.confirm('GPS timed out. Would you like to try again?')) {
+            const retry = window.confirm(
+              'GPS request timed out. This usually means:\n\n' +
+              '• Weak GPS signal (try moving outdoors)\n' +
+              '• GPS still acquiring satellites (wait 30-60 seconds)\n' +
+              '• Device GPS is disabled\n\n' +
+              'Would you like to try again?'
+            );
+            if (retry) {
               setError(null);
               setGpsStatus('initializing');
               getInitialLocation();
@@ -426,7 +433,14 @@ const useGPSTracker = () => {
         // For timeout errors, offer to retry
         if (err && err.code === 3) {
           setTimeout(() => {
-            if (window.confirm('GPS timed out. Would you like to try again?')) {
+            const retry = window.confirm(
+              'GPS tracking timed out. This usually means:\n\n' +
+              '• Temporary loss of GPS signal\n' +
+              '• Moving between areas with poor coverage\n' +
+              '• Device entering power-saving mode\n\n' +
+              'Would you like to restart GPS tracking?'
+            );
+            if (retry) {
               setError(null);
               startTracking();
             }
@@ -4612,6 +4626,14 @@ export default function Home() {
             if (gpsPosition) {
               console.log('GPS position exists, centering on it');
               centerOnGPS();
+            } else if (gpsStatus === 'error') {
+              console.log('GPS in error state, retrying location request');
+              setError(null);
+              setGpsStatus('acquiring');
+              getInitialLocation();
+              setTimeout(() => {
+                if (!gpsPosition) startTracking();
+              }, 500);
             } else {
               console.log('No GPS position, requesting location');
               setError(null);
