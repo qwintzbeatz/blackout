@@ -583,8 +583,9 @@ export default function Home() {
   ];
   const NZ_CENTER: [number, number] = [-40.9006, 174.8860]; // Center of New Zealand
   const NZ_DEFAULT_ZOOM = 6; // Zoom level to show all of NZ
+  const GPS_DEFAULT_ZOOM = 15; // Zoom level for GPS location
 
-  const [mapCenter, setMapCenter] = useState<[number, number] | null>(NZ_CENTER);
+  const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [isClient, setIsClient] = useState(false);
   const [show50mRadius, setShow50mRadius] = useState(true);
   const [userMarkers, setUserMarkers] = useState<UserMarker[]>([]);
@@ -1169,12 +1170,14 @@ export default function Home() {
 
       if (withinNZ) {
         setMapCenter(gpsPosition);
-        setZoom(15);
+        setZoom(GPS_DEFAULT_ZOOM);
+        console.log('Map centered on GPS location within NZ');
       } else {
         // GPS outside NZ - center on NZ and show message
         setMapCenter(NZ_CENTER);
         setZoom(NZ_DEFAULT_ZOOM);
         setError('🏝️ Kia ora! Blackout is NZ-only. Your location appears to be outside Aotearoa. The map has been centered on New Zealand for the best street art experience! 🗺️');
+        console.log('GPS outside NZ bounds, centering on NZ');
       }
     }
   }, [gpsPosition, mapCenter]);
