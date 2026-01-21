@@ -77,46 +77,71 @@ export const RANK_SYSTEM = [
   { rank: 'WRITER', xpRequired: 300, color: '#4ECDC4' },
 ] as const;
 
-// East Auckland locations
-export const EAST_AUCKLAND_LOCATIONS = {
-  "Pakuranga Plaza": { 
-    coords: [-36.8874, 174.8550] as [number, number], 
-    description: "Major shopping center in East Auckland" 
+// New Zealand locations for Blackout game
+export const NEW_ZEALAND_LOCATIONS = {
+  // Auckland Region
+  "Auckland CBD": {
+    coords: [-36.8485, 174.7633] as [number, number],
+    description: "Heart of Auckland city - Sky Tower and central business district"
   },
-  "Howick Village": { 
-    coords: [-36.8944, 174.9253] as [number, number], 
-    description: "Historic village with cafes and shops" 
+  "Mission Bay": {
+    coords: [-36.8477, 174.8294] as [number, number],
+    description: "Popular beach suburb with cafes and coastal walks"
   },
-  "Botany Town Centre": { 
-    coords: [-36.9564, 174.9060] as [number, number], 
-    description: "Large shopping mall and entertainment hub" 
+  "Wellington CBD": {
+    coords: [-41.2924, 174.7787] as [number, number],
+    description: "New Zealand's capital city center with Parliament Buildings"
   },
-  "Maraetai Beach": { 
-    coords: [-36.8809, 175.0390] as [number, number], 
-    description: "Popular beach in East Auckland" 
+  "Te Papa Museum": {
+    coords: [-41.2904, 174.7822] as [number, number],
+    description: "National museum of New Zealand - Te Papa Tongarewa"
   },
-  "Musick Point": { 
-    coords: [-36.8528, 174.9233] as [number, number], 
-    description: "Historic point with golf course and views" 
+  "Christchurch CBD": {
+    coords: [-43.5321, 172.6362] as [number, number],
+    description: "Christchurch city center with Canterbury Cathedral"
   },
-  "Lloyd Elsmore Park": { 
-    coords: [-36.9152, 174.8943] as [number, number], 
-    description: "Large park with sports facilities" 
+  "Christchurch Botanic Gardens": {
+    coords: [-43.5309, 172.6166] as [number, number],
+    description: "Beautiful botanical gardens in Christchurch"
   },
-  "Highland Park": { 
-    coords: [-36.9052, 174.9045] as [number, number], 
-    description: "Suburban area with shopping center" 
+  "Dunedin CBD": {
+    coords: [-45.8742, 170.5036] as [number, number],
+    description: "Dunedin city center with historic architecture"
   },
-  "Bucklands Beach": { 
-    coords: [-36.8650, 174.9050] as [number, number], 
-    description: "Eastern suburb with coastal views" 
+  "Otago Peninsula": {
+    coords: [-45.8756, 170.6788] as [number, number],
+    description: "Scenic peninsula with albatross colony and lighthouses"
   },
-  "Cockle Bay": { 
-    coords: [-36.8864, 174.9589] as [number, number], 
-    description: "Seaside suburb with bay views" 
+  "Queenstown CBD": {
+    coords: [-45.0312, 168.6626] as [number, number],
+    description: "Adventure capital of NZ with Lake Wakatipu views"
   },
-  "Somerville": { 
-    coords: [-36.9436, 174.9186] as [number, number], 
-    description: "Residential area near Botany" 
+  "Skyline Queenstown": {
+    coords: [-45.0298, 168.6589] as [number, number],
+    description: "Iconic skyline with panoramic views of Queenstown"
+  },
+  "Rotorua Polynesian Spa": {
+    coords: [-38.1368, 176.2497] as [number, number],
+    description: "World-famous Polynesian Spa thermal pools"
+  },
+  "Rainbow Springs Nature Park": {
+    coords: [-38.1686, 176.1567] as [number, number],
+    description: "Kiwi bird sanctuary and nature conservation park"
+  },
+  "Franz Josef Glacier": {
+    coords: [-43.4671, 170.1833] as [number, number],
+    description: "Iconic glacier in Westland Tai Poutini National Park"
+  },
+  "Milford Sound": {
+    coords: [-44.6167, 167.8667] as [number, number],
+    description: "World Heritage fjord with seals and dolphins"
+  },
+  "Abel Tasman National Park": {
+    coords: [-40.8333, 173.0500] as [number, number],
+    description: "Golden Bay national park with pristine beaches"
   }
 } as const;
+
+// Keep EAST_AUCKLAND_LOCATIONS for backward compatibility but mark as deprecated
+/** @deprecated Use NEW_ZEALAND_LOCATIONS instead */
+export const EAST_AUCKLAND_LOCATIONS = NEW_ZEALAND_LOCATIONS;

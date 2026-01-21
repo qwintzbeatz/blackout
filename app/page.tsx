@@ -39,7 +39,7 @@ import PhotoSelectionModal from '@/components/ui/PhotoSelectionModal';
 import DropPopup from '@/components/map/DropPopup';
 import { uploadImageToImgBB } from '@/lib/services/imgbb';
 import { saveDropToFirestore, loadAllDrops } from '@/lib/firebase/drops';
-import { Drop } from '@/lib/utils/types';
+import { Drop, NEW_ZEALAND_LOCATIONS } from '@/lib/utils/types';
 
 const HIPHOP_TRACKS = [
   "https://soundcloud.com/90s-hiphopclassics/2pac-california-love",
@@ -223,6 +223,9 @@ const useGPSTracker = () => {
     setError(null); // Clear any previous errors
     setGpsStatus('acquiring');
 
+    // Show NZ-specific loading message
+    setError('🗺️ Finding your location in Aotearoa... GPS acquiring satellites may take 30-60 seconds.');
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         console.log('GPS position acquired:', pos.coords);
@@ -231,6 +234,15 @@ const useGPSTracker = () => {
         setError(null); // Clear any errors on success
         setGpsStatus('tracking');
         setIsLoading(false);
+
+        // Check if within NZ bounds
+        const [lat, lng] = [pos.coords.latitude, pos.coords.longitude];
+        const withinNZ = lat >= NZ_BOUNDS[0][0] && lat <= NZ_BOUNDS[1][0] &&
+                        lng >= NZ_BOUNDS[0][1] && lng <= NZ_BOUNDS[1][1];
+
+        if (!withinNZ) {
+          setError('🏝️ Welcome to Blackout NZ! Your current location is outside New Zealand. Feel free to explore the map and plan your next NZ adventure! 🗺️');
+        }
       },
       (err) => {
         console.error('GPS initial error:', err);
@@ -564,7 +576,15 @@ const MARKER_COLORS = [
 export default function Home() {
   const [mapReady, setMapReady] = useState(false);
   const [zoom, setZoom] = useState<number>(15);
-  const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
+  // New Zealand bounds and center
+  const NZ_BOUNDS: [[number, number], [number, number]] = [
+    [-47.5, 165.0], // Southwest corner (South Island)
+    [-34.0, 179.0]  // Northeast corner (North Island)
+  ];
+  const NZ_CENTER: [number, number] = [-40.9006, 174.8860]; // Center of New Zealand
+  const NZ_DEFAULT_ZOOM = 6; // Zoom level to show all of NZ
+
+  const [mapCenter, setMapCenter] = useState<[number, number] | null>(NZ_CENTER);
   const [isClient, setIsClient] = useState(false);
   const [show50mRadius, setShow50mRadius] = useState(true);
   const [userMarkers, setUserMarkers] = useState<UserMarker[]>([]);
@@ -1139,11 +1159,23 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [gpsPosition, userProfile, user, topPlayers]);
 
-  // Set initial map center to GPS position when available
+  // Set initial map center to GPS position when available (within NZ bounds)
   useEffect(() => {
     if (gpsPosition && !mapCenter) {
-      setMapCenter(gpsPosition);
-      setZoom(15);
+      // Check if GPS position is within NZ bounds
+      const [lat, lng] = gpsPosition;
+      const withinNZ = lat >= NZ_BOUNDS[0][0] && lat <= NZ_BOUNDS[1][0] &&
+                      lng >= NZ_BOUNDS[0][1] && lng <= NZ_BOUNDS[1][1];
+
+      if (withinNZ) {
+        setMapCenter(gpsPosition);
+        setZoom(15);
+      } else {
+        // GPS outside NZ - center on NZ and show message
+        setMapCenter(NZ_CENTER);
+        setZoom(NZ_DEFAULT_ZOOM);
+        setError('🏝️ Kia ora! Blackout is NZ-only. Your location appears to be outside Aotearoa. The map has been centered on New Zealand for the best street art experience! 🗺️');
+      }
     }
   }, [gpsPosition, mapCenter]);
 
@@ -1479,49 +1511,8 @@ export default function Home() {
     centerMap(marker.position, 18);
   };
 
-  // East Auckland locations
-  const eastAucklandLocations = {
-    "Pakuranga Plaza": { 
-      coords: [-36.8874, 174.8550], 
-      description: "Major shopping center in East Auckland" 
-    },
-    "Howick Village": { 
-      coords: [-36.8944, 174.9253], 
-      description: "Historic village with cafes and shops" 
-    },
-    "Botany Town Centre": { 
-      coords: [-36.9564, 174.9060], 
-      description: "Large shopping mall and entertainment hub" 
-    },
-    "Maraetai Beach": { 
-      coords: [-36.8809, 175.0390], 
-      description: "Popular beach in East Auckland" 
-    },
-    "Musick Point": { 
-      coords: [-36.8528, 174.9233], 
-      description: "Historic point with golf course and views" 
-    },
-    "Lloyd Elsmore Park": { 
-      coords: [-36.9152, 174.8943], 
-      description: "Large park with sports facilities" 
-    },
-    "Highland Park": { 
-      coords: [-36.9052, 174.9045], 
-      description: "Suburban area with shopping center" 
-    },
-    "Bucklands Beach": { 
-      coords: [-36.8650, 174.9050], 
-      description: "Eastern suburb with coastal views" 
-    },
-    "Cockle Bay": { 
-      coords: [-36.8864, 174.9589], 
-      description: "Seaside suburb with bay views" 
-    },
-    "Somerville": { 
-      coords: [-36.9436, 174.9186], 
-      description: "Residential area near Botany" 
-    }
-  };
+  // New Zealand locations for the game
+  const newZealandLocations = NEW_ZEALAND_LOCATIONS;
 
   // Default fallback center (East Auckland)
  const defaultCenter: [number, number] | null = null;
@@ -2500,12 +2491,18 @@ export default function Home() {
       </button>
 
       <MapContainer
-        center={mapCenter || gpsPosition || [0, 0]}
-        zoom={zoom}
+        center={mapCenter || NZ_CENTER}
+        zoom={mapCenter ? zoom : NZ_DEFAULT_ZOOM}
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom={true}
+        maxBounds={NZ_BOUNDS}
+        maxBoundsViscosity={1.0}
+        minZoom={5}
+        maxZoom={18}
         whenCreated={(mapInstance) => {
           mapRef.current = mapInstance;
+          // Set initial bounds to prevent panning outside NZ
+          mapInstance.setMaxBounds(NZ_BOUNDS);
         }}
         eventHandlers={{
           click: handleMapClick
@@ -3180,7 +3177,7 @@ export default function Home() {
         })}
 
         {/* East Auckland location markers */}
-        {(!gpsPosition || !isTracking) && Object.entries(eastAucklandLocations).map(([name, info]) => (
+        {(!gpsPosition || !isTracking) && Object.entries(newZealandLocations).map(([name, info]) => (
           <Marker 
             key={name} 
             position={info.coords as [number, number]}
@@ -4759,10 +4756,13 @@ export default function Home() {
         backdropFilter: 'blur(4px)',
         maxWidth: '250px'
       }}>
-        <div>📍 Your location</div>
+        <div>📍 Your location (NZ only)</div>
         <div style={{color: selectedMarkerColor}}>● All drops (blue dot = yours)</div>
         <div>🔴 50m radius</div>
         <div>🎯 GPS accuracy</div>
+        <div style={{fontSize: '10px', color: '#60a5fa', marginTop: '4px'}}>
+          🗺️ Blackout NZ - Street art across Aotearoa
+        </div>
         <div style={{
           marginTop: '8px',
           fontSize: '11px',
