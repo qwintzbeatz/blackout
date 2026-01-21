@@ -4742,36 +4742,6 @@ export default function Home() {
         zIndex: 1100,
         boxShadow: '0 -4px 20px rgba(0,0,0,0.4)'
       }}>
-        {/* Map - Toggle Map View */}
-        <button
-          onClick={() => {
-            // Toggle map view (user will add functionality later)
-            setShowProfilePanel(false);
-            setShowPhotosPanel(false);
-            setShowMessagesPanel(false);
-          }}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#4dabf7',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            fontSize: '11px',
-            gap: '3px',
-            padding: '6px 12px',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease'
-          }}
-        >
-          <div style={{
-            fontSize: '24px',
-            transform: 'scale(1.1)'
-          }}>
-            🗺️
-          </div>
-          Map
-        </button>
 
         {/* Blackbook - Toggles Profile Panel */}
         <button
