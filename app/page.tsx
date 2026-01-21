@@ -166,11 +166,30 @@ const useGPSTracker = () => {
   const [gpsStatus, setGpsStatus] = useState<'initializing' | 'acquiring' | 'tracking' | 'error'>('initializing');
   const watchIdRef = useRef<number | null>(null);
 
-  const getInitialLocation = useCallback(() => {
+  // Check GPS permission status
+  const checkGPSPermission = useCallback(async () => {
+    if ('permissions' in navigator) {
+      try {
+        const permission = await navigator.permissions.query({ name: 'geolocation' });
+        console.log('GPS permission status:', permission.state);
+        return permission.state;
+      } catch (error) {
+        console.log('Could not check GPS permission:', error);
+        return 'unknown';
+      }
+    }
+    return 'unknown';
+  }, []);
+
+  const getInitialLocation = useCallback(async () => {
     console.log('getInitialLocation called');
     console.log('navigator.geolocation available:', !!navigator.geolocation);
     console.log('protocol:', window.location.protocol);
     console.log('hostname:', window.location.hostname);
+
+    // Check permission status first
+    const permissionStatus = await checkGPSPermission();
+    console.log('GPS permission status:', permissionStatus);
 
     if (!navigator.geolocation) {
       const errorMsg = 'Geolocation not supported in this browser. Please use Chrome, Firefox, Safari, or Edge.';
@@ -215,31 +234,53 @@ const useGPSTracker = () => {
       },
       (err) => {
         console.error('GPS initial error:', err);
+
+        // Handle empty error objects (most common case for permission denied)
+        if (!err || (err.code === undefined && !err.message)) {
+          console.warn('GPS initial request failed with empty error - likely permission denied or GPS disabled');
+          const errorMessage = 'Location access blocked. Please enable location services in your browser settings and refresh the page.';
+          setError(errorMessage);
+          setGpsStatus('error');
+          setIsLoading(false);
+          return;
+        }
+
         let errorMessage = 'Failed to get location';
 
-        if (err && err.message) {
+        if (err.message) {
           errorMessage = err.message;
-        } else if (err && err.code) {
+        } else if (err.code !== undefined) {
           switch(err.code) {
             case 1:
-              errorMessage = 'Location permission denied. Please enable location services in your browser settings and refresh the page.';
+              errorMessage = 'Location permission denied. Please click "Allow" when your browser asks for location access.';
               break;
             case 2:
-              errorMessage = 'Location information unavailable. Check your GPS signal or try moving to an open area.';
+              errorMessage = 'Location information unavailable. Check your GPS signal or try moving outdoors.';
               break;
             case 3:
-              errorMessage = 'Location request timed out. GPS signal may be weak. Please try again.';
+              errorMessage = 'Location request timed out. GPS signal may be weak.';
               break;
             default:
-              errorMessage = 'Unable to get your location. Please check your device settings and GPS signal.';
+              errorMessage = `GPS error (code: ${err.code}). Please check your device settings.`;
           }
         } else {
-          errorMessage = 'Could not access location. Please ensure location services are enabled and try refreshing the page.';
+          errorMessage = 'Could not access location. Please ensure location services are enabled.';
         }
 
         setError(errorMessage);
         setGpsStatus('error');
         setIsLoading(false);
+
+        // For timeout errors, offer to retry
+        if (err.code === 3) {
+          setTimeout(() => {
+            if (window.confirm('GPS timed out. Would you like to try again?')) {
+              setError(null);
+              setGpsStatus('initializing');
+              getInitialLocation();
+            }
+          }, 1000);
+        }
       },
       {
         enableHighAccuracy: true,
@@ -289,14 +330,25 @@ const useGPSTracker = () => {
           },
           (err) => {
             console.error('GPS watch error:', err);
+
+            // Handle empty error objects
+            if (!err || (err.code === undefined && !err.message)) {
+              console.warn('GPS watch failed with empty error object - likely permission denied or GPS unavailable');
+              const errorMessage = 'Location access blocked or unavailable. Please check your browser permissions and GPS settings.';
+              setError(errorMessage);
+              setGpsStatus('error');
+              stopTracking();
+              return;
+            }
+
             let errorMessage = 'GPS tracking failed';
 
-            if (err && err.message) {
+            if (err.message) {
               errorMessage = err.message;
-            } else if (err && err.code) {
+            } else if (err.code !== undefined) {
               switch(err.code) {
                 case err.PERMISSION_DENIED:
-                  errorMessage = 'Location permission denied. Please enable location services.';
+                  errorMessage = 'Location permission denied. Please enable location services in your browser settings.';
                   break;
                 case err.POSITION_UNAVAILABLE:
                   errorMessage = 'Location information unavailable. Check your GPS signal or try moving outdoors.';
@@ -305,27 +357,34 @@ const useGPSTracker = () => {
                   errorMessage = 'Location request timed out. GPS signal may be weak or blocked.';
                   break;
                 default:
-                  errorMessage = 'Unknown GPS error occurred.';
+                  errorMessage = `GPS error (code: ${err.code})`;
               }
             }
 
             // Only stop tracking for critical errors, not timeouts
-            if (err && err.code === err.PERMISSION_DENIED) {
+            if (err.code === err.PERMISSION_DENIED) {
               setError(errorMessage);
+              setGpsStatus('error');
               stopTracking();
-            } else if (err && err.code === err.POSITION_UNAVAILABLE) {
+            } else if (err.code === err.POSITION_UNAVAILABLE) {
               setError(errorMessage);
+              setGpsStatus('error');
               // Try to restart tracking after a delay for position unavailable
               setTimeout(() => {
-                if (isTracking) {
+                if (!gpsPosition) { // Only try restart if we don't have a position
                   console.log('Attempting to restart GPS tracking...');
                   stopTracking();
                   setTimeout(() => startTracking(), 2000);
                 }
               }, 5000);
+            } else if (err.code === err.TIMEOUT) {
+              // For timeouts, just log and continue watching
+              console.warn('GPS timeout, continuing to watch for position updates');
+              setGpsStatus('acquiring');
             } else {
-              // For timeouts and other errors, just log and continue
-              console.warn('GPS watch error, continuing to monitor:', errorMessage);
+              // For other errors, set error status
+              setError(errorMessage);
+              setGpsStatus('error');
             }
           },
           {
@@ -4540,21 +4599,39 @@ export default function Home() {
 
         {/* GPS - Location & Tracking */}
         <button
-          onClick={() => {
+          onClick={async () => {
             console.log('GPS button clicked');
+            const permissionStatus = await checkGPSPermission();
+            console.log('Current GPS permission:', permissionStatus);
+
+            if (permissionStatus === 'denied') {
+              alert('GPS permission is blocked. Please enable location access in your browser settings and refresh the page.');
+              return;
+            }
+
             if (gpsPosition) {
               console.log('GPS position exists, centering on it');
               centerOnGPS();
             } else {
               console.log('No GPS position, requesting location');
+              setError(null);
+              setGpsStatus('acquiring');
               getInitialLocation();
-              setTimeout(() => startTracking(), 500);
+              setTimeout(() => {
+                if (!gpsPosition) startTracking();
+              }, 500);
             }
           }}
           style={{
-            background: gpsPosition ? 'rgba(16, 185, 129, 0.2)' : (isTracking ? 'rgba(245, 158, 11, 0.2)' : 'none'),
-            border: gpsPosition ? '1px solid rgba(16, 185, 129, 0.3)' : (isTracking ? '1px solid rgba(245, 158, 11, 0.3)' : 'none'),
-            color: gpsPosition ? '#10b981' : (isTracking ? '#f59e0b' : '#cbd5e1'),
+            background: gpsPosition ? 'rgba(16, 185, 129, 0.2)' :
+                     (gpsStatus === 'error' ? 'rgba(239, 68, 68, 0.2)' :
+                     (isTracking || gpsStatus === 'acquiring') ? 'rgba(245, 158, 11, 0.2)' : 'none'),
+            border: gpsPosition ? '1px solid rgba(16, 185, 129, 0.3)' :
+                   (gpsStatus === 'error' ? '1px solid rgba(239, 68, 68, 0.3)' :
+                   (isTracking || gpsStatus === 'acquiring') ? '1px solid rgba(245, 158, 11, 0.3)' : 'none'),
+            color: gpsPosition ? '#10b981' :
+                  (gpsStatus === 'error' ? '#ef4444' :
+                  (isTracking || gpsStatus === 'acquiring') ? '#f59e0b' : '#cbd5e1'),
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -4570,7 +4647,9 @@ export default function Home() {
             fontSize: '24px',
             transform: 'scale(1.1)'
           }}>
-            📍
+            {gpsStatus === 'error' ? '❌' :
+             gpsPosition ? '📍' :
+             (isTracking || gpsStatus === 'acquiring') ? '🔄' : '📍'}
           </div>
           GPS
         </button>
