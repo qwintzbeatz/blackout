@@ -404,6 +404,7 @@ const useGPSTracker = () => {
     error,
     isTracking,
     isLoading,
+    gpsStatus,
     startTracking,
     stopTracking
   };
@@ -852,6 +853,7 @@ export default function Home() {
     error: gpsError,
     isTracking,
     isLoading: gpsLoading,
+    gpsStatus,
     startTracking,
     stopTracking
   } = useGPSTracker();
