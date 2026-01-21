@@ -4307,47 +4307,6 @@ export default function Home() {
               )}
             </div>
 
-            {/* Friends Section */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{
-                fontSize: '16px',
-                color: '#8b5cf6',
-                fontWeight: 'bold',
-                marginBottom: '12px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}>
-                <span>👫 Friends</span>
-                <span style={{ fontSize: '12px', color: '#aaa' }}>0/∞</span>
-              </div>
-
-              <div style={{
-                textAlign: 'center',
-                padding: '30px 20px',
-                background: 'rgba(255,255,255,0.03)',
-                borderRadius: '8px',
-                border: '1px dashed #444'
-              }}>
-                <div style={{ fontSize: '48px', marginBottom: '10px' }}>👫</div>
-                <div style={{ color: '#aaa', marginBottom: '15px' }}>
-                  No friends added yet
-                </div>
-                <button
-                  onClick={() => alert('Friend system coming soon!')}
-                  style={{
-                    background: 'rgba(139, 92, 246, 0.2)',
-                    color: '#8b5cf6',
-                    border: '1px solid #8b5cf6',
-                    padding: '8px 16px',
-                    borderRadius: '6px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Add Friends
-                </button>
-              </div>
-            </div>
 
             {/* Recent Messages */}
             <div>
