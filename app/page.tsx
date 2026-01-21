@@ -2487,25 +2487,6 @@ export default function Home() {
         </button>
       </div>
 
-      {/* GPS Status Button */}
-      <button
-        onClick={toggleTracking}
-        style={{
-          position: 'absolute',
-          top: 25,
-          left: 50,
-          backgroundColor: isTracking ? '#10b981' : '#ef4444',
-          color: 'white',
-          padding: '10px 15px',
-          borderRadius: '8px',
-          zIndex: 1001,
-          fontWeight: 'bold',
-          border: 'none',
-          cursor: 'pointer'
-        }}
-      >
-        {isTracking ? 'ONLINE' : 'OFFLINE'}
-      </button>
 
       <MapContainer
         center={
