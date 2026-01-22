@@ -3296,14 +3296,7 @@ export default function Home() {
         {/* Left Panel - Profile & Stats (Blackbook) */}
         {showProfilePanel && (
           <div style={{
-            backgroundColor: 'rgba(0,0,0,0.85)',
-            color: '#e0e0e0',
-            padding: '16px',
-            borderRadius: '8px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
-            width: '320px',
-            maxHeight: '80vh',
-            overflowY: 'auto',
+            ...panelStyle,
             border: '1px solid #333',
             display: 'flex',
             flexDirection: 'column',
@@ -3853,14 +3846,7 @@ export default function Home() {
         {/* Right Panel - Photos & Gallery (Camera) */}
         {showPhotosPanel && (
           <div style={{
-            backgroundColor: 'rgba(0,0,0,0.85)',
-            color: '#e0e0e0',
-            padding: '16px',
-            borderRadius: '8px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
-            width: '320px',
-            maxHeight: '80vh',
-            overflowY: 'auto',
+            ...panelStyle,
             border: '1px solid #333',
             display: 'flex',
             flexDirection: 'column',
@@ -4171,14 +4157,7 @@ export default function Home() {
         {/* Messages Panel */}
         {showMessagesPanel && (
           <div style={{
-            backgroundColor: 'rgba(0,0,0,0.85)',
-            color: '#e0e0e0',
-            padding: '16px',
-            borderRadius: '8px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
-            width: '320px',
-            maxHeight: '80vh',
-            overflowY: 'auto',
+            ...panelStyle,
             border: '1px solid #333',
             display: 'flex',
             flexDirection: 'column',
