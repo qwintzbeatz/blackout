@@ -4564,15 +4564,7 @@ export default function Home() {
                   No tracks unlocked yet
                 </div>
                 <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-                  Place drops to unlock music and access playback controls!
-                </div>
-                <div style={{
-                  marginTop: '15px',
-                  fontSize: '12px',
-                  color: '#8a2be2',
-                  fontStyle: 'italic'
-                }}>
-                  🎛️ Controls include: Play/Pause, Previous/Next, Stop, Volume
+                  Place drops to unlock music!
                 </div>
               </div>
             ) : (
@@ -4638,175 +4630,6 @@ export default function Home() {
                 })}
               </div>
             )}
-          </div>
-
-          {/* Music Controls */}
-          {unlockedTracks.length > 0 && (
-            <div style={{
-              marginTop: '15px',
-              paddingTop: '15px',
-              borderTop: '1px solid rgba(138, 43, 226, 0.3)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px'
-            }}>
-              {/* Playback Controls */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px'
-              }}>
-                <button
-                  onClick={() => {
-                    if (unlockedTracks.length > 0) {
-                      const prevIndex = currentTrackIndex > 0 ? currentTrackIndex - 1 : unlockedTracks.length - 1;
-                      setCurrentTrackIndex(prevIndex);
-                      playNextTrack();
-                    }
-                  }}
-                  disabled={unlockedTracks.length === 0}
-                  style={{
-                    background: unlockedTracks.length === 0 ? 'rgba(138, 43, 226, 0.1)' : 'rgba(138, 43, 226, 0.2)',
-                    border: unlockedTracks.length === 0 ? '1px solid rgba(138, 43, 226, 0.2)' : '1px solid rgba(138, 43, 226, 0.3)',
-                    color: unlockedTracks.length === 0 ? '#666' : '#8a2be2',
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    cursor: unlockedTracks.length === 0 ? 'not-allowed' : 'pointer',
-                    fontSize: '16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  ⏮️
-                </button>
-
-                <button
-                  onClick={() => {
-                    if (unlockedTracks.length > 0 && audioRef.current) {
-                      if (isPlaying) {
-                        audioRef.current.pause();
-                      } else {
-                        audioRef.current.play().catch(error => {
-                          console.error('Error playing audio:', error);
-                        });
-                      }
-                      setIsPlaying(!isPlaying);
-                    }
-                  }}
-                  disabled={unlockedTracks.length === 0}
-                  style={{
-                    background: unlockedTracks.length === 0 ? 'rgba(138, 43, 226, 0.1)' : 'rgba(138, 43, 226, 0.2)',
-                    border: unlockedTracks.length === 0 ? '1px solid rgba(138, 43, 226, 0.2)' : '1px solid rgba(138, 43, 226, 0.3)',
-                    color: unlockedTracks.length === 0 ? '#666' : '#8a2be2',
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: '50%',
-                    cursor: unlockedTracks.length === 0 ? 'not-allowed' : 'pointer',
-                    fontSize: '20px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  {unlockedTracks.length === 0 ? '▶️' : (isPlaying ? '⏸️' : '▶️')}
-                </button>
-
-                <button
-                  onClick={() => {
-                    if (unlockedTracks.length > 0 && audioRef.current) {
-                      audioRef.current.pause();
-                      audioRef.current.currentTime = 0;
-                      setIsPlaying(false);
-                    }
-                  }}
-                  disabled={unlockedTracks.length === 0}
-                  style={{
-                    background: unlockedTracks.length === 0 ? 'rgba(138, 43, 226, 0.1)' : 'rgba(138, 43, 226, 0.2)',
-                    border: unlockedTracks.length === 0 ? '1px solid rgba(138, 43, 226, 0.2)' : '1px solid rgba(138, 43, 226, 0.3)',
-                    color: unlockedTracks.length === 0 ? '#666' : '#8a2be2',
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    cursor: unlockedTracks.length === 0 ? 'not-allowed' : 'pointer',
-                    fontSize: '16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  ⏹️
-                </button>
-
-                <button
-                  onClick={() => {
-                    if (unlockedTracks.length > 0) {
-                      playNextTrack();
-                    }
-                  }}
-                  disabled={unlockedTracks.length === 0}
-                  style={{
-                    background: unlockedTracks.length === 0 ? 'rgba(138, 43, 226, 0.1)' : 'rgba(138, 43, 226, 0.2)',
-                    border: unlockedTracks.length === 0 ? '1px solid rgba(138, 43, 226, 0.2)' : '1px solid rgba(138, 43, 226, 0.3)',
-                    color: unlockedTracks.length === 0 ? '#666' : '#8a2be2',
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    cursor: unlockedTracks.length === 0 ? 'not-allowed' : 'pointer',
-                    fontSize: '16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  ⏭️
-                </button>
-              </div>
-
-              {/* Volume Control */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '8px 12px',
-                background: 'rgba(255,255,255,0.03)',
-                borderRadius: '6px',
-                border: '1px solid #333'
-              }}>
-                <span style={{ fontSize: '14px', color: '#cbd5e1' }}>🔊</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={volume}
-                  onChange={(e) => {
-                    const newVolume = parseFloat(e.target.value);
-                    setVolume(newVolume);
-                    if (audioRef.current) {
-                      audioRef.current.volume = newVolume;
-                    }
-                  }}
-                  style={{
-                    flex: 1,
-                    height: '4px',
-                    borderRadius: '2px',
-                    background: '#333',
-                    outline: 'none',
-                    cursor: 'pointer'
-                  }}
-                />
-                <span style={{ fontSize: '12px', color: '#cbd5e1', minWidth: '30px' }}>
-                  {Math.round(volume * 100)}%
-                </span>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -5186,39 +5009,6 @@ export default function Home() {
           Camera
         </button>
 
-        {/* Music - Toggles Music Panel */}
-        <button
-          onClick={() => {
-            setShowMusicPanel(!showMusicPanel);
-            setShowProfilePanel(false);
-            setShowPhotosPanel(false);
-            setShowMessagesPanel(false);
-            setShowMapPanel(false);
-          }}
-          style={{
-            background: showMusicPanel ? 'rgba(138, 43, 226, 0.2)' : 'none',
-            border: showMusicPanel ? '1px solid rgba(138, 43, 226, 0.3)' : 'none',
-            color: showMusicPanel ? '#8a2be2' : '#cbd5e1',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            fontSize: '11px',
-            gap: '3px',
-            padding: '6px 12px',
-            cursor: 'pointer',
-            borderRadius: '8px',
-            transition: 'all 0.3s ease'
-          }}
-        >
-          <div style={{
-            fontSize: '24px',
-            transform: showMusicPanel ? 'scale(1.1)' : 'scale(1)'
-          }}>
-            🎵
-          </div>
-          Music
-        </button>
-
         {/* Messages - Crew & Friends */}
         <button
           onClick={() => {
@@ -5250,6 +5040,39 @@ export default function Home() {
             📱
           </div>
           Messages
+        </button>
+
+        {/* Music - Toggles Music Panel */}
+        <button
+          onClick={() => {
+            setShowMusicPanel(!showMusicPanel);
+            setShowProfilePanel(false);
+            setShowPhotosPanel(false);
+            setShowMessagesPanel(false);
+            setShowMapPanel(false);
+          }}
+          style={{
+            background: showMusicPanel ? 'rgba(138, 43, 226, 0.2)' : 'none',
+            border: showMusicPanel ? '1px solid rgba(138, 43, 226, 0.3)' : 'none',
+            color: showMusicPanel ? '#8a2be2' : '#cbd5e1',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            fontSize: '11px',
+            gap: '3px',
+            padding: '6px 12px',
+            cursor: 'pointer',
+            borderRadius: '8px',
+            transition: 'all 0.3s ease'
+          }}
+        >
+          <div style={{
+            fontSize: '24px',
+            transform: showMusicPanel ? 'scale(1.1)' : 'scale(1)'
+          }}>
+            🎵
+          </div>
+          Music
         </button>
       </div>
 
