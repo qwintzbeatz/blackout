@@ -4623,12 +4623,9 @@ export default function Home() {
         <button
           onClick={() => {
             setShowMapPanel(!showMapPanel);
-            // Close other panels when opening map panel
-            if (!showMapPanel) {
-              setShowProfilePanel(false);
-              setShowPhotosPanel(false);
-              setShowMessagesPanel(false);
-            }
+            setShowProfilePanel(false);
+            setShowPhotosPanel(false);
+            setShowMessagesPanel(false);
           }}
           style={{
             background: showMapPanel ? 'rgba(77, 171, 247, 0.2)' : 'none',
@@ -4658,11 +4655,9 @@ export default function Home() {
         <button
           onClick={() => {
             setShowProfilePanel(!showProfilePanel);
-            // Close other panels when opening profile panel
-            if (!showProfilePanel) {
-              setShowPhotosPanel(false);
-              setShowMessagesPanel(false);
-            }
+            setShowPhotosPanel(false);
+            setShowMessagesPanel(false);
+            setShowMapPanel(false);
           }}
           style={{
             background: showProfilePanel ? 'rgba(255, 107, 107, 0.2)' : 'none',
@@ -4692,11 +4687,9 @@ export default function Home() {
         <button
           onClick={() => {
             setShowPhotosPanel(!showPhotosPanel);
-            // Close other panels when opening photos panel
-            if (!showPhotosPanel) {
-              setShowProfilePanel(false);
-              setShowMessagesPanel(false);
-            }
+            setShowProfilePanel(false);
+            setShowMessagesPanel(false);
+            setShowMapPanel(false);
           }}
           style={{
             background: showPhotosPanel ? 'rgba(77, 171, 247, 0.2)' : 'none',
@@ -4726,11 +4719,9 @@ export default function Home() {
         <button
           onClick={() => {
             setShowMessagesPanel(!showMessagesPanel);
-            // Close other panels when opening messages
-            if (!showMessagesPanel) {
-              setShowProfilePanel(false);
-              setShowPhotosPanel(false);
-            }
+            setShowProfilePanel(false);
+            setShowPhotosPanel(false);
+            setShowMapPanel(false);
           }}
           style={{
             background: showMessagesPanel ? 'rgba(16, 185, 129, 0.2)' : 'none',
