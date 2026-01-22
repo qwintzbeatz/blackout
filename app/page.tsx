@@ -3778,31 +3778,6 @@ export default function Home() {
                 {showTopPlayers ? '👑 Hide Top Players' : '👑 Show Top Players'}
               </button>
 
-              {/* Color Picker */}
-              <div>
-                <div style={{ fontSize: '14px', color: '#ff6b6b', marginBottom: '8px' }}>
-                  Marker Color
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
-                  {MARKER_COLORS.map((color) => (
-                    <button
-                      key={color.value}
-                      onClick={() => {
-                        setSelectedMarkerColor(color.value);
-                        saveFavoriteColor(color.value);
-                      }}
-                      style={{
-                        width: '100%',
-                        aspectRatio: '1/1',
-                        backgroundColor: color.value,
-                        border: selectedMarkerColor === color.value ? '3px solid #ff6b6b' : '1px solid #444',
-                        borderRadius: '6px',
-                        cursor: 'pointer'
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
 
               <button
                 onClick={handleLogout}
@@ -4471,6 +4446,35 @@ export default function Home() {
               </button>
               <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
                 Show/hide leaderboard markers
+              </span>
+            </div>
+
+            {/* Color Picker (Moved to Map Controls) */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+              <div style={{ fontSize: '14px', color: '#ff6b6b', marginBottom: '8px' }}>
+                Marker Color
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
+                {MARKER_COLORS.map((color) => (
+                  <button
+                    key={color.value}
+                    onClick={() => {
+                      setSelectedMarkerColor(color.value);
+                      saveFavoriteColor(color.value);
+                    }}
+                    style={{
+                      width: '100%',
+                      aspectRatio: '1/1',
+                      backgroundColor: color.value,
+                      border: selectedMarkerColor === color.value ? '3px solid #ff6b6b' : '1px solid #444',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                  />
+                ))}
+              </div>
+              <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
+                Choose your default marker color
               </span>
             </div>
 
