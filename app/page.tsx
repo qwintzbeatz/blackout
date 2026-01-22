@@ -40,6 +40,7 @@ import DropPopup from '@/components/map/DropPopup';
 import { uploadImageToImgBB } from '@/lib/services/imgbb';
 import { saveDropToFirestore, loadAllDrops } from '@/lib/firebase/drops';
 import { Drop, NEW_ZEALAND_LOCATIONS } from '@/lib/utils/types';
+import { useGPSTracker } from '@/hooks/useGPSTracker';
 
 const HIPHOP_TRACKS = [
   "https://soundcloud.com/90s-hiphopclassics/2pac-california-love",
