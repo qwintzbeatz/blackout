@@ -280,6 +280,7 @@ export default function Home() {
   const [showDropTypeModal, setShowDropTypeModal] = useState(false);
   const [pendingDropPosition, setPendingDropPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [selectedMarkerType, setSelectedMarkerType] = useState<MarkerDescription>('Tag');
   
   // Crew states
   const [nearbyCrewMembers, setNearbyCrewMembers] = useState<Array<{ uid: string; username: string; distance: number }>>([]);
@@ -1008,10 +1009,26 @@ export default function Home() {
         userProfilePic: userProfile.profilePicUrl,
       };
 
-      // Save to Firestore
+      // Save to drops collection
       const dropId = await saveDropToFirestore(newDrop);
 
-      if (dropId) {
+      // Also save to markers collection with type information
+      const markerData: UserMarker = {
+        id: `temp-${Date.now()}`, // Temporary ID, will be replaced by Firestore ID
+        position: [pendingDropPosition.lat, pendingDropPosition.lng],
+        name: 'Pole', // Default location
+        description: selectedMarkerType, // Use selected type
+        color: '#10b981', // Default green
+        timestamp: new Date(),
+        userId: user.uid,
+        username: userProfile.username,
+        userProfilePic: userProfile.profilePicUrl,
+      };
+
+      // Save marker to markers collection
+      const markerId = await saveMarkerToFirestore(markerData);
+
+      if (dropId && markerId) {
         // Award REP for placing a marker drop
         const repEarned = 5; // Less REP than photo drops
         const newRep = (userProfile.rep || 0) + repEarned;
@@ -1029,10 +1046,11 @@ export default function Home() {
         setUserProfile(prev => prev ? { ...prev, rep: newRep, level: newLevel, rank: newRank } : null);
 
         // Show REP notification
-        setRepNotification({ show: true, amount: repEarned, message: 'Marker placed!' });
+        setRepNotification({ show: true, amount: repEarned, message: `${selectedMarkerType} marker placed!` });
 
-        // Reload drops
+        // Reload drops and markers
         await loadDrops();
+        await loadAllMarkers();
       }
 
       // Close modal and reset state
@@ -2856,6 +2874,41 @@ export default function Home() {
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              {/* Marker Type Selection */}
+              <div style={{ marginBottom: '10px' }}>
+                <label style={{
+                  color: '#f1f5f9',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  marginBottom: '8px',
+                  display: 'block'
+                }}>
+                  🎨 Marker Type:
+                </label>
+                <select
+                  value={selectedMarkerType}
+                  onChange={(e) => setSelectedMarkerType(e.target.value as MarkerDescription)}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '2px solid rgba(59, 130, 246, 0.3)',
+                    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                    color: '#f1f5f9',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    backdropFilter: 'blur(4px)'
+                  }}
+                >
+                  {MARKER_DESCRIPTIONS.map((desc) => (
+                    <option key={desc} value={desc} style={{ backgroundColor: '#1e293b' }}>
+                      {desc}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Marker Option */}
               <button
                 onClick={handleMarkerDrop}
@@ -2885,9 +2938,9 @@ export default function Home() {
               >
                 <span style={{ fontSize: '24px' }}>📍</span>
                 <div style={{ textAlign: 'left' }}>
-                  <div>Place Marker</div>
+                  <div>Place {selectedMarkerType} Marker</div>
                   <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: 'normal' }}>
-                    Quick marker drop (+5 REP)
+                    Custom marker drop (+5 REP)
                   </div>
                 </div>
               </button>
