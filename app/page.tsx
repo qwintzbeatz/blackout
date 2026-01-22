@@ -94,7 +94,8 @@ const panelStyle = {
   maxHeight: '80vh',
   overflowY: 'auto' as const,
   border: '1px solid rgba(255,255,255,0.1)',
-  backdropFilter: 'blur(4px)'
+  backdropFilter: 'blur(4px)',
+  zIndex: 1200
 };
 
 // Avatar generator function
