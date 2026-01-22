@@ -44,12 +44,12 @@ import { useGPSTracker } from '@/hooks/useGPSTracker';
 
 const HIPHOP_TRACKS = [
   "https://soundcloud.com/e-u-g-hdub-connected/hdub-party-ft-koers",
-  "https://soundcloud.com/biggie-smalls-official/big-poppa",
-  "https://soundcloud.com/nas/nas-ny-state-of-mind",
-  "https://soundcloud.com/wutangclan/wu-tang-clan-c-r-e-a-m",
-  "https://soundcloud.com/jayz/official-jay-z-hard-knock-life",
-  "https://soundcloud.com/dr-dre/still-dre-feat-snoop-dogg",
-  "https://soundcloud.com/outkast/ms-jackson",
+  "https://soundcloud.com/e-u-g-hdub-connected/fight-music",
+  "https://soundcloud.com/e-u-g-hdub-connected/rockin-in-the-club",
+  "https://soundcloud.com/e-u-g-hdub-connected/we-dont-owe-u-shit-ft-koers",
+  "https://soundcloud.com/qwintz-one/i-wanna-be-your-gangsta",
+  "https://soundcloud.com/qwintz-one/mary-j-and-johnny-blaze-type",
+  "https://soundcloud.com/hustle-kangs/so-good",
   "https://soundcloud.com/e-u-g-hdub-connected/b-o-p-freestyle-at-western",
 ];
 
@@ -349,6 +349,7 @@ export default function Home() {
   const [showPhotosPanel, setShowPhotosPanel] = useState(false);
   const [showMessagesPanel, setShowMessagesPanel] = useState(false);
   const [showMapPanel, setShowMapPanel] = useState(false);
+  const [showMusicPanel, setShowMusicPanel] = useState(false);
 
   // Initialize audio
   useEffect(() => {
@@ -4480,6 +4481,159 @@ export default function Home() {
         )}
       </div>
 
+      {/* Music Panel */}
+      {showMusicPanel && (
+        <div style={{
+          ...panelStyle,
+          border: '1px solid #333',
+          display: 'flex',
+          flexDirection: 'column',
+          animation: 'slideInRight 0.3s ease-out'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '10px',
+            paddingBottom: '10px',
+            borderBottom: '1px solid rgba(138, 43, 226, 0.3)'
+          }}>
+            <h3 style={{
+              margin: 0,
+              color: '#8a2be2',
+              fontSize: '18px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <span>🎵</span>
+              MUSIC COLLECTION
+            </h3>
+            <button
+              onClick={() => setShowMusicPanel(false)}
+              style={{
+                background: 'rgba(138, 43, 226, 0.2)',
+                border: '1px solid rgba(138, 43, 226, 0.3)',
+                color: '#8a2be2',
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                cursor: 'pointer',
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Current Track Info */}
+          <div style={{
+            background: 'rgba(138, 43, 226, 0.1)',
+            padding: '12px',
+            borderRadius: '8px',
+            marginBottom: '15px',
+            border: '1px solid rgba(138, 43, 226, 0.2)'
+          }}>
+            <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'white', marginBottom: '5px' }}>
+              Now Playing: {getCurrentTrackName()}
+            </div>
+            <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+              Track {currentTrackIndex + 1} of {unlockedTracks.length} unlocked
+            </div>
+          </div>
+
+          {/* Unlocked Tracks List */}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div style={{ fontSize: '14px', color: '#cbd5e1', marginBottom: '10px', fontWeight: 'bold' }}>
+              🎵 Your Collection ({unlockedTracks.length} tracks)
+            </div>
+
+            {unlockedTracks.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '30px 20px',
+                background: 'rgba(255,255,255,0.03)',
+                borderRadius: '8px',
+                border: '1px dashed #444'
+              }}>
+                <div style={{ fontSize: '32px', marginBottom: '10px' }}>🎵</div>
+                <div style={{ color: '#aaa' }}>
+                  No tracks unlocked yet
+                </div>
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                  Place drops to unlock music!
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {unlockedTracks.map((track, index) => {
+                  const trackName = getTrackNameFromUrl(track);
+                  const isSoundCloud = track.includes('soundcloud.com');
+                  const isCurrentlyPlaying = index === currentTrackIndex;
+
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => {
+                        setCurrentTrackIndex(index);
+                        playNextTrack(); // This will play the selected track
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '10px',
+                        background: isCurrentlyPlaying ? 'rgba(138, 43, 226, 0.2)' : 'rgba(255,255,255,0.03)',
+                        borderRadius: '6px',
+                        border: isCurrentlyPlaying ? '1px solid rgba(138, 43, 226, 0.4)' : '1px solid #333',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <div style={{
+                        fontSize: '18px',
+                        minWidth: '24px',
+                        textAlign: 'center'
+                      }}>
+                        {isSoundCloud ? '🎵' : '💿'}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{
+                          fontSize: '13px',
+                          fontWeight: isCurrentlyPlaying ? 'bold' : 'normal',
+                          color: isCurrentlyPlaying ? '#8a2be2' : 'white'
+                        }}>
+                          {trackName}
+                        </div>
+                        <div style={{
+                          fontSize: '11px',
+                          color: isSoundCloud ? '#ff6b6b' : '#10b981',
+                          marginTop: '2px'
+                        }}>
+                          {isSoundCloud ? 'SoundCloud' : 'Local Audio'}
+                        </div>
+                      </div>
+                      {isCurrentlyPlaying && (
+                        <div style={{
+                          fontSize: '14px',
+                          color: '#8a2be2',
+                          animation: 'pulse 1s infinite'
+                        }}>
+                          ●
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Map Control Panel */}
       {showMapPanel && (
           <div style={{
@@ -4763,6 +4917,7 @@ export default function Home() {
             setShowProfilePanel(false);
             setShowPhotosPanel(false);
             setShowMessagesPanel(false);
+            setShowMusicPanel(false);
           }}
           style={{
             background: showMapPanel ? 'rgba(77, 171, 247, 0.2)' : 'none',
@@ -4795,6 +4950,7 @@ export default function Home() {
             setShowPhotosPanel(false);
             setShowMessagesPanel(false);
             setShowMapPanel(false);
+            setShowMusicPanel(false);
           }}
           style={{
             background: showProfilePanel ? 'rgba(255, 107, 107, 0.2)' : 'none',
@@ -4827,6 +4983,7 @@ export default function Home() {
             setShowProfilePanel(false);
             setShowMessagesPanel(false);
             setShowMapPanel(false);
+            setShowMusicPanel(false);
           }}
           style={{
             background: showPhotosPanel ? 'rgba(77, 171, 247, 0.2)' : 'none',
@@ -4859,6 +5016,7 @@ export default function Home() {
             setShowProfilePanel(false);
             setShowPhotosPanel(false);
             setShowMapPanel(false);
+            setShowMusicPanel(false);
           }}
           style={{
             background: showMessagesPanel ? 'rgba(16, 185, 129, 0.2)' : 'none',
@@ -4882,6 +5040,39 @@ export default function Home() {
             📱
           </div>
           Messages
+        </button>
+
+        {/* Music - Toggles Music Panel */}
+        <button
+          onClick={() => {
+            setShowMusicPanel(!showMusicPanel);
+            setShowProfilePanel(false);
+            setShowPhotosPanel(false);
+            setShowMessagesPanel(false);
+            setShowMapPanel(false);
+          }}
+          style={{
+            background: showMusicPanel ? 'rgba(138, 43, 226, 0.2)' : 'none',
+            border: showMusicPanel ? '1px solid rgba(138, 43, 226, 0.3)' : 'none',
+            color: showMusicPanel ? '#8a2be2' : '#cbd5e1',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            fontSize: '11px',
+            gap: '3px',
+            padding: '6px 12px',
+            cursor: 'pointer',
+            borderRadius: '8px',
+            transition: 'all 0.3s ease'
+          }}
+        >
+          <div style={{
+            fontSize: '24px',
+            transform: showMusicPanel ? 'scale(1.1)' : 'scale(1)'
+          }}>
+            🎵
+          </div>
+          Music
         </button>
       </div>
 
