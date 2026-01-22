@@ -51,6 +51,17 @@ const HIPHOP_TRACKS = [
   "https://soundcloud.com/qwintz-one/mary-j-and-johnny-blaze-type",
   "https://soundcloud.com/hustle-kangs/so-good",
   "https://soundcloud.com/e-u-g-hdub-connected/b-o-p-freestyle-at-western",
+  "https://soundcloud.com/nzhiphop/ermehn-bank-job-feat-tuface-mr-sicc",
+  "https://soundcloud.com/nzhiphop/smashproof-liquor-anthem",
+  "https://soundcloud.com/nzhiphop/home-brew-monday",
+  "https://soundcloud.com/nzhiphop/deceptikonz-go-home-stay-home",
+  "https://soundcloud.com/nzhiphop/tuface-otara-state-of-mind",
+  "https://soundcloud.com/nzhiphop/mareko-city-line",
+  "https://soundcloud.com/nzhiphop/tyna-iv-corners-djsmv-welcome-to-hamilton-city",
+  "https://soundcloud.com/madisnzofficial/madis-start-to-an-end",
+  "https://soundcloud.com/colourway_records/colourway-put-your-colors-on",
+  "https://soundcloud.com/uiceheidd/too-smooth-juice",
+
 ];
 
 // Dynamically import leaflet only on client side
@@ -1393,7 +1404,7 @@ export default function Home() {
           padding: '15px 20px',
           borderRadius: '15px',
           boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
-          zIndex: 2,
+          zIndex: 9999,
           backdropFilter: 'blur(10px)',
           border: '1px solid rgba(255, 255, 255, 0.1)',
           minWidth: unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? '400px' : '280px',
