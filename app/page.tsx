@@ -83,6 +83,20 @@ type MarkerName = typeof MARKER_NAMES[number];
 const MARKER_DESCRIPTIONS = ['Sticker/Slap', 'Stencil/Brand/Stamp', 'Tag', 'TAG', 'Etch/Scribe/Scratch', 'Throw-Up', 'Paste-Up/Poster', 'Piece/Bombing', 'Burner/Heater', 'Roller/Blockbuster', 'Extinguisher', 'Mural'] as const;
 type MarkerDescription = typeof MARKER_DESCRIPTIONS[number];
 
+// Modern panel styling constant for consistency across all UI panels
+const panelStyle = {
+  backgroundColor: 'rgba(0, 0, 0, 0.85)',
+  color: '#e0e0e0',
+  padding: '16px',
+  borderRadius: '8px',
+  boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
+  width: '320px',
+  maxHeight: '80vh',
+  overflowY: 'auto' as const,
+  border: '1px solid rgba(255,255,255,0.1)',
+  backdropFilter: 'blur(4px)'
+};
+
 // Avatar generator function
 const generateAvatarUrl = (userId: string, username: string, gender?: string): string => {
   const seed = username || userId;
@@ -4358,19 +4372,11 @@ export default function Home() {
       {/* Map Control Panel */}
       {showMapPanel && (
         <div style={{
+          ...panelStyle,
           position: 'absolute',
           top: '70px',
           left: '70px',
-          backgroundColor: 'rgba(0,0,0,0.85)',
-          color: '#e0e0e0',
-          padding: '16px',
-          borderRadius: '8px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          zIndex: 1200,
-          width: '320px',
-          maxHeight: '80vh',
-          overflowY: 'auto'
+          zIndex: 1200
         }}>
           <div style={{
             display: 'flex',
