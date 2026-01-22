@@ -4346,13 +4346,14 @@ export default function Home() {
 
       {/* Map Control Panel */}
       {showMapPanel && (
-        <div style={{
-          ...panelStyle,
-          position: 'absolute',
-          top: '70px',
-          left: '70px',
-          zIndex: 1200
-        }}>
+          <div style={{
+            ...panelStyle,
+            position: 'absolute',
+            top: '70px',
+            left: '70px',
+            zIndex: 1200,
+            animation: showMapPanel ? 'slideInLeft 0.3s ease-out' : ''
+          }}>
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
