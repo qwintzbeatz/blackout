@@ -79,7 +79,7 @@ const MARKER_NAMES = ['Pole', 'Sign', 'E.Box', 'Fence', 'Wall', 'Shutter', 'Sewe
 type MarkerName = typeof MARKER_NAMES[number];
 
 // Marker description options
-const MARKER_DESCRIPTIONS = ['Sticker/Slap', 'Stencil/Brand/Stamp', 'Tag', 'Etch/Scribe/Scratch', 'Throw-Up', 'Paste-Up/Poster', 'Piece/Bombing', 'Burner/Heater', 'Roller/Blockbuster', 'Extinguisher', 'Mural'] as const;
+const MARKER_DESCRIPTIONS = ['Sticker/Slap', 'Stencil/Brand/Stamp', 'Tag', 'TAG', 'Etch/Scribe/Scratch', 'Throw-Up', 'Paste-Up/Poster', 'Piece/Bombing', 'Burner/Heater', 'Roller/Blockbuster', 'Extinguisher', 'Mural'] as const;
 type MarkerDescription = typeof MARKER_DESCRIPTIONS[number];
 
 // Avatar generator function
@@ -4658,20 +4658,19 @@ export default function Home() {
       {/* Map Control Panel */}
       {showMapPanel && (
         <div style={{
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          backgroundColor: 'rgba(0,0,0,0.9)',
+          position: 'absolute',
+          top: '70px',
+          left: '70px',
+          backgroundColor: 'rgba(0,0,0,0.85)',
           color: '#e0e0e0',
-          padding: '20px',
-          borderRadius: '12px',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          padding: '16px',
+          borderRadius: '8px',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
           border: '1px solid rgba(255,255,255,0.1)',
           zIndex: 1200,
-          backdropFilter: 'blur(10px)',
-          minWidth: '320px',
-          maxWidth: '90vw'
+          width: '320px',
+          maxHeight: '80vh',
+          overflowY: 'auto'
         }}>
           <div style={{
             display: 'flex',
