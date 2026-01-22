@@ -3290,7 +3290,7 @@ export default function Home() {
         left: 70,
         display: 'flex',
         gap: '15px',
-        zIndex: 1000,
+        zIndex: 1200,
         maxHeight: '80vh'
       }}>
         {/* Left Panel - Profile & Stats (Blackbook) */}
