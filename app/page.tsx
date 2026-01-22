@@ -4631,6 +4631,127 @@ export default function Home() {
               </div>
             )}
           </div>
+
+          {/* Music Controls */}
+          {unlockedTracks.length > 0 && (
+            <div style={{
+              marginTop: '15px',
+              paddingTop: '15px',
+              borderTop: '1px solid rgba(138, 43, 226, 0.3)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}>
+              {/* Playback Controls */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}>
+                <button
+                  onClick={() => {
+                    const prevIndex = currentTrackIndex > 0 ? currentTrackIndex - 1 : unlockedTracks.length - 1;
+                    setCurrentTrackIndex(prevIndex);
+                    playNextTrack();
+                  }}
+                  style={{
+                    background: 'rgba(138, 43, 226, 0.2)',
+                    border: '1px solid rgba(138, 43, 226, 0.3)',
+                    color: '#8a2be2',
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  PREV
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (audioRef.current) {
+                      if (isPlaying) {
+                        audioRef.current.pause();
+                      } else {
+                        audioRef.current.play().catch(error => {
+                          console.error('Error playing audio:', error);
+                        });
+                      }
+                      setIsPlaying(!isPlaying);
+                    }
+                  }}
+                  style={{
+                    background: 'rgba(138, 43, 226, 0.2)',
+                    border: '1px solid rgba(138, 43, 226, 0.3)',
+                    color: '#8a2be2',
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '50%',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {isPlaying ? 'PAUSE' : 'PLAY'}
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (audioRef.current) {
+                      audioRef.current.pause();
+                      audioRef.current.currentTime = 0;
+                      setIsPlaying(false);
+                    }
+                  }}
+                  style={{
+                    background: 'rgba(138, 43, 226, 0.2)',
+                    border: '1px solid rgba(138, 43, 226, 0.3)',
+                    color: '#8a2be2',
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  STOP
+                </button>
+
+                <button
+                  onClick={playNextTrack}
+                  style={{
+                    background: 'rgba(138, 43, 226, 0.2)',
+                    border: '1px solid rgba(138, 43, 226, 0.3)',
+                    color: '#8a2be2',
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  NEXT
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
