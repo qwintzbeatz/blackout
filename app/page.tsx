@@ -43,14 +43,14 @@ import { Drop, NEW_ZEALAND_LOCATIONS } from '@/lib/utils/types';
 import { useGPSTracker } from '@/hooks/useGPSTracker';
 
 const HIPHOP_TRACKS = [
-  "https://soundcloud.com/90s-hiphopclassics/2pac-california-love",
+  "https://soundcloud.com/e-u-g-hdub-connected/hdub-party-ft-koers",
   "https://soundcloud.com/biggie-smalls-official/big-poppa",
   "https://soundcloud.com/nas/nas-ny-state-of-mind",
   "https://soundcloud.com/wutangclan/wu-tang-clan-c-r-e-a-m",
   "https://soundcloud.com/jayz/official-jay-z-hard-knock-life",
   "https://soundcloud.com/dr-dre/still-dre-feat-snoop-dogg",
   "https://soundcloud.com/outkast/ms-jackson",
-  "https://soundcloud.com/kendrick-lamar/kendrick-lamar-humble",
+  "https://soundcloud.com/e-u-g-hdub-connected/b-o-p-freestyle-at-western",
 ];
 
 // Dynamically import leaflet only on client side
@@ -170,6 +170,35 @@ const calculateLevel = (rep: number): number => {
   return Math.floor(rep / 100) + 1;
 };
 
+// Helper function to unlock a random track
+const unlockRandomTrack = (currentUnlocked: string[]): string[] => {
+  // Get tracks that haven't been unlocked yet
+  const availableTracks = HIPHOP_TRACKS.filter(track =>
+    !currentUnlocked.includes(track)
+  );
+
+  if (availableTracks.length === 0) return currentUnlocked;
+
+  // Pick random track
+  const randomTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)];
+
+  return [...currentUnlocked, randomTrack];
+};
+
+// Helper function to get track name from URL
+const getTrackNameFromUrl = (url: string): string => {
+  if (url === 'blackout-classic.mp3') return 'Blackout (Default)';
+  if (url.includes('soundcloud.com')) {
+    // Extract track name from SoundCloud URL
+    const segments = url.split('/');
+    const trackSegment = segments[segments.length - 1];
+    return trackSegment.split('-').map(word =>
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+  }
+  return 'Unknown Track';
+};
+
 
 // Type for user-placed markers
 interface UserMarker {
@@ -206,6 +235,7 @@ interface UserProfile {
   crewName?: string;    // Add this
   crewId?: string;      // Add this
   isLeader?: boolean;   // Add this
+  unlockedTracks?: string[];  // SoundCloud URLs and local tracks player has unlocked
 }
 
 // Top Player interface
@@ -284,6 +314,8 @@ export default function Home() {
   // Audio player states
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.5);
+  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+  const [unlockedTracks, setUnlockedTracks] = useState<string[]>(['blackout-classic.mp3']);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   
   // REP Notification state
@@ -357,7 +389,7 @@ export default function Home() {
   // Audio control functions
   const togglePlay = () => {
     if (!audioRef.current) return;
-    
+
     if (isPlaying) {
       audioRef.current.pause();
     } else {
@@ -366,6 +398,39 @@ export default function Home() {
       });
     }
     setIsPlaying(!isPlaying);
+  };
+
+  // Playlist functions
+  const playNextTrack = () => {
+    const nextIndex = (currentTrackIndex + 1) % unlockedTracks.length;
+    setCurrentTrackIndex(nextIndex);
+
+    const nextTrack = unlockedTracks[nextIndex];
+    const isSoundCloud = nextTrack.includes('soundcloud.com');
+
+    if (isSoundCloud) {
+      // Pause local audio if playing
+      if (audioRef.current && !audioRef.current.paused) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      }
+      // SoundCloud will autoplay through the embed
+      console.log('Now playing SoundCloud track:', getTrackNameFromUrl(nextTrack));
+    } else {
+      // Local audio file - ensure we're playing local audio
+      if (audioRef.current) {
+        audioRef.current.src = `/${nextTrack}`;
+        audioRef.current.play().catch(error => {
+          console.error('Error playing audio:', error);
+        });
+        setIsPlaying(true);
+      }
+    }
+  };
+
+  const getCurrentTrackName = () => {
+    if (unlockedTracks.length === 0) return 'No tracks unlocked';
+    return getTrackNameFromUrl(unlockedTracks[currentTrackIndex]);
   };
   
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -549,6 +614,7 @@ export default function Home() {
         rank: 'TOY',
         totalMarkers: 0,
         favoriteColor: selectedMarkerColor,
+        unlockedTracks: ['blackout-classic.mp3'], // Start with default track
         createdAt: Timestamp.now(),
         lastActive: Timestamp.now(),
         crewId: crewId,
@@ -593,7 +659,10 @@ export default function Home() {
         
         const favoriteColor = data.favoriteColor || '#10b981';
         setSelectedMarkerColor(favoriteColor);
-        
+
+        const userUnlockedTracks = data.unlockedTracks || ['blackout-classic.mp3'];
+        setUnlockedTracks(userUnlockedTracks);
+
         setUserProfile({
           uid: data.uid,
           email: data.email,
@@ -605,6 +674,7 @@ export default function Home() {
           rank: data.rank || 'TOY',
           totalMarkers: data.totalMarkers || 0,
           favoriteColor: favoriteColor,
+          unlockedTracks: userUnlockedTracks,
           createdAt: data.createdAt?.toDate() || new Date(),
           lastActive: data.lastActive?.toDate() || new Date(),
           crewId: data.crewId || null,
@@ -971,11 +1041,16 @@ export default function Home() {
         const newRank = calculateRank(newRep);
         const newLevel = calculateLevel(newRep);
 
+        // Check for new track unlock
+        const currentTracks = userProfile.unlockedTracks || ['blackout-classic.mp3'];
+        const newTracks = unlockRandomTrack(currentTracks);
+
         const userRef = doc(db, 'users', user.uid);
         await updateDoc(userRef, {
           rep: newRep,
           rank: newRank,
           level: newLevel,
+          unlockedTracks: newTracks,
           lastActive: Timestamp.now()
         });
 
@@ -983,8 +1058,12 @@ export default function Home() {
           ...prev,
           rep: newRep,
           rank: newRank,
-          level: newLevel
+          level: newLevel,
+          unlockedTracks: newTracks
         } : prev);
+
+        // Update unlocked tracks state
+        setUnlockedTracks(newTracks);
 
         // Add to local state
         setDrops(prev => [{ ...newDrop, firestoreId: dropId, id: `drop-${dropId}` }, ...prev]);
@@ -993,8 +1072,16 @@ export default function Home() {
         setShowPhotoModal(false);
         setPendingDropPosition(null);
 
+        // Check if new track was unlocked
+        const trackUnlocked = newTracks.length > currentTracks.length;
+        const unlockedTrackName = trackUnlocked ? getTrackNameFromUrl(newTracks[newTracks.length - 1]) : '';
+
         // Notify player
-        alert(`Drop placed successfully! 📸\n\n+${repEarned} REP\nNew Rank: ${newRank}`);
+        const message = trackUnlocked
+          ? `🎵 NEW TRACK UNLOCKED! 🎵\n\n${unlockedTrackName}\n\nDrop placed successfully! 📸\n+${repEarned} REP\nNew Rank: ${newRank}`
+          : `Drop placed successfully! 📸\n\n+${repEarned} REP\nNew Rank: ${newRank}`;
+
+        alert(message);
       } else {
         throw new Error('Failed to save drop');
       }
@@ -1050,18 +1137,39 @@ export default function Home() {
         const newRank = calculateRank(newRep);
         const newLevel = calculateLevel(newRep);
 
+        // Check for new track unlock
+        const currentTracks = userProfile.unlockedTracks || ['blackout-classic.mp3'];
+        const newTracks = unlockRandomTrack(currentTracks);
+
         const userRef = doc(db, 'users', user.uid);
         await updateDoc(userRef, {
           rep: newRep,
           level: newLevel,
           rank: newRank,
+          unlockedTracks: newTracks,
         });
 
         // Update local state
-        setUserProfile(prev => prev ? { ...prev, rep: newRep, level: newLevel, rank: newRank } : null);
+        setUserProfile(prev => prev ? {
+          ...prev,
+          rep: newRep,
+          level: newLevel,
+          rank: newRank,
+          unlockedTracks: newTracks
+        } : null);
 
-        // Show REP notification
-        setRepNotification({ show: true, amount: repEarned, message: `${selectedMarkerType} marker placed!` });
+        // Update unlocked tracks state
+        setUnlockedTracks(newTracks);
+
+        // Show REP notification with track unlock info
+        const trackUnlocked = newTracks.length > currentTracks.length;
+        const unlockedTrackName = trackUnlocked ? getTrackNameFromUrl(newTracks[newTracks.length - 1]) : '';
+
+        const notificationMessage = trackUnlocked
+          ? `🎵 ${unlockedTrackName} Unlocked! 🎵\n${selectedMarkerType} marker placed!`
+          : `${selectedMarkerType} marker placed!`;
+
+        setRepNotification({ show: true, amount: repEarned, message: notificationMessage });
 
         // Reload drops and markers
         await loadDrops();
@@ -1287,7 +1395,7 @@ export default function Home() {
           zIndex: 2,
           backdropFilter: 'blur(10px)',
           border: '1px solid rgba(255, 255, 255, 0.1)',
-          minWidth: '280px',
+          minWidth: unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? '400px' : '280px',
           color: 'white'
         }}>
           <div style={{
@@ -1320,15 +1428,44 @@ export default function Home() {
             </button>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'white' }}>
-                🎵 Blackout - Classic
+                🎵 {getCurrentTrackName()}
               </div>
               <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '4px' }}>
-                #Classic at Western Heights Rotovegas
+                Track {currentTrackIndex + 1} of {unlockedTracks.length} unlocked
               </div>
-              <div style={{ fontSize: '11px', color: isPlaying ? '#10b981' : '#94a3b8', marginTop: '4px' }}>
-                {isPlaying ? '● Now Playing' : 'Paused'}
+              <div style={{ fontSize: '11px', color: unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? '#ff6b6b' : (isPlaying ? '#10b981' : '#94a3b8'), marginTop: '4px' }}>
+                {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? '🎵 SoundCloud' : (isPlaying ? '● Now Playing' : 'Paused')}
               </div>
             </div>
+            <button
+              onClick={playNextTrack}
+              style={{
+                width: '35px',
+                height: '35px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                color: '#4dabf7',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '16px',
+                boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.transform = 'scale(1.1)';
+                e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.3)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.2)';
+              }}
+              title="Next Track"
+            >
+              ⏭️
+            </button>
           </div>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
@@ -1354,6 +1491,25 @@ export default function Home() {
               {Math.round(volume * 100)}%
             </span>
           </div>
+
+          {/* SoundCloud Embed */}
+          {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && (
+            <div style={{ marginTop: '15px', borderRadius: '8px', overflow: 'hidden' }}>
+              <iframe
+                width="100%"
+                height="166"
+                scrolling="no"
+                frameBorder="no"
+                allow="autoplay"
+                src={`https://w.soundcloud.com/player/?url=${encodeURIComponent(unlockedTracks[currentTrackIndex])}&color=%23ff6b6b&auto_play=true&hide_related=false&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=true`}
+                title={`SoundCloud Player - ${getCurrentTrackName()}`}
+                style={{
+                  borderRadius: '8px',
+                  border: 'none'
+                }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Main login card */}
@@ -4342,7 +4498,7 @@ export default function Home() {
             borderBottom: '1px solid rgba(255,255,255,0.1)',
             paddingBottom: '12px'
           }}>
-            <h3 style={{ margin: 0, color: '#4dabf7', fontSize: '18px' }}>🗺️ Map Controls</h3>
+            <h3 style={{ margin: 0, color: '#4dabf7', fontSize: '18px' }}>🗺️ MAP CONTROLS</h3>
             <button
               onClick={() => setShowMapPanel(false)}
               style={{
