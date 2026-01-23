@@ -43,6 +43,7 @@ import { Drop, NEW_ZEALAND_LOCATIONS } from '@/lib/utils/types';
 import { useGPSTracker } from '@/hooks/useGPSTracker';
 
 const HIPHOP_TRACKS = [
+  "https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1",
   "https://soundcloud.com/e-u-g-hdub-connected/hdub-party-ft-koers",
   "https://soundcloud.com/e-u-g-hdub-connected/fight-music",
   "https://soundcloud.com/e-u-g-hdub-connected/rockin-in-the-club",
@@ -58,11 +59,35 @@ const HIPHOP_TRACKS = [
   "https://soundcloud.com/nzhiphop/tuface-otara-state-of-mind",
   "https://soundcloud.com/nzhiphop/mareko-city-line",
   "https://soundcloud.com/nzhiphop/tyna-iv-corners-djsmv-welcome-to-hamilton-city",
-  "https://soundcloud.com/madisnzofficial/madis-start-to-an-end",
+  "https://soundcloud.com/nzhiphop/madis-start-to-an-end",
   "https://soundcloud.com/colourway_records/colourway-put-your-colors-on",
   "https://soundcloud.com/uiceheidd/too-smooth-juice",
-
 ];
+
+// SoundCloud Widget API global declaration
+declare global {
+  interface Window {
+    SC: {
+      Widget: {
+        (iframe: HTMLIFrameElement): any;
+        Events: {
+          READY: string;
+          PLAY: string;
+          PAUSE: string;
+          FINISH: string;
+          ERROR: string;
+        };
+      };
+    };
+  }
+}
+
+// Extended iframe interface
+declare global {
+  interface HTMLIFrameElement {
+    _scWidget?: any;
+  }
+}
 
 // Dynamically import leaflet only on client side
 const MapContainer = dynamic(
@@ -91,7 +116,7 @@ const MARKER_NAMES = ['Pole', 'Sign', 'E.Box', 'Fence', 'Wall', 'Shutter', 'Sewe
 type MarkerName = typeof MARKER_NAMES[number];
 
 // Marker description options
-const MARKER_DESCRIPTIONS = ['Sticker/Slap', 'Stencil/Brand/Stamp', 'Tag', 'TAG', 'Etch/Scribe/Scratch', 'Throw-Up', 'Paste-Up/Poster', 'Piece/Bombing', 'Burner/Heater', 'Roller/Blockbuster', 'Extinguisher', 'Mural'] as const;
+const MARKER_DESCRIPTIONS = ['Sticker/Slap', 'Stencil/Brand/Stamp', 'Tag/Signature', 'Etch/Scribe/Scratch', 'Throw-Up', 'Paste-Up/Poster', 'Piece/Bombing', 'Burner/Heater', 'Roller/Blockbuster', 'Extinguisher', 'Mural'] as const;
 type MarkerDescription = typeof MARKER_DESCRIPTIONS[number];
 
 // Modern panel styling constant for consistency across all UI panels
@@ -161,7 +186,7 @@ const calculateRepForMarker = (distanceFromCenter: number | null, markerDescript
     case 'Paste-Up/Poster':
       rep += 8;
       break;
-    case 'Tag':
+    case 'Tag/Signature':
       rep += 5;
       break;
     default:
@@ -210,7 +235,6 @@ const getTrackNameFromUrl = (url: string): string => {
   return 'Unknown Track';
 };
 
-
 // Type for user-placed markers
 interface UserMarker {
   id: string;
@@ -242,11 +266,11 @@ interface UserProfile {
   favoriteColor?: string;
   createdAt: Date;
   lastActive: Date;
-  isSolo?: boolean;      // Add this
-  crewName?: string;    // Add this
-  crewId?: string;      // Add this
-  isLeader?: boolean;   // Add this
-  unlockedTracks?: string[];  // SoundCloud URLs and local tracks player has unlocked
+  isSolo?: boolean;
+  crewName?: string;
+  crewId?: string;
+  isLeader?: boolean;
+  unlockedTracks?: string[];
 }
 
 // Top Player interface
@@ -260,6 +284,14 @@ interface TopPlayer {
   totalMarkers: number;
   position?: [number, number];
   lastActive: Date;
+}
+
+// SoundCloud Track interface
+interface SoundCloudTrack {
+  url: string;
+  title: string;
+  isLoaded: boolean;
+  iframeId?: string;
 }
 
 // Marker colors
@@ -276,17 +308,55 @@ const MARKER_COLORS = [
   { name: 'Gray', value: '#6b7280' }
 ] as const;
 
+// Helper function to calculate bounds from markers
+const calculateBoundsFromMarkers = (markers: UserMarker[]): [[number, number], [number, number]] | null => {
+  if (markers.length === 0) return null;
+  
+  const lats = markers.map(m => m.position[0]);
+  const lngs = markers.map(m => m.position[1]);
+  
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  
+  return [[minLat, minLng], [maxLat, maxLng]];
+};
+
+// Function to create SoundCloud iframe URL
+const createSoundCloudIframeUrl = (trackUrl: string): string => {
+  const params = new URLSearchParams({
+    url: trackUrl,
+    color: 'ff5500',
+    auto_play: 'false',
+    hide_related: 'true',
+    show_comments: 'false',
+    show_user: 'false',
+    show_reposts: 'false',
+    show_teaser: 'false',
+    visual: 'false',
+    sharing: 'false',
+    buying: 'false',
+    download: 'false',
+    show_playcount: 'false',
+    show_artwork: 'false',
+    show_playlist: 'false'
+  });
+  
+  return `https://w.soundcloud.com/player/?${params.toString()}`;
+};
+
 export default function Home() {
   const [mapReady, setMapReady] = useState(false);
   const [zoom, setZoom] = useState<number>(15);
   // New Zealand bounds and center
   const NZ_BOUNDS: [[number, number], [number, number]] = [
-    [-47.5, 165.0], // Southwest corner (South Island)
-    [-34.0, 179.0]  // Northeast corner (North Island)
+    [-47.5, 165.0],
+    [-34.0, 179.0]
   ];
-  const NZ_CENTER: [number, number] = [-40.9006, 174.8860]; // Center of New Zealand
-  const NZ_DEFAULT_ZOOM = 6; // Zoom level to show all of NZ
-  const GPS_DEFAULT_ZOOM = 15; // Zoom level for GPS location
+  const NZ_CENTER: [number, number] = [-40.9006, 174.8860];
+  const NZ_DEFAULT_ZOOM = 6;
+  const GPS_DEFAULT_ZOOM = 15;
 
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [isClient, setIsClient] = useState(false);
@@ -326,8 +396,17 @@ export default function Home() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.5);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
-  const [unlockedTracks, setUnlockedTracks] = useState<string[]>(['blackout-classic.mp3']);
+  const [unlockedTracks, setUnlockedTracks] = useState<string[]>(['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1']);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // SoundCloud states
+  const [soundCloudTracks, setSoundCloudTracks] = useState<SoundCloudTrack[]>([]);
+  const [isSoundCloudLoading, setIsSoundCloudLoading] = useState(false);
+  const soundCloudContainerRef = useRef<HTMLDivElement>(null);
+  
+  // SoundCloud widgets ref - FIXED: Using Map for proper tracking
+  const soundCloudWidgetsRef = useRef<Map<string, any>>(new Map());
+  const soundCloudIframesRef = useRef<Map<string, HTMLIFrameElement>>(new Map());
   
   // REP Notification state
   const [repNotification, setRepNotification] = useState<{ show: boolean, amount: number, message: string } | null>(null);
@@ -338,11 +417,11 @@ export default function Home() {
   const [showDropTypeModal, setShowDropTypeModal] = useState(false);
   const [pendingDropPosition, setPendingDropPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [selectedMarkerType, setSelectedMarkerType] = useState<MarkerDescription>('Tag');
+  const [selectedMarkerType, setSelectedMarkerType] = useState<MarkerDescription>('Tag/Signature');
   
   // Crew states
   const [nearbyCrewMembers, setNearbyCrewMembers] = useState<Array<{ uid: string; username: string; distance: number }>>([]);
-  const [expandedRadius, setExpandedRadius] = useState(50); // Base 50m, expands by 50m per crew member
+  const [expandedRadius, setExpandedRadius] = useState(50);
   
   // Last marker date for streak bonus
   const [lastMarkerDate, setLastMarkerDate] = useState<string | null>(null);
@@ -355,38 +434,167 @@ export default function Home() {
   // Filter toggle
   const [showOnlyMyDrops, setShowOnlyMyDrops] = useState(false);
   
-  // NEW: Panel control states
+  // Error state
+  const [error, setError] = useState<string | null>(null);
+  
+  // Panel control states
   const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [showPhotosPanel, setShowPhotosPanel] = useState(false);
   const [showMessagesPanel, setShowMessagesPanel] = useState(false);
   const [showMapPanel, setShowMapPanel] = useState(false);
   const [showMusicPanel, setShowMusicPanel] = useState(false);
 
-  // Initialize audio
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      audioRef.current = new Audio('/blackout-classic.mp3');
-      audioRef.current.loop = true;
-      audioRef.current.volume = volume;
-      audioRef.current.play().catch(err => {
-        console.error('Autoplay failed:', err);
-      });
-    }
+  // Refreshing state
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
+  // Load SoundCloud Widget API - FIXED: Better initialization
+  useEffect(() => {
+    const loadSoundCloudAPI = () => {
+      if (typeof window !== 'undefined') {
+        // Check if already loaded
+        if (window.SC) {
+          console.log('SoundCloud Widget API already loaded');
+          return;
+        }
+
+        console.log('Loading SoundCloud Widget API...');
+        const script = document.createElement('script');
+        script.src = 'https://w.soundcloud.com/player/api.js';
+        script.async = true;
+        script.onload = () => {
+          console.log('SoundCloud Widget API loaded successfully');
+        };
+        script.onerror = (error) => {
+          console.error('Failed to load SoundCloud Widget API:', error);
+        };
+        document.body.appendChild(script);
       }
+    };
+
+    loadSoundCloudAPI();
+
+    // Cleanup function
+    return () => {
+      // Clean up all widgets
+      soundCloudWidgetsRef.current.forEach((widget, key) => {
+        try {
+          if (widget && typeof widget.unbind === 'function') {
+            widget.unbind(window.SC?.Widget?.Events?.READY);
+            widget.unbind(window.SC?.Widget?.Events?.PLAY);
+            widget.unbind(window.SC?.Widget?.Events?.PAUSE);
+            widget.unbind(window.SC?.Widget?.Events?.FINISH);
+            widget.unbind(window.SC?.Widget?.Events?.ERROR);
+          }
+        } catch (error) {
+          console.error('Error cleaning up SoundCloud widget:', error);
+        }
+      });
+      soundCloudWidgetsRef.current.clear();
+      soundCloudIframesRef.current.clear();
     };
   }, []);
 
-  // Update volume when it changes
+  // Initialize SoundCloud tracks when unlocked tracks change - FIXED: Simplified approach
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = volume;
-    }
-  }, [volume]);
+    const initializeSoundCloudTracks = async () => {
+      const soundCloudUrls = unlockedTracks.filter(track => track.includes('soundcloud.com'));
+      
+      if (soundCloudUrls.length === 0) return;
+      
+      setIsSoundCloudLoading(true);
+      
+      // Create track objects
+      const tracks = soundCloudUrls.map((url, index) => ({
+        url,
+        title: getTrackNameFromUrl(url),
+        isLoaded: false,
+        iframeId: `soundcloud-player-${Date.now()}-${index}`
+      }));
+      
+      setSoundCloudTracks(tracks);
+      setIsSoundCloudLoading(false);
+    };
+
+    initializeSoundCloudTracks();
+  }, [unlockedTracks]);
+
+  // Initialize SoundCloud widgets when iframes are mounted - FIXED: Better initialization
+  useEffect(() => {
+    const initializeWidgets = () => {
+      if (!window.SC) {
+        // Try again in 500ms if SC not loaded yet
+        setTimeout(initializeWidgets, 500);
+        return;
+      }
+
+      // Initialize widgets for all SoundCloud iframes
+      soundCloudIframesRef.current.forEach((iframe, iframeId) => {
+        if (!soundCloudWidgetsRef.current.has(iframeId)) {
+          try {
+            const widget = window.SC.Widget(iframe);
+            soundCloudWidgetsRef.current.set(iframeId, widget);
+            
+            // Bind events
+            widget.bind(window.SC.Widget.Events.READY, () => {
+              console.log(`SoundCloud widget ${iframeId} ready`);
+            });
+            
+            widget.bind(window.SC.Widget.Events.PLAY, () => {
+              console.log(`SoundCloud widget ${iframeId} playing`);
+              setIsPlaying(true);
+            });
+            
+            widget.bind(window.SC.Widget.Events.PAUSE, () => {
+              console.log(`SoundCloud widget ${iframeId} paused`);
+              setIsPlaying(false);
+            });
+            
+            widget.bind(window.SC.Widget.Events.FINISH, () => {
+              console.log(`SoundCloud widget ${iframeId} finished`);
+              setIsPlaying(false);
+              playNextTrack();
+            });
+            
+            widget.bind(window.SC.Widget.Events.ERROR, (error: any) => {
+              console.error(`SoundCloud widget ${iframeId} error:`, error);
+            });
+            
+          } catch (error) {
+            console.error(`Failed to initialize SoundCloud widget ${iframeId}:`, error);
+          }
+        }
+      });
+    };
+
+    // Initialize after a short delay to ensure DOM is ready
+    const timeoutId = setTimeout(initializeWidgets, 1000);
+    
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [soundCloudTracks]);
+
+  // Clean up when component unmounts or tracks change
+  useEffect(() => {
+    return () => {
+      // Clean up widgets for tracks that are no longer in the list
+      const currentTrackUrls = new Set(unlockedTracks);
+      soundCloudWidgetsRef.current.forEach((widget, key) => {
+        if (!currentTrackUrls.has(key)) {
+          try {
+            widget.unbind(window.SC?.Widget?.Events?.READY);
+            widget.unbind(window.SC?.Widget?.Events?.PLAY);
+            widget.unbind(window.SC?.Widget?.Events?.PAUSE);
+            widget.unbind(window.SC?.Widget?.Events?.FINISH);
+            widget.unbind(window.SC?.Widget?.Events?.ERROR);
+            soundCloudWidgetsRef.current.delete(key);
+          } catch (error) {
+            console.error('Error cleaning up widget:', error);
+          }
+        }
+      });
+    };
+  }, [unlockedTracks]);
 
   // REP Notification effect
   useEffect(() => {
@@ -398,21 +606,64 @@ export default function Home() {
     }
   }, [repNotification]);
 
-  // Audio control functions
+  // FIXED: Toggle play function
   const togglePlay = () => {
+    const currentTrack = unlockedTracks[currentTrackIndex];
+    const isSoundCloud = currentTrack?.includes('soundcloud.com');
+
+    if (isSoundCloud) {
+      console.log('Toggling SoundCloud playback...');
+      
+      // Find the SoundCloud track
+      const soundCloudTrack = soundCloudTracks.find(t => t.url === currentTrack);
+      if (!soundCloudTrack?.iframeId) {
+        console.log('SoundCloud track not found or iframe not ready');
+        return;
+      }
+
+      // Get widget from ref
+      const widget = soundCloudWidgetsRef.current.get(soundCloudTrack.iframeId);
+      
+      if (widget && typeof widget.toggle === 'function') {
+        widget.toggle();
+        
+        // Update playing state
+        widget.isPaused((paused: boolean) => {
+          setIsPlaying(!paused);
+          console.log(`SoundCloud ${paused ? 'paused' : 'playing'}`);
+        });
+      } else {
+        console.error('No SoundCloud widget available or widget.toggle not a function');
+        // Try to play via iframe directly
+        const iframe = soundCloudIframesRef.current.get(soundCloudTrack.iframeId);
+        if (iframe) {
+          const iframeWindow = iframe.contentWindow;
+          if (iframeWindow && typeof iframeWindow.postMessage === 'function') {
+            iframeWindow.postMessage(JSON.stringify({
+              method: 'play'
+            }), 'https://w.soundcloud.com');
+          }
+        }
+      }
+      return;
+    }
+
+    // Local audio handling
     if (!audioRef.current) return;
 
     if (isPlaying) {
       audioRef.current.pause();
+      setIsPlaying(false);
     } else {
       audioRef.current.play().catch(error => {
         console.error('Error playing audio:', error);
+        setIsPlaying(false);
       });
+      setIsPlaying(true);
     }
-    setIsPlaying(!isPlaying);
   };
 
-  // Playlist functions
+  // FIXED: Play next track function
   const playNextTrack = () => {
     const nextIndex = (currentTrackIndex + 1) % unlockedTracks.length;
     setCurrentTrackIndex(nextIndex);
@@ -420,20 +671,74 @@ export default function Home() {
     const nextTrack = unlockedTracks[nextIndex];
     const isSoundCloud = nextTrack.includes('soundcloud.com');
 
+    console.log(`Playing next track: ${getTrackNameFromUrl(nextTrack)} (SoundCloud: ${isSoundCloud})`);
+
     if (isSoundCloud) {
-      // Pause local audio if playing
+      // Stop local audio if playing
       if (audioRef.current && !audioRef.current.paused) {
         audioRef.current.pause();
         setIsPlaying(false);
       }
-      // SoundCloud will autoplay through the embed
-      console.log('Now playing SoundCloud track:', getTrackNameFromUrl(nextTrack));
+
+      // Get widget for next track
+      const soundCloudTrack = soundCloudTracks.find(t => t.url === nextTrack);
+      if (soundCloudTrack?.iframeId) {
+        const widget = soundCloudWidgetsRef.current.get(soundCloudTrack.iframeId);
+        if (widget && typeof widget.play === 'function') {
+          widget.play();
+          setIsPlaying(true);
+        } else {
+          console.error('No widget found for next track');
+        }
+      }
     } else {
-      // Local audio file - ensure we're playing local audio
+      // Handle local audio
       if (audioRef.current) {
         audioRef.current.src = `/${nextTrack}`;
         audioRef.current.play().catch(error => {
           console.error('Error playing audio:', error);
+          setIsPlaying(false);
+        });
+        setIsPlaying(true);
+      }
+    }
+  };
+
+  // FIXED: Play previous track function
+  const playPreviousTrack = () => {
+    const prevIndex = currentTrackIndex > 0 ? currentTrackIndex - 1 : unlockedTracks.length - 1;
+    setCurrentTrackIndex(prevIndex);
+
+    const prevTrack = unlockedTracks[prevIndex];
+    const isSoundCloud = prevTrack.includes('soundcloud.com');
+
+    console.log(`Playing previous track: ${getTrackNameFromUrl(prevTrack)} (SoundCloud: ${isSoundCloud})`);
+
+    if (isSoundCloud) {
+      // Stop local audio if playing
+      if (audioRef.current && !audioRef.current.paused) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      }
+
+      // Get widget for previous track
+      const soundCloudTrack = soundCloudTracks.find(t => t.url === prevTrack);
+      if (soundCloudTrack?.iframeId) {
+        const widget = soundCloudWidgetsRef.current.get(soundCloudTrack.iframeId);
+        if (widget && typeof widget.play === 'function') {
+          widget.play();
+          setIsPlaying(true);
+        } else {
+          console.error('No widget found for previous track');
+        }
+      }
+    } else {
+      // Handle local audio
+      if (audioRef.current) {
+        audioRef.current.src = `/${prevTrack}`;
+        audioRef.current.play().catch(error => {
+          console.error('Error playing audio:', error);
+          setIsPlaying(false);
         });
         setIsPlaying(true);
       }
@@ -442,12 +747,24 @@ export default function Home() {
 
   const getCurrentTrackName = () => {
     if (unlockedTracks.length === 0) return 'No tracks unlocked';
-    return getTrackNameFromUrl(unlockedTracks[currentTrackIndex]);
+    
+    const track = unlockedTracks[currentTrackIndex];
+    if (track.includes('soundcloud.com')) {
+      const soundCloudTrack = soundCloudTracks.find(t => t.url === track);
+      return soundCloudTrack?.title || getTrackNameFromUrl(track);
+    }
+    
+    return getTrackNameFromUrl(track);
   };
   
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newVolume = parseFloat(e.target.value);
     setVolume(newVolume);
+    
+    // Update audio volume
+    if (audioRef.current) {
+      audioRef.current.volume = newVolume;
+    }
   };
 
   const calculateStreakBonus = (): number => {
@@ -577,20 +894,17 @@ export default function Home() {
     try {
       const profilePicUrl = generateAvatarUrl(user.uid, profileUsername.trim(), profileGender);
       
-      // Handle crew creation or solo choice
       let crewId: string | null = null;
       let crewName: string | null = null;
       const isSolo = profileCrewChoice === 'solo';
       
       if (!isSolo && profileCrewName.trim()) {
-        // Create or join crew
         const crewNameLower = profileCrewName.trim().toLowerCase();
         const crewsRef = collection(db, 'crews');
         const crewQuery = query(crewsRef, where('nameLower', '==', crewNameLower));
         const crewSnapshot = await getDocs(crewQuery);
         
         if (crewSnapshot.empty) {
-          // Create new crew
           const newCrewRef = doc(crewsRef);
           crewId = newCrewRef.id;
           await setDoc(newCrewRef, {
@@ -602,7 +916,6 @@ export default function Home() {
           });
           crewName = profileCrewName.trim();
         } else {
-          // Join existing crew
           const crewDoc = crewSnapshot.docs[0];
           crewId = crewDoc.id;
           crewName = crewDoc.data().name;
@@ -626,7 +939,7 @@ export default function Home() {
         rank: 'TOY',
         totalMarkers: 0,
         favoriteColor: selectedMarkerColor,
-        unlockedTracks: ['blackout-classic.mp3'], // Start with default track
+        unlockedTracks: ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'],
         createdAt: Timestamp.now(),
         lastActive: Timestamp.now(),
         crewId: crewId,
@@ -647,7 +960,7 @@ export default function Home() {
       setProfileUsername('');
       
       await loadTopPlayers();
-      await loadAllMarkers(); // Load all markers after profile creation
+      await loadAllMarkers();
       
     } catch (error: any) {
       console.error('Error creating profile:', error);
@@ -672,7 +985,7 @@ export default function Home() {
         const favoriteColor = data.favoriteColor || '#10b981';
         setSelectedMarkerColor(favoriteColor);
 
-        const userUnlockedTracks = data.unlockedTracks || ['blackout-classic.mp3'];
+        const userUnlockedTracks = data.unlockedTracks || ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'];
         setUnlockedTracks(userUnlockedTracks);
 
         setUserProfile({
@@ -817,8 +1130,8 @@ export default function Home() {
           await loadTopPlayers();
 
           if (hasProfile) {
-            await loadAllMarkers(); // Load ALL markers
-            await loadDrops(); // Load ALL drops
+            await loadAllMarkers();
+            await loadDrops();
           }
         } finally {
           setLoadingUserProfile(false);
@@ -837,7 +1150,7 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
-  // Load drops on component mount (for all users)
+  // Load drops on component mount
   useEffect(() => {
     loadDrops();
   }, [loadDrops]);
@@ -852,7 +1165,6 @@ export default function Home() {
 
     const detectNearbyCrewMembers = async () => {
       try {
-        // Get all members of the same crew
         const crewDoc = await getDoc(doc(db, 'crews', userProfile.crewId!));
         if (!crewDoc.exists()) {
           setExpandedRadius(50);
@@ -863,7 +1175,6 @@ export default function Home() {
         const crewData = crewDoc.data();
         const crewMemberIds = crewData.members || [];
         
-        // Filter out current user
         const otherMemberIds = crewMemberIds.filter((uid: string) => uid !== user.uid);
         
         if (otherMemberIds.length === 0) {
@@ -872,7 +1183,6 @@ export default function Home() {
           return;
         }
 
-        // Get positions of other crew members from topPlayers (they have position data)
         const nearbyMembers: Array<{ uid: string; username: string; distance: number }> = [];
         
         topPlayers.forEach((player) => {
@@ -884,7 +1194,6 @@ export default function Home() {
               player.position[1]
             );
             
-            // If within 200m, consider them "nearby" for radius expansion
             if (distance <= 200) {
               nearbyMembers.push({
                 uid: player.uid,
@@ -895,7 +1204,6 @@ export default function Home() {
           }
         });
 
-        // Calculate expanded radius: base 50m + 50m per nearby crew member
         const newRadius = 50 + (nearbyMembers.length * 50);
         setExpandedRadius(newRadius);
         setNearbyCrewMembers(nearbyMembers);
@@ -908,15 +1216,13 @@ export default function Home() {
 
     detectNearbyCrewMembers();
     
-    // Check every 5 seconds
     const interval = setInterval(detectNearbyCrewMembers, 5000);
     return () => clearInterval(interval);
   }, [gpsPosition, userProfile, user, topPlayers]);
 
-  // Set initial map center to GPS position when available (within NZ bounds)
+  // Set initial map center to GPS position when available
   useEffect(() => {
     if (gpsPosition && !mapCenter) {
-      // Check if GPS position is within NZ bounds
       const [lat, lng] = gpsPosition;
       const withinNZ = lat >= NZ_BOUNDS[0][0] && lat <= NZ_BOUNDS[1][0] &&
                       lng >= NZ_BOUNDS[0][1] && lng <= NZ_BOUNDS[1][1];
@@ -926,7 +1232,6 @@ export default function Home() {
         setZoom(GPS_DEFAULT_ZOOM);
         console.log('Map centered on GPS location within NZ');
       } else {
-        // GPS outside NZ - center on NZ and show message
         setMapCenter(NZ_CENTER);
         setZoom(NZ_DEFAULT_ZOOM);
         setError('🏝️ Kia ora! Blackout is NZ-only. Your location appears to be outside Aotearoa. The map has been centered on New Zealand for the best street art experience! 🗺️');
@@ -970,7 +1275,7 @@ export default function Home() {
         userId: user.uid,
         username: userProfile.username,
         userProfilePic: userProfile.profilePicUrl,
-        createdAt: serverTimestamp(), // Use server timestamp
+        createdAt: serverTimestamp(),
         distanceFromCenter: marker.distanceFromCenter || null,
         repEarned: totalRep
       };
@@ -1028,10 +1333,8 @@ export default function Home() {
 
     setIsUploadingPhoto(true);
     try {
-      // Upload photo to ImgBB
       const photoUrl = await uploadImageToImgBB(file);
 
-      // Create drop
       const newDrop: Drop = {
         lat: pendingDropPosition.lat,
         lng: pendingDropPosition.lng,
@@ -1043,18 +1346,15 @@ export default function Home() {
         userProfilePic: userProfile.profilePicUrl,
       };
 
-      // Save to Firestore
       const dropId = await saveDropToFirestore(newDrop);
       
       if (dropId) {
-        // Award REP for placing a photo drop (simpler fixed REP for now)
         const repEarned = 10;
         const newRep = (userProfile.rep || 0) + repEarned;
         const newRank = calculateRank(newRep);
         const newLevel = calculateLevel(newRep);
 
-        // Check for new track unlock
-        const currentTracks = userProfile.unlockedTracks || ['blackout-classic.mp3'];
+        const currentTracks = userProfile.unlockedTracks || ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'];
         const newTracks = unlockRandomTrack(currentTracks);
 
         const userRef = doc(db, 'users', user.uid);
@@ -1074,21 +1374,16 @@ export default function Home() {
           unlockedTracks: newTracks
         } : prev);
 
-        // Update unlocked tracks state
         setUnlockedTracks(newTracks);
 
-        // Add to local state
         setDrops(prev => [{ ...newDrop, firestoreId: dropId, id: `drop-${dropId}` }, ...prev]);
         
-        // Close modal and reset
         setShowPhotoModal(false);
         setPendingDropPosition(null);
 
-        // Check if new track was unlocked
         const trackUnlocked = newTracks.length > currentTracks.length;
         const unlockedTrackName = trackUnlocked ? getTrackNameFromUrl(newTracks[newTracks.length - 1]) : '';
 
-        // Notify player
         const message = trackUnlocked
           ? `🎵 NEW TRACK UNLOCKED! 🎵\n\n${unlockedTrackName}\n\nDrop placed successfully! 📸\n+${repEarned} REP\nNew Rank: ${newRank}`
           : `Drop placed successfully! 📸\n\n+${repEarned} REP\nNew Rank: ${newRank}`;
@@ -1112,7 +1407,6 @@ export default function Home() {
     }
 
     try {
-      // Create marker drop (no photo)
       const newDrop: Drop = {
         lat: pendingDropPosition.lat,
         lng: pendingDropPosition.lng,
@@ -1123,34 +1417,29 @@ export default function Home() {
         userProfilePic: userProfile.profilePicUrl,
       };
 
-      // Save to drops collection
       const dropId = await saveDropToFirestore(newDrop);
 
-      // Also save to markers collection with type information
       const markerData: UserMarker = {
-        id: `temp-${Date.now()}`, // Temporary ID, will be replaced by Firestore ID
+        id: `temp-${Date.now()}`,
         position: [pendingDropPosition.lat, pendingDropPosition.lng],
-        name: 'Pole', // Default location
-        description: selectedMarkerType, // Use selected type
-        color: '#10b981', // Default green
+        name: 'Pole',
+        description: selectedMarkerType,
+        color: '#10b981',
         timestamp: new Date(),
         userId: user.uid,
         username: userProfile.username,
         userProfilePic: userProfile.profilePicUrl,
       };
 
-      // Save marker to markers collection
       const markerId = await saveMarkerToFirestore(markerData);
 
       if (dropId && markerId) {
-        // Award REP for placing a marker drop
-        const repEarned = 5; // Less REP than photo drops
+        const repEarned = 5;
         const newRep = (userProfile.rep || 0) + repEarned;
         const newRank = calculateRank(newRep);
         const newLevel = calculateLevel(newRep);
 
-        // Check for new track unlock
-        const currentTracks = userProfile.unlockedTracks || ['blackout-classic.mp3'];
+        const currentTracks = userProfile.unlockedTracks || ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'];
         const newTracks = unlockRandomTrack(currentTracks);
 
         const userRef = doc(db, 'users', user.uid);
@@ -1161,7 +1450,6 @@ export default function Home() {
           unlockedTracks: newTracks,
         });
 
-        // Update local state
         setUserProfile(prev => prev ? {
           ...prev,
           rep: newRep,
@@ -1170,10 +1458,8 @@ export default function Home() {
           unlockedTracks: newTracks
         } : null);
 
-        // Update unlocked tracks state
         setUnlockedTracks(newTracks);
 
-        // Show REP notification with track unlock info
         const trackUnlocked = newTracks.length > currentTracks.length;
         const unlockedTrackName = trackUnlocked ? getTrackNameFromUrl(newTracks[newTracks.length - 1]) : '';
 
@@ -1183,12 +1469,10 @@ export default function Home() {
 
         setRepNotification({ show: true, amount: repEarned, message: notificationMessage });
 
-        // Reload drops and markers
         await loadDrops();
         await loadAllMarkers();
       }
 
-      // Close modal and reset state
       setShowDropTypeModal(false);
       setPendingDropPosition(null);
 
@@ -1196,7 +1480,7 @@ export default function Home() {
       console.error('Error creating marker drop:', error);
       alert(`Failed to create marker drop: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-  }, [user, userProfile, pendingDropPosition]);
+  }, [user, userProfile, pendingDropPosition, selectedMarkerType, loadDrops]);
 
   // Handle photo drop selection
   const handlePhotoDrop = useCallback(() => {
@@ -1228,7 +1512,6 @@ export default function Home() {
 
     const { lat, lng } = e.latlng;
 
-    // Store the clicked position and show drop type selection modal
     setPendingDropPosition({ lat, lng });
     setShowDropTypeModal(true);
   }, [user, userProfile, loadingUserProfile, showProfileSetup, isOfflineMode]);
@@ -1245,7 +1528,7 @@ export default function Home() {
   const centerOnGPS = useCallback(() => {
     if (gpsPosition && mapRef.current) {
       setMapCenter(gpsPosition);
-      setZoom(17); // Higher zoom for better location visibility
+      setZoom(17);
       mapRef.current.setView(gpsPosition, 17);
     } else {
       alert('GPS location not available. Please enable location services.');
@@ -1269,7 +1552,6 @@ export default function Home() {
       try {
         await deleteDoc(doc(db, 'markers', markerToDelete.firestoreId));
         
-        // Update user stats if it's their marker
         if (markerToDelete.userId === user?.uid && userProfile) {
           const userRef = doc(db, 'users', user.uid);
           await updateDoc(userRef, {
@@ -1292,7 +1574,6 @@ export default function Home() {
   // Function to delete all markers
   const deleteAllMarkers = async () => {
     if (userMarkers.length > 0 && window.confirm(`Are you sure you want to delete all ${userMarkers.length} markers?`)) {
-      // Delete only user's markers from Firestore
       const userMarkerIds = userMarkers
         .filter(marker => marker.userId === user?.uid && marker.firestoreId)
         .map(marker => marker.firestoreId);
@@ -1303,7 +1584,6 @@ export default function Home() {
       
       await Promise.all(deletePromises);
       
-      // Update user stats
       if (user && userProfile) {
         const userRef = doc(db, 'users', user.uid);
         await updateDoc(userRef, {
@@ -1316,7 +1596,6 @@ export default function Home() {
         } : null);
       }
       
-      // Clear all markers from view (including others')
       setUserMarkers([]);
       setNextMarkerNumber(1);
     }
@@ -1330,8 +1609,20 @@ export default function Home() {
   // New Zealand locations for the game
   const newZealandLocations = NEW_ZEALAND_LOCATIONS;
 
-  // Default fallback center (East Auckland)
- const defaultCenter: [number, number] | null = null;
+  // Handle refresh all data
+  const handleRefreshAll = async () => {
+    setIsRefreshing(true);
+    try {
+      await loadAllMarkers();
+      await loadTopPlayers();
+      await loadDrops();
+      console.log('All data refreshed successfully');
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // ========== AUTH LOADING CHECK ==========
   if (loadingAuth) {
@@ -1404,10 +1695,11 @@ export default function Home() {
           padding: '15px 20px',
           borderRadius: '15px',
           boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
-          zIndex: 9999,
+          zIndex: 2,
           backdropFilter: 'blur(10px)',
           border: '1px solid rgba(255, 255, 255, 0.1)',
-          minWidth: unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? '400px' : '280px',
+          minWidth: '280px',
+          maxWidth: '400px',
           color: 'white'
         }}>
           <div style={{
@@ -1422,7 +1714,8 @@ export default function Home() {
                 width: '45px',
                 height: '45px',
                 borderRadius: '50%',
-                backgroundColor: isPlaying ? '#ef4444' : '#10b981',
+                backgroundColor: (unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? 
+                  false : isPlaying) ? '#ef4444' : '#10b981',
                 border: 'none',
                 color: 'white',
                 cursor: 'pointer',
@@ -1436,7 +1729,8 @@ export default function Home() {
               onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
               onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
             >
-              {isPlaying ? '⏸️' : '▶️'}
+              {(unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? 
+                false : isPlaying) ? '⏸️' : '▶️'}
             </button>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'white' }}>
@@ -1445,8 +1739,10 @@ export default function Home() {
               <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '4px' }}>
                 Track {currentTrackIndex + 1} of {unlockedTracks.length} unlocked
               </div>
-              <div style={{ fontSize: '11px', color: unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? '#ff6b6b' : (isPlaying ? '#10b981' : '#94a3b8'), marginTop: '4px' }}>
-                {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? '🎵 SoundCloud' : (isPlaying ? '● Now Playing' : 'Paused')}
+              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+                {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? 
+                  '🎧 SoundCloud' : 
+                  (isPlaying ? '● Now Playing' : 'Paused')}
               </div>
             </div>
             <button
@@ -1504,22 +1800,47 @@ export default function Home() {
             </span>
           </div>
 
-          {/* SoundCloud Embed */}
+          {/* SoundCloud Embed Container */}
           {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && (
-            <div style={{ marginTop: '15px', borderRadius: '8px', overflow: 'hidden' }}>
-              <iframe
-                width="100%"
-                height="166"
-                scrolling="no"
-                frameBorder="no"
-                allow="autoplay"
-                src={`https://w.soundcloud.com/player/?url=${encodeURIComponent(unlockedTracks[currentTrackIndex])}&color=%23ff6b6b&auto_play=true&hide_related=false&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=true`}
-                title={`SoundCloud Player - ${getCurrentTrackName()}`}
-                style={{
-                  borderRadius: '8px',
-                  border: 'none'
-                }}
-              />
+            <div style={{ marginTop: '15px' }}>
+              <div style={{ 
+                fontSize: '12px', 
+                color: '#ff6b6b', 
+                marginBottom: '8px', 
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                🎧 Playing via SoundCloud
+              </div>
+              <div style={{ 
+                marginTop: '10px',
+                minHeight: '166px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: '8px',
+                overflow: 'hidden'
+              }}>
+                {isSoundCloudLoading ? (
+                  <div style={{ padding: '20px', color: '#cbd5e1', fontSize: '12px' }}>
+                    Loading SoundCloud track...
+                  </div>
+                ) : (
+                  <iframe
+                    id="soundcloud-login-player"
+                    src={createSoundCloudIframeUrl(unlockedTracks[currentTrackIndex])}
+                    width="100%"
+                    height="166"
+                    frameBorder="no"
+                    scrolling="no"
+                    style={{ border: 'none', backgroundColor: 'transparent' }}
+                    title="SoundCloud Player"
+                  />
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -1834,6 +2155,7 @@ export default function Home() {
                   <li style={{ marginBottom: '8px' }}>📏 <strong>50-meter radius visualization</strong></li>
                   <li style={{ marginBottom: '8px' }}>🏙️ <strong>East Auckland location presets</strong></li>
                   <li>👤 <strong>See ALL players' drops</strong> in real-time</li>
+                  <li>🎵 <strong>SoundCloud music player</strong> built into app</li>
                 </ul>
               </div>
               
@@ -1890,7 +2212,7 @@ export default function Home() {
               }}>
                 <div style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center' }}>
                   <div style={{ marginBottom: '5px' }}>🎵 Music: <strong>Blackout - Classic</strong></div>
-                  <div>Ver. 1.0 Alpha | See all writers' drops live!</div>
+                  <div>SoundCloud tracks play directly in app! 🎧</div>
                 </div>
               </div>
             </div>
@@ -1902,42 +2224,6 @@ export default function Home() {
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
             100% { background-position: 0% 50%; }
-          }
-          
-          input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 22px;
-            height: 22px;
-            border-radius: 50%;
-            background: white;
-            cursor: pointer;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            border: 2px solid #4dabf7;
-            transition: all 0.2s ease;
-          }
-          
-          input[type="range"]::-webkit-slider-thumb:hover {
-            transform: scale(1.1);
-            boxShadow: 0 6px 15px rgba(0,0,0,0.4);
-          }
-          
-          input[type="range"]::-moz-range-thumb {
-            width: 22px;
-            height: 22px;
-            border-radius: 50%;
-            background: white;
-            cursor: pointer;
-            border: 2px solid #4dabf7;
-            boxShadow: 0 4px 10px rgba(0,0,0,0.3);
-          }
-          
-          ::placeholder {
-            color: rgba(255, 255, 255, 0.5);
-          }
-          
-          ::selection {
-            background-color: rgba(59, 130, 246, 0.5);
-            color: white;
           }
         `}</style>
       </div>
@@ -2261,8 +2547,6 @@ export default function Home() {
         </div>
       )}
 
-
-
       <MapContainer
         center={
           isOfflineMode && lastKnownPosition ? lastKnownPosition :
@@ -2277,11 +2561,10 @@ export default function Home() {
         maxZoom={18}
         whenCreated={(mapInstance) => {
           mapRef.current = mapInstance;
-          // Set initial bounds to prevent panning outside NZ
           mapInstance.setMaxBounds(NZ_BOUNDS);
         }}
         eventHandlers={{
-          click: isOfflineMode ? undefined : handleMapClick // Disable map clicks in offline mode
+          click: isOfflineMode ? undefined : handleMapClick
         }}
       >
         <TileLayer
@@ -2338,14 +2621,14 @@ export default function Home() {
                 center={isOfflineMode && lastKnownPosition ? lastKnownPosition : gpsPosition}
                 radius={expandedRadius}
                 pathOptions={{
-                  color: isOfflineMode ? '#ef4444' : '#10b981', // Green for online, red for offline
+                  color: isOfflineMode ? '#ef4444' : '#10b981',
                   fillColor: isOfflineMode ? '#ef4444' : '#10b981',
                   fillOpacity: 0.1,
                   weight: 2,
                   opacity: 0.7
                 }}
                 eventHandlers={{
-                  click: isOfflineMode ? undefined : (e) => handleMapClick(e) // Disable in offline mode
+                  click: isOfflineMode ? undefined : (e) => handleMapClick(e)
                 }}
               >
                 <Popup>
@@ -2513,8 +2796,7 @@ export default function Home() {
                         width: '60px',
                         height: '60px',
                         borderRadius: '50%',
-                        border: `3px solid ${index === 0 ? '#fbbf24' : index === 1 ? '#cbd5e1' : '#d97706'}`,
-                        objectFit: 'cover'
+                        border: `3px solid ${index === 0 ? '#fbbf24' : index === 1 ? '#cbd5e1' : '#d97706'}`
                       }}
                     />
                     <div style={{ textAlign: 'left', flex: 1 }}>
@@ -3210,7 +3492,6 @@ export default function Home() {
       <button
         onClick={() => {
           if (!isOfflineMode) {
-            // Switching to offline mode - save current position
             if (gpsPosition) {
               setLastKnownPosition(gpsPosition);
               console.log('Switching to offline mode, saved position:', gpsPosition);
@@ -3220,13 +3501,12 @@ export default function Home() {
               return;
             }
             setIsOfflineMode(true);
-            stopTracking(); // Stop GPS tracking
+            stopTracking();
           } else {
-            // Switching to online mode - resume GPS
             setIsOfflineMode(false);
-            setJoystickPosition({ x: 0, y: 0 }); // Reset joystick
+            setJoystickPosition({ x: 0, y: 0 });
             if (!isTracking) {
-              startTracking(); // Resume GPS tracking
+              startTracking();
             }
             console.log('Switching to online mode');
           }
@@ -3336,7 +3616,7 @@ export default function Home() {
               const deltaX = moveEvent.clientX - centerX;
               const deltaY = moveEvent.clientY - centerY;
               const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-              const maxDistance = 35; // Maximum joystick movement
+              const maxDistance = 35;
 
               if (distance > maxDistance) {
                 const angle = Math.atan2(deltaY, deltaX);
@@ -3348,13 +3628,11 @@ export default function Home() {
                 setJoystickPosition({ x: deltaX, y: deltaY });
               }
 
-              // Move map based on joystick position
               if (lastKnownPosition && mapRef.current) {
-                const moveSpeed = 0.00001; // Adjust movement speed
+                const moveSpeed = 0.00001;
                 const newLat = lastKnownPosition[0] + (joystickPosition.y * moveSpeed);
                 const newLng = lastKnownPosition[1] + (joystickPosition.x * moveSpeed);
 
-                // Keep within NZ bounds
                 const clampedLat = Math.max(NZ_BOUNDS[0][0], Math.min(NZ_BOUNDS[1][0], newLat));
                 const clampedLng = Math.max(NZ_BOUNDS[0][1], Math.min(NZ_BOUNDS[1][1], newLng));
 
@@ -3399,16 +3677,14 @@ export default function Home() {
                 setJoystickPosition({ x: deltaX, y: deltaY });
               }
 
-              // Move map based on joystick position
               if (lastKnownPosition && mapRef.current) {
-                const moveSpeed = 0.001; // Increased movement speed for better responsiveness
+                const moveSpeed = 0.001;
                 const newLat = lastKnownPosition[0] + (joystickPosition.y * moveSpeed);
                 const newLng = lastKnownPosition[1] + (joystickPosition.x * moveSpeed);
 
                 const clampedLat = Math.max(NZ_BOUNDS[0][0], Math.min(NZ_BOUNDS[1][0], newLat));
                 const clampedLng = Math.max(NZ_BOUNDS[0][1], Math.min(NZ_BOUNDS[1][1], newLng));
 
-                console.log('Touch joystick move:', { x: joystickPosition.x, y: joystickPosition.y, newLat, newLng, clampedLat, clampedLng });
                 setLastKnownPosition([clampedLat, clampedLng]);
                 mapRef.current.setView([clampedLat, clampedLng], mapRef.current.getZoom());
               }
@@ -3683,7 +3959,6 @@ export default function Home() {
                         let finalCrewName: string;
                         
                         if (crewSnapshot.empty) {
-                          // Create new crew
                           const newCrewRef = doc(crewsRef);
                           crewId = newCrewRef.id;
                           await setDoc(newCrewRef, {
@@ -3695,7 +3970,6 @@ export default function Home() {
                           });
                           finalCrewName = crewName;
                         } else {
-                          // Join existing crew
                           const crewDoc = crewSnapshot.docs[0];
                           crewId = crewDoc.id;
                           finalCrewName = crewDoc.data().name;
@@ -3707,7 +3981,6 @@ export default function Home() {
                           }
                         }
                         
-                        // Update user profile
                         const userRef = doc(db, 'users', user.uid);
                         await updateDoc(userRef, {
                           crewId: crewId,
@@ -3752,7 +4025,6 @@ export default function Home() {
                     if (!confirm(`Leave ${userProfile.crewName}?`)) return;
                     
                     try {
-                      // Remove from crew
                       const crewDoc = await getDoc(doc(db, 'crews', userProfile.crewId));
                       if (crewDoc.exists()) {
                         const currentMembers = crewDoc.data().members || [];
@@ -3762,7 +4034,6 @@ export default function Home() {
                         });
                       }
                       
-                      // Update user profile
                       const userRef = doc(db, 'users', user.uid);
                       await updateDoc(userRef, {
                         crewId: null,
@@ -3906,9 +4177,10 @@ export default function Home() {
 
             {/* Actions */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>
-              {/* Refresh All Markers Button */}
+              {/* Refresh All Button */}
               <button
-                onClick={loadAllMarkers}
+                onClick={handleRefreshAll}
+                disabled={isRefreshing}
                 style={{
                   background: '#4dabf7',
                   color: 'white',
@@ -3918,10 +4190,11 @@ export default function Home() {
                   cursor: 'pointer',
                   marginBottom: '5px',
                   fontSize: '14px',
-                  fontWeight: 'bold'
+                  fontWeight: 'bold',
+                  opacity: isRefreshing ? 0.7 : 1
                 }}
               >
-                🔄 Refresh All Drops
+                {isRefreshing ? '🔄 Refreshing...' : '🔄 Refresh All Drops'}
               </button>
 
               {/* Top Players Toggle */}
@@ -3939,7 +4212,6 @@ export default function Home() {
               >
                 {showTopPlayers ? '👑 Hide Top Players' : '👑 Show Top Players'}
               </button>
-
 
               <button
                 onClick={handleLogout}
@@ -4283,8 +4555,7 @@ export default function Home() {
                     borderRadius: '6px',
                     cursor: 'pointer',
                     fontSize: '12px'
-                  }}
-                >
+                  }}>
                   📤 Export
                 </button>
                 
@@ -4460,7 +4731,6 @@ export default function Home() {
               )}
             </div>
 
-
             {/* Recent Messages */}
             <div>
               <div style={{
@@ -4490,538 +4760,650 @@ export default function Home() {
             </div>
           </div>
         )}
-      </div>
 
-      {/* Music Panel */}
-      {showMusicPanel && (
-        <div style={{
-          ...panelStyle,
-          border: '1px solid #333',
-          display: 'flex',
-          flexDirection: 'column',
-          animation: 'slideInRight 0.3s ease-out'
-        }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '10px',
-            paddingBottom: '10px',
-            borderBottom: '1px solid rgba(138, 43, 226, 0.3)'
-          }}>
-            <h3 style={{
-              margin: 0,
-              color: '#8a2be2',
-              fontSize: '18px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <span>🎵</span>
-              MUSIC COLLECTION
-            </h3>
-            <button
-              onClick={() => setShowMusicPanel(false)}
-              style={{
-                background: 'rgba(138, 43, 226, 0.2)',
-                border: '1px solid rgba(138, 43, 226, 0.3)',
-                color: '#8a2be2',
-                width: '28px',
-                height: '28px',
-                borderRadius: '50%',
-                cursor: 'pointer',
-                fontSize: '14px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              ✕
-            </button>
-          </div>
-
-          {/* Current Track Info */}
-          <div style={{
-            background: 'rgba(138, 43, 226, 0.1)',
-            padding: '12px',
-            borderRadius: '8px',
-            marginBottom: '15px',
-            border: '1px solid rgba(138, 43, 226, 0.2)'
-          }}>
-            <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'white', marginBottom: '5px' }}>
-              Now Playing: {getCurrentTrackName()}
-            </div>
-            <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
-              Track {currentTrackIndex + 1} of {unlockedTracks.length} unlocked
-            </div>
-          </div>
-
-          {/* Unlocked Tracks List */}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            <div style={{ fontSize: '14px', color: '#cbd5e1', marginBottom: '10px', fontWeight: 'bold' }}>
-              🎵 Your Collection ({unlockedTracks.length} tracks)
-            </div>
-
-            {unlockedTracks.length === 0 ? (
-              <div style={{
-                textAlign: 'center',
-                padding: '30px 20px',
-                background: 'rgba(255,255,255,0.03)',
-                borderRadius: '8px',
-                border: '1px dashed #444'
-              }}>
-                <div style={{ fontSize: '32px', marginBottom: '10px' }}>🎵</div>
-                <div style={{ color: '#aaa' }}>
-                  No tracks unlocked yet
-                </div>
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-                  Place drops to unlock music!
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {unlockedTracks.map((track, index) => {
-                  const trackName = getTrackNameFromUrl(track);
-                  const isSoundCloud = track.includes('soundcloud.com');
-                  const isCurrentlyPlaying = index === currentTrackIndex;
-
-                  return (
-                    <div
-                      key={index}
-                      onClick={() => {
-                        setCurrentTrackIndex(index);
-                        playNextTrack(); // This will play the selected track
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        padding: '10px',
-                        background: isCurrentlyPlaying ? 'rgba(138, 43, 226, 0.2)' : 'rgba(255,255,255,0.03)',
-                        borderRadius: '6px',
-                        border: isCurrentlyPlaying ? '1px solid rgba(138, 43, 226, 0.4)' : '1px solid #333',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease'
-                      }}
-                    >
-                      <div style={{
-                        fontSize: '18px',
-                        minWidth: '24px',
-                        textAlign: 'center'
-                      }}>
-                        {isSoundCloud ? '🎵' : '💿'}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{
-                          fontSize: '13px',
-                          fontWeight: isCurrentlyPlaying ? 'bold' : 'normal',
-                          color: isCurrentlyPlaying ? '#8a2be2' : 'white'
-                        }}>
-                          {trackName}
-                        </div>
-                        <div style={{
-                          fontSize: '11px',
-                          color: isSoundCloud ? '#ff6b6b' : '#10b981',
-                          marginTop: '2px'
-                        }}>
-                          {isSoundCloud ? 'SoundCloud' : 'Local Audio'}
-                        </div>
-                      </div>
-                      {isCurrentlyPlaying && (
-                        <div style={{
-                          fontSize: '14px',
-                          color: '#8a2be2',
-                          animation: 'pulse 1s infinite'
-                        }}>
-                          ●
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Music Controls */}
-          {unlockedTracks.length > 0 && (
-            <div style={{
-              marginTop: '15px',
-              paddingTop: '15px',
-              borderTop: '1px solid rgba(138, 43, 226, 0.3)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px'
-            }}>
-              {/* Playback Controls */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px'
-              }}>
-                <button
-                  onClick={() => {
-                    const prevIndex = currentTrackIndex > 0 ? currentTrackIndex - 1 : unlockedTracks.length - 1;
-                    setCurrentTrackIndex(prevIndex);
-                    playNextTrack();
-                  }}
-                  style={{
-                    background: 'rgba(138, 43, 226, 0.2)',
-                    border: '1px solid rgba(138, 43, 226, 0.3)',
-                    color: '#8a2be2',
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  PREV
-                </button>
-
-                <button
-                  onClick={() => {
-                    if (audioRef.current) {
-                      if (isPlaying) {
-                        audioRef.current.pause();
-                      } else {
-                        audioRef.current.play().catch(error => {
-                          console.error('Error playing audio:', error);
-                        });
-                      }
-                      setIsPlaying(!isPlaying);
-                    }
-                  }}
-                  style={{
-                    background: 'rgba(138, 43, 226, 0.2)',
-                    border: '1px solid rgba(138, 43, 226, 0.3)',
-                    color: '#8a2be2',
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: '50%',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  {isPlaying ? 'PAUSE' : 'PLAY'}
-                </button>
-
-                <button
-                  onClick={() => {
-                    if (audioRef.current) {
-                      audioRef.current.pause();
-                      audioRef.current.currentTime = 0;
-                      setIsPlaying(false);
-                    }
-                  }}
-                  style={{
-                    background: 'rgba(138, 43, 226, 0.2)',
-                    border: '1px solid rgba(138, 43, 226, 0.3)',
-                    color: '#8a2be2',
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  STOP
-                </button>
-
-                <button
-                  onClick={playNextTrack}
-                  style={{
-                    background: 'rgba(138, 43, 226, 0.2)',
-                    border: '1px solid rgba(138, 43, 226, 0.3)',
-                    color: '#8a2be2',
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  NEXT
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Map Control Panel */}
-      {showMapPanel && (
+        {/* Music Panel - FIXED: Better SoundCloud implementation */}
+        {showMusicPanel && (
           <div style={{
             ...panelStyle,
-            position: 'absolute',
-            top: '70px',
-            left: '70px',
-            zIndex: 1200,
-            animation: showMapPanel ? 'slideInLeft 0.3s ease-out' : ''
-          }}>
-          <div style={{
+            border: '1px solid #333',
             display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '20px',
-            borderBottom: '1px solid rgba(255,255,255,0.1)',
-            paddingBottom: '12px'
+            flexDirection: 'column',
+            animation: 'slideInRight 0.3s ease-out',
+            minWidth: '350px'
           }}>
-            <h3 style={{ margin: 0, color: '#4dabf7', fontSize: '18px' }}>🗺️ MAP CONTROLS</h3>
-            <button
-              onClick={() => setShowMapPanel(false)}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#cbd5e1',
-                cursor: 'pointer',
-                fontSize: '20px',
-                padding: '4px',
-                borderRadius: '4px'
-              }}
-            >
-              ×
-            </button>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-
-            {/* Legend Toggle */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '10px',
+              paddingBottom: '10px',
+              borderBottom: '1px solid rgba(138, 43, 226, 0.3)'
+            }}>
+              <h3 style={{
+                margin: 0,
+                color: '#8a2be2',
+                fontSize: '18px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <span>🎵</span>
+                MUSIC COLLECTION
+              </h3>
               <button
-                onClick={() => setShowLegend(!showLegend)}
+                onClick={() => setShowMusicPanel(false)}
                 style={{
-                  backgroundColor: showLegend ? 'rgba(77, 171, 247, 0.2)' : 'rgba(75, 85, 99, 0.5)',
-                  border: showLegend ? '1px solid #4dabf7' : '1px solid #6b7280',
-                  color: showLegend ? '#4dabf7' : '#cbd5e1',
-                  padding: '12px',
-                  borderRadius: '8px',
+                  background: 'rgba(138, 43, 226, 0.2)',
+                  border: '1px solid rgba(138, 43, 226, 0.3)',
+                  color: '#8a2be2',
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
                   cursor: 'pointer',
                   fontSize: '14px',
-                  width: '100%',
-                  transition: 'all 0.2s ease'
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}
               >
-                📋 Legend {showLegend ? 'ON' : 'OFF'}
+                ✕
               </button>
-              <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
-                Show/hide map legend
-              </span>
             </div>
 
-            {/* 50m Radius Toggle */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-              <button
-                onClick={() => setShow50mRadius(!show50mRadius)}
-                style={{
-                  backgroundColor: show50mRadius ? 'rgba(77, 171, 247, 0.2)' : 'rgba(75, 85, 99, 0.5)',
-                  border: show50mRadius ? '1px solid #4dabf7' : '1px solid #6b7280',
-                  color: show50mRadius ? '#4dabf7' : '#cbd5e1',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  width: '100%',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                🎯 50m Radius {show50mRadius ? 'ON' : 'OFF'}
-              </button>
-              <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
-                Show/hide 50m action radius
-              </span>
-            </div>
-
-            {/* Top Players Toggle */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-              <button
-                onClick={() => setShowTopPlayers(!showTopPlayers)}
-                style={{
-                  backgroundColor: showTopPlayers ? 'rgba(77, 171, 247, 0.2)' : 'rgba(75, 85, 99, 0.5)',
-                  border: showTopPlayers ? '1px solid #4dabf7' : '1px solid #6b7280',
-                  color: showTopPlayers ? '#4dabf7' : '#cbd5e1',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  width: '100%',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                🏆 Top Players {showTopPlayers ? 'ON' : 'OFF'}
-              </button>
-              <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
-                Show/hide leaderboard markers
-              </span>
-            </div>
-
-            {/* Color Picker (Moved to Map Controls) */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-              <div style={{ fontSize: '14px', color: '#ff6b6b', marginBottom: '8px' }}>
-                Marker Color
+            {/* Music Player Section */}
+            <div style={{
+              marginBottom: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '15px'
+            }}>
+              {/* Now Playing Info */}
+              <div style={{
+                background: 'rgba(138, 43, 226, 0.1)',
+                padding: '12px',
+                borderRadius: '8px',
+                border: '1px solid rgba(138, 43, 226, 0.2)'
+              }}>
+                <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'white', marginBottom: '5px' }}>
+                  Now Playing: {getCurrentTrackName()}
+                </div>
+                <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+                  {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? 
+                    '🎧 Playing via SoundCloud Widget' : 
+                    `Track ${currentTrackIndex + 1} of ${unlockedTracks.length} unlocked`
+                  }
+                </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
-                {MARKER_COLORS.map((color) => (
+
+              {/* SoundCloud Player */}
+              {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && (
+                <div style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  border: '1px solid #444',
+                  minHeight: '166px',
+                  position: 'relative'
+                }}>
+                  {isSoundCloudLoading ? (
+                    <div style={{ 
+                      padding: '30px', 
+                      color: '#cbd5e1', 
+                      fontSize: '12px',
+                      textAlign: 'center',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}>
+                      <div style={{ fontSize: '24px' }}>⏳</div>
+                      Loading SoundCloud track...
+                    </div>
+                  ) : (
+                    <div style={{ position: 'relative', width: '100%' }}>
+                      {/* Get iframe ID for current track */}
+                      {(() => {
+                        const soundCloudTrack = soundCloudTracks.find(t => t.url === unlockedTracks[currentTrackIndex]);
+                        const iframeId = soundCloudTrack?.iframeId || `soundcloud-player-${currentTrackIndex}`;
+                        
+                        return (
+                          <iframe
+                            id={iframeId}
+                            ref={(el) => {
+                              if (el && !soundCloudIframesRef.current.has(iframeId)) {
+                                soundCloudIframesRef.current.set(iframeId, el);
+                              }
+                            }}
+                            src={createSoundCloudIframeUrl(unlockedTracks[currentTrackIndex])}
+                            width="100%"
+                            height="166"
+                            frameBorder="no"
+                            scrolling="no"
+                            style={{ 
+                              border: 'none',
+                              backgroundColor: 'transparent'
+                            }}
+                            title="SoundCloud Player"
+                            allow="autoplay"
+                          />
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Local Audio Player */}
+              {!unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && unlockedTracks[currentTrackIndex] && (
+                <div style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  borderRadius: '8px',
+                  padding: '15px',
+                  border: '1px solid #444',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '32px', marginBottom: '10px' }}>💿</div>
+                  <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+                    Local Audio File
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '5px' }}>
+                    Using browser audio player
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Unlocked Tracks List */}
+            <div style={{ flex: 1, overflowY: 'auto', marginBottom: '15px' }}>
+              <div style={{ fontSize: '14px', color: '#cbd5e1', marginBottom: '10px', fontWeight: 'bold' }}>
+                🎵 Your Collection ({unlockedTracks.length} tracks)
+              </div>
+
+              {unlockedTracks.length === 0 ? (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '30px 20px',
+                  background: 'rgba(255,255,255,0.03)',
+                  borderRadius: '8px',
+                  border: '1px dashed #444'
+                }}>
+                  <div style={{ fontSize: '32px', marginBottom: '10px' }}>🎵</div>
+                  <div style={{ color: '#aaa' }}>
+                    No tracks unlocked yet
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                    Place drops to unlock music!
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {unlockedTracks.map((track, index) => {
+                    const trackName = getTrackNameFromUrl(track);
+                    const isSoundCloud = track.includes('soundcloud.com');
+                    const isCurrentlyPlaying = index === currentTrackIndex;
+                    const soundCloudTrack = soundCloudTracks.find(t => t.url === track);
+                    const iframeId = soundCloudTrack?.iframeId || `soundcloud-player-${index}`;
+
+                    return (
+                      <div
+                        key={index}
+                        onClick={() => {
+                          if (isCurrentlyPlaying) {
+                            togglePlay();
+                          } else {
+                            setCurrentTrackIndex(index);
+                            if (isSoundCloud) {
+                              // For SoundCloud tracks, play via widget if available
+                              const widget = soundCloudWidgetsRef.current.get(iframeId);
+                              if (widget && typeof widget.play === 'function') {
+                                widget.play();
+                                setIsPlaying(true);
+                              }
+                            } else {
+                              // Play local audio
+                              if (audioRef.current) {
+                                audioRef.current.src = `/${track}`;
+                                audioRef.current.play().catch(error => {
+                                  console.error('Error playing audio:', error);
+                                });
+                                setIsPlaying(true);
+                              }
+                            }
+                          }
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '10px',
+                          background: isCurrentlyPlaying ? 'rgba(138, 43, 226, 0.2)' : 'rgba(255,255,255,0.03)',
+                          borderRadius: '6px',
+                          border: isCurrentlyPlaying ? '1px solid rgba(138, 43, 226, 0.4)' : '1px solid #333',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{
+                          fontSize: '18px',
+                          minWidth: '24px',
+                          textAlign: 'center'
+                        }}>
+                          {isSoundCloud ? '🎵' : '💿'}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{
+                            fontSize: '13px',
+                            fontWeight: isCurrentlyPlaying ? 'bold' : 'normal',
+                            color: isCurrentlyPlaying ? '#8a2be2' : 'white'
+                          }}>
+                            {trackName}
+                            {isCurrentlyPlaying && (
+                              <span style={{
+                                marginLeft: '8px',
+                                fontSize: '11px',
+                                color: '#10b981',
+                                animation: 'pulse 1s infinite'
+                              }}>
+                                ● NOW PLAYING
+                              </span>
+                            )}
+                          </div>
+                          <div style={{
+                            fontSize: '11px',
+                            color: isSoundCloud ? '#ff6b6b' : '#10b981',
+                            marginTop: '2px'
+                          }}>
+                            {isSoundCloud ? 'SoundCloud' : 'Local Audio'}
+                          </div>
+                        </div>
+                        {isSoundCloud && (
+                          <div style={{
+                            fontSize: '12px',
+                            color: '#ff6b6b'
+                          }}>
+                            🎧
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Music Controls */}
+            {unlockedTracks.length > 0 && (
+              <div style={{
+                marginTop: '15px',
+                paddingTop: '15px',
+                borderTop: '1px solid rgba(138, 43, 226, 0.3)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}>
+                {/* Playback Controls */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}>
                   <button
-                    key={color.value}
-                    onClick={() => {
-                      setSelectedMarkerColor(color.value);
-                      saveFavoriteColor(color.value);
-                    }}
+                    onClick={playPreviousTrack}
                     style={{
-                      width: '100%',
-                      aspectRatio: '1/1',
-                      backgroundColor: color.value,
-                      border: selectedMarkerColor === color.value ? '3px solid #ff6b6b' : '1px solid #444',
-                      borderRadius: '6px',
+                      background: 'rgba(138, 43, 226, 0.2)',
+                      border: '1px solid rgba(138, 43, 226, 0.3)',
+                      color: '#8a2be2',
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    ⏮️
+                  </button>
+
+                  <button
+                    onClick={togglePlay}
+                    style={{
+                      background: 'rgba(138, 43, 226, 0.2)',
+                      border: '1px solid rgba(138, 43, 226, 0.3)',
+                      color: '#8a2be2',
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '50%',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? 
+                      '⏯️' : 
+                      (isPlaying ? '⏸️' : '▶️')
+                    }
+                  </button>
+
+                  <button
+                    onClick={playNextTrack}
+                    style={{
+                      background: 'rgba(138, 43, 226, 0.2)',
+                      border: '1px solid rgba(138, 43, 226, 0.3)',
+                      color: '#8a2be2',
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    ⏭️
+                  </button>
+                </div>
+
+                {/* Volume Control */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px' }}>
+                  <span style={{ fontSize: '14px', color: '#cbd5e1' }}>🔈</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={volume}
+                    onChange={handleVolumeChange}
+                    style={{
+                      flex: 1,
+                      height: '6px',
+                      borderRadius: '3px',
+                      background: 'linear-gradient(to right, #8a2be2, #6b21a8)',
+                      outline: 'none',
+                      WebkitAppearance: 'none',
                       cursor: 'pointer'
                     }}
                   />
-                ))}
+                  <span style={{ fontSize: '12px', color: 'white', minWidth: '40px', textAlign: 'right' }}>
+                    {Math.round(volume * 100)}%
+                  </span>
+                </div>
+
+                {/* Track Info */}
+                <div style={{
+                  fontSize: '11px',
+                  color: '#94a3b8',
+                  textAlign: 'center',
+                  padding: '8px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                  borderRadius: '6px',
+                  marginTop: '10px'
+                }}>
+                  {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? 
+                    'SoundCloud tracks play directly in app 🎧' :
+                    'Local audio files play via browser audio'
+                  }
+                </div>
               </div>
-              <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
-                Choose your default marker color
-              </span>
-            </div>
-
-            {/* Refresh Drops */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-              <button
-                onClick={() => {
-                  // Refresh all markers/drops
-                  loadMarkers();
-                  loadTopPlayers();
-                  console.log('Refreshing all drops and players...');
-                }}
-                style={{
-                  backgroundColor: 'rgba(16, 185, 129, 0.2)',
-                  border: '1px solid #10b981',
-                  color: '#10b981',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  width: '100%',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                🔄 Refresh Drops
-              </button>
-              <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
-                Reload all markers & players
-              </span>
-            </div>
-
-            {/* Center on GPS */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-              <button
-                onClick={() => {
-                  if (gpsPosition) {
-                    centerMap(gpsPosition, 17);
-                  } else {
-                    alert('GPS location not available');
-                  }
-                }}
-                style={{
-                  backgroundColor: 'rgba(245, 158, 11, 0.2)',
-                  border: '1px solid #f59e0b',
-                  color: '#f59e0b',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  width: '100%',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                📍 Center on GPS
-              </button>
-              <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
-                Zoom to your location
-              </span>
-            </div>
-
-            {/* Show All Drops */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-              <button
-                onClick={() => {
-                  // This would show all drops - maybe zoom out to show all
-                  if (userMarkers.length > 0) {
-                    // Calculate bounds of all markers and fit map to them
-                    const bounds = userMarkers.reduce((bounds, marker) => {
-                      return bounds.extend([marker.position.lat, marker.position.lng]);
-                    }, mapRef.current.getBounds());
-                    mapRef.current.fitBounds(bounds, { padding: [20, 20] });
-                  }
-                }}
-                style={{
-                  backgroundColor: 'rgba(139, 92, 246, 0.2)',
-                  border: '1px solid #8b5cf6',
-                  color: '#8b5cf6',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  width: '100%',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                👁️ Show All Drops
-              </button>
-              <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
-                Fit map to all markers
-              </span>
-            </div>
-
+            )}
           </div>
+        )}
 
-          {/* Status Info */}
+        {/* Map Control Panel */}
+        {showMapPanel && (
           <div style={{
-            marginTop: '20px',
-            padding: '12px',
-            backgroundColor: 'rgba(255,255,255,0.05)',
-            borderRadius: '8px',
-            fontSize: '12px',
-            color: '#cbd5e1'
+            ...panelStyle,
+            animation: 'slideInLeft 0.3s ease-out'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <span>Drops visible:</span>
-              <span style={{ color: '#4dabf7' }}>{userMarkers.length}</span>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px',
+              borderBottom: '1px solid rgba(255,255,255,0.1)',
+              paddingBottom: '12px'
+            }}>
+              <h3 style={{ margin: 0, color: '#4dabf7', fontSize: '18px' }}>🗺️ MAP CONTROLS</h3>
+              <button
+                onClick={() => setShowMapPanel(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#cbd5e1',
+                  cursor: 'pointer',
+                  fontSize: '20px',
+                  padding: '4px',
+                  borderRadius: '4px'
+                }}
+              >
+                ×
+              </button>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <span>Top players:</span>
-              <span style={{ color: '#f59e0b' }}>{topPlayers.length}</span>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+
+              {/* Legend Toggle */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={() => setShowLegend(!showLegend)}
+                  style={{
+                    backgroundColor: showLegend ? 'rgba(77, 171, 247, 0.2)' : 'rgba(75, 85, 99, 0.5)',
+                    border: showLegend ? '1px solid #4dabf7' : '1px solid #6b7280',
+                    color: showLegend ? '#4dabf7' : '#cbd5e1',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    width: '100%',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  📋 Legend {showLegend ? 'ON' : 'OFF'}
+                </button>
+                <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
+                  Show/hide map legend
+                </span>
+              </div>
+
+              {/* 50m Radius Toggle */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={() => setShow50mRadius(!show50mRadius)}
+                  style={{
+                    backgroundColor: show50mRadius ? 'rgba(77, 171, 247, 0.2)' : 'rgba(75, 85, 99, 0.5)',
+                    border: show50mRadius ? '1px solid #4dabf7' : '1px solid #6b7280',
+                    color: show50mRadius ? '#4dabf7' : '#cbd5e1',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    width: '100%',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  🎯 50m Radius {show50mRadius ? 'ON' : 'OFF'}
+                </button>
+                <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
+                  Show/hide 50m action radius
+                </span>
+              </div>
+
+              {/* Top Players Toggle */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={() => setShowTopPlayers(!showTopPlayers)}
+                  style={{
+                    backgroundColor: showTopPlayers ? 'rgba(77, 171, 247, 0.2)' : 'rgba(75, 85, 99, 0.5)',
+                    border: showTopPlayers ? '1px solid #4dabf7' : '1px solid #6b7280',
+                    color: showTopPlayers ? '#4dabf7' : '#cbd5e1',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    width: '100%',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  🏆 Top Players {showTopPlayers ? 'ON' : 'OFF'}
+                </button>
+                <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
+                  Show/hide leaderboard markers
+                </span>
+              </div>
+
+              {/* Color Picker */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                <div style={{ fontSize: '14px', color: '#ff6b6b', marginBottom: '8px' }}>
+                  Marker Color
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
+                  {MARKER_COLORS.map((color) => (
+                    <button
+                      key={color.value}
+                      onClick={() => {
+                        setSelectedMarkerColor(color.value);
+                        saveFavoriteColor(color.value);
+                      }}
+                      style={{
+                        width: '100%',
+                        aspectRatio: '1/1',
+                        backgroundColor: color.value,
+                        border: selectedMarkerColor === color.value ? '3px solid #ff6b6b' : '1px solid #444',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}
+                    />
+                  ))}
+                </div>
+                <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
+                  Choose your default marker color
+                </span>
+              </div>
+
+              {/* Refresh Drops */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={handleRefreshAll}
+                  disabled={isRefreshing}
+                  style={{
+                    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                    border: '1px solid #10b981',
+                    color: '#10b981',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    cursor: isRefreshing ? 'not-allowed' : 'pointer',
+                    fontSize: '14px',
+                    width: '100%',
+                    transition: 'all 0.2s ease',
+                    opacity: isRefreshing ? 0.7 : 1
+                  }}
+                >
+                  {isRefreshing ? '🔄 Refreshing...' : '🔄 Refresh Drops'}
+                </button>
+                <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
+                  Reload all markers & players
+                </span>
+              </div>
+
+              {/* Center on GPS */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={centerOnGPS}
+                  style={{
+                    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                    border: '1px solid #f59e0b',
+                    color: '#f59e0b',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    width: '100%',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  📍 Center on GPS
+                </button>
+                <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
+                  Zoom to your location
+                </span>
+              </div>
+
+              {/* Show All Drops */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={() => {
+                    if (userMarkers.length > 0 && mapRef.current) {
+                      const bounds = calculateBoundsFromMarkers(userMarkers);
+                      if (bounds) {
+                        mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+                      }
+                    }
+                  }}
+                  style={{
+                    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                    border: '1px solid #8b5cf6',
+                    color: '#8b5cf6',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    width: '100%',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  👁️ Show All Drops
+                </button>
+                <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
+                  Fit map to all markers
+                </span>
+              </div>
+
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>GPS status:</span>
-              <span style={{
-                color: gpsStatus === 'tracking' ? '#10b981' :
-                       gpsStatus === 'acquiring' ? '#f59e0b' : '#ef4444'
-              }}>
-                {gpsStatus === 'tracking' ? 'Active' :
-                 gpsStatus === 'acquiring' ? 'Acquiring...' : 'Error'}
-              </span>
+
+            {/* Status Info */}
+            <div style={{
+              marginTop: '20px',
+              padding: '12px',
+              backgroundColor: 'rgba(255,255,255,0.05)',
+              borderRadius: '8px',
+              fontSize: '12px',
+              color: '#cbd5e1'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span>Drops visible:</span>
+                <span style={{ color: '#4dabf7' }}>{userMarkers.length}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span>Top players:</span>
+                <span style={{ color: '#f59e0b' }}>{topPlayers.length}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>GPS status:</span>
+                <span style={{
+                  color: gpsStatus === 'tracking' ? '#10b981' :
+                         gpsStatus === 'acquiring' ? '#f59e0b' : '#ef4444'
+                }}>
+                  {gpsStatus === 'tracking' ? 'Active' :
+                   gpsStatus === 'acquiring' ? 'Acquiring...' :
+                   gpsStatus === 'error' ? 'Error' : 'Initializing'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                <span>Music tracks:</span>
+                <span style={{ color: '#8a2be2' }}>{unlockedTracks.length}</span>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* ========== END DUAL CONTROL PANELS ========== */}
 
@@ -5270,8 +5652,18 @@ export default function Home() {
         <div style={{marginTop: '8px', fontSize: '11px', color: '#4dabf7'}}>
           Total drops: {userMarkers.length}
         </div>
+        <div style={{marginTop: '8px', fontSize: '11px', color: '#8a2be2'}}>
+          Music: {unlockedTracks.length} tracks unlocked
+        </div>
       </div>
       )}
+
+      {/* Hidden Audio Element for Local Files */}
+      <audio
+        ref={audioRef}
+        style={{ display: 'none' }}
+        onEnded={playNextTrack}
+      />
 
       <style>{`
         @keyframes popIn {
@@ -5288,6 +5680,12 @@ export default function Home() {
         @keyframes slideInRight {
           0% { transform: translateX(20px); opacity: 0; }
           100% { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes pulse {
+          0% { opacity: 1; }
+          50% { opacity: 0.5; }
+          100% { opacity: 1; }
         }
       `}</style>
     </div>
