@@ -368,8 +368,7 @@ export default function Home() {
   // Offline/Online mode states
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [lastKnownPosition, setLastKnownPosition] = useState<[number, number] | null>(null);
-  const [joystickPosition, setJoystickPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const joystickRef = useRef<any>(null);
+  
   const [user, setUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
@@ -397,16 +396,13 @@ export default function Home() {
   const [volume, setVolume] = useState(0.5);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [unlockedTracks, setUnlockedTracks] = useState<string[]>(['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1']);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   
   // SoundCloud states
   const [soundCloudTracks, setSoundCloudTracks] = useState<SoundCloudTrack[]>([]);
   const [isSoundCloudLoading, setIsSoundCloudLoading] = useState(false);
-  const soundCloudContainerRef = useRef<HTMLDivElement>(null);
   
-  // SoundCloud widgets ref - FIXED: Using Map for proper tracking
+  // SoundCloud widgets ref
   const soundCloudWidgetsRef = useRef<Map<string, any>>(new Map());
-  const soundCloudIframesRef = useRef<Map<string, HTMLIFrameElement>>(new Map());
   
   // REP Notification state
   const [repNotification, setRepNotification] = useState<{ show: boolean, amount: number, message: string } | null>(null);
@@ -418,7 +414,8 @@ export default function Home() {
   const [pendingDropPosition, setPendingDropPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [selectedMarkerType, setSelectedMarkerType] = useState<MarkerDescription>('Tag/Signature');
-  
+  const [selectedTrackForMusicDrop, setSelectedTrackForMusicDrop] = useState<string | null>(null);
+
   // Crew states
   const [nearbyCrewMembers, setNearbyCrewMembers] = useState<Array<{ uid: string; username: string; distance: number }>>([]);
   const [expandedRadius, setExpandedRadius] = useState(50);
@@ -429,7 +426,7 @@ export default function Home() {
   // Top players state
   const [topPlayers, setTopPlayers] = useState<TopPlayer[]>([]);
   const [showTopPlayers, setShowTopPlayers] = useState(true);
-  const [showLegend, setShowLegend] = useState(true);
+  const [showLegend, setShowLegend] = useState(false);
   
   // Filter toggle
   const [showOnlyMyDrops, setShowOnlyMyDrops] = useState(false);
@@ -447,7 +444,7 @@ export default function Home() {
   // Refreshing state
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Load SoundCloud Widget API - FIXED: Better initialization
+  // Load SoundCloud Widget API
   useEffect(() => {
     const loadSoundCloudAPI = () => {
       if (typeof window !== 'undefined') {
@@ -463,6 +460,8 @@ export default function Home() {
         script.async = true;
         script.onload = () => {
           console.log('SoundCloud Widget API loaded successfully');
+          // Initialize main player after API loads
+          initializeMainPlayer();
         };
         script.onerror = (error) => {
           console.error('Failed to load SoundCloud Widget API:', error);
@@ -490,11 +489,134 @@ export default function Home() {
         }
       });
       soundCloudWidgetsRef.current.clear();
-      soundCloudIframesRef.current.clear();
     };
   }, []);
 
-  // Initialize SoundCloud tracks when unlocked tracks change - FIXED: Simplified approach
+  // Initialize main SoundCloud player
+  const initializeMainPlayer = useCallback(() => {
+    if (typeof window === 'undefined' || !window.SC || unlockedTracks.length === 0) return;
+
+    const currentTrack = unlockedTracks[currentTrackIndex];
+    if (!currentTrack || !currentTrack.includes('soundcloud.com')) return;
+
+    const iframeId = 'soundcloud-main-player';
+    let iframe = document.getElementById(iframeId) as HTMLIFrameElement;
+    
+    if (!iframe) {
+      // Create iframe if it doesn't exist
+      iframe = document.createElement('iframe');
+      iframe.id = iframeId;
+      iframe.src = createSoundCloudIframeUrl(currentTrack);
+      iframe.width = '1';
+      iframe.height = '1';
+      iframe.frameBorder = 'no';
+      iframe.scrolling = 'no';
+      iframe.style.position = 'absolute';
+      iframe.style.top = '-9999px';
+      iframe.style.left = '-9999px';
+      document.body.appendChild(iframe);
+    }
+
+    // Initialize widget
+    if (!soundCloudWidgetsRef.current.has(iframeId)) {
+      try {
+        const widget = window.SC.Widget(iframe);
+        soundCloudWidgetsRef.current.set(iframeId, widget);
+        
+        widget.bind(window.SC.Widget.Events.READY, () => {
+          console.log('Main SoundCloud player ready');
+          // Set initial volume
+          widget.setVolume(Math.round(volume * 100));
+        });
+        
+        widget.bind(window.SC.Widget.Events.PLAY, () => {
+          console.log('Main SoundCloud player playing');
+          setIsPlaying(true);
+        });
+        
+        widget.bind(window.SC.Widget.Events.PAUSE, () => {
+          console.log('Main SoundCloud player paused');
+          setIsPlaying(false);
+        });
+        
+        widget.bind(window.SC.Widget.Events.FINISH, () => {
+          console.log('Main SoundCloud player finished');
+          setIsPlaying(false);
+          playNextTrack();
+        });
+        
+        widget.bind(window.SC.Widget.Events.ERROR, (error: any) => {
+          console.error('Main SoundCloud player error:', error);
+        });
+        
+      } catch (error) {
+        console.error('Failed to initialize main SoundCloud widget:', error);
+      }
+    }
+  }, [unlockedTracks, currentTrackIndex, volume]);
+
+  // Update SoundCloud player when track changes
+  useEffect(() => {
+    if (unlockedTracks.length === 0) return;
+
+    const iframeId = 'soundcloud-main-player';
+    const widget = soundCloudWidgetsRef.current.get(iframeId);
+    
+    if (widget && window.SC) {
+      const currentTrack = unlockedTracks[currentTrackIndex];
+      if (currentTrack && currentTrack.includes('soundcloud.com')) {
+        // Update iframe source
+        const iframe = document.getElementById(iframeId) as HTMLIFrameElement;
+        if (iframe) {
+          iframe.src = createSoundCloudIframeUrl(currentTrack);
+        }
+        
+        // Reinitialize widget with new track
+        setTimeout(() => {
+          try {
+            const newWidget = window.SC.Widget(iframe);
+            soundCloudWidgetsRef.current.set(iframeId, newWidget);
+            
+            newWidget.bind(window.SC.Widget.Events.READY, () => {
+              console.log('Track loaded, setting volume:', volume);
+              newWidget.setVolume(Math.round(volume * 100));
+              if (isPlaying) {
+                newWidget.play();
+              }
+            });
+            
+            newWidget.bind(window.SC.Widget.Events.PLAY, () => {
+              setIsPlaying(true);
+            });
+            
+            newWidget.bind(window.SC.Widget.Events.PAUSE, () => {
+              setIsPlaying(false);
+            });
+            
+            newWidget.bind(window.SC.Widget.Events.FINISH, () => {
+              setIsPlaying(false);
+              playNextTrack();
+            });
+            
+          } catch (error) {
+            console.error('Failed to update SoundCloud widget:', error);
+          }
+        }, 100);
+      }
+    }
+  }, [currentTrackIndex, unlockedTracks, isPlaying, volume]);
+
+  // Update volume when changed
+  useEffect(() => {
+    const iframeId = 'soundcloud-main-player';
+    const widget = soundCloudWidgetsRef.current.get(iframeId);
+    
+    if (widget && typeof widget.setVolume === 'function') {
+      widget.setVolume(Math.round(volume * 100));
+    }
+  }, [volume]);
+
+  // Initialize SoundCloud tracks when unlocked tracks change
   useEffect(() => {
     const initializeSoundCloudTracks = async () => {
       const soundCloudUrls = unlockedTracks.filter(track => track.includes('soundcloud.com'));
@@ -518,84 +640,6 @@ export default function Home() {
     initializeSoundCloudTracks();
   }, [unlockedTracks]);
 
-  // Initialize SoundCloud widgets when iframes are mounted - FIXED: Better initialization
-  useEffect(() => {
-    const initializeWidgets = () => {
-      if (!window.SC) {
-        // Try again in 500ms if SC not loaded yet
-        setTimeout(initializeWidgets, 500);
-        return;
-      }
-
-      // Initialize widgets for all SoundCloud iframes
-      soundCloudIframesRef.current.forEach((iframe, iframeId) => {
-        if (!soundCloudWidgetsRef.current.has(iframeId)) {
-          try {
-            const widget = window.SC.Widget(iframe);
-            soundCloudWidgetsRef.current.set(iframeId, widget);
-            
-            // Bind events
-            widget.bind(window.SC.Widget.Events.READY, () => {
-              console.log(`SoundCloud widget ${iframeId} ready`);
-            });
-            
-            widget.bind(window.SC.Widget.Events.PLAY, () => {
-              console.log(`SoundCloud widget ${iframeId} playing`);
-              setIsPlaying(true);
-            });
-            
-            widget.bind(window.SC.Widget.Events.PAUSE, () => {
-              console.log(`SoundCloud widget ${iframeId} paused`);
-              setIsPlaying(false);
-            });
-            
-            widget.bind(window.SC.Widget.Events.FINISH, () => {
-              console.log(`SoundCloud widget ${iframeId} finished`);
-              setIsPlaying(false);
-              playNextTrack();
-            });
-            
-            widget.bind(window.SC.Widget.Events.ERROR, (error: any) => {
-              console.error(`SoundCloud widget ${iframeId} error:`, error);
-            });
-            
-          } catch (error) {
-            console.error(`Failed to initialize SoundCloud widget ${iframeId}:`, error);
-          }
-        }
-      });
-    };
-
-    // Initialize after a short delay to ensure DOM is ready
-    const timeoutId = setTimeout(initializeWidgets, 1000);
-    
-    return () => {
-      clearTimeout(timeoutId);
-    };
-  }, [soundCloudTracks]);
-
-  // Clean up when component unmounts or tracks change
-  useEffect(() => {
-    return () => {
-      // Clean up widgets for tracks that are no longer in the list
-      const currentTrackUrls = new Set(unlockedTracks);
-      soundCloudWidgetsRef.current.forEach((widget, key) => {
-        if (!currentTrackUrls.has(key)) {
-          try {
-            widget.unbind(window.SC?.Widget?.Events?.READY);
-            widget.unbind(window.SC?.Widget?.Events?.PLAY);
-            widget.unbind(window.SC?.Widget?.Events?.PAUSE);
-            widget.unbind(window.SC?.Widget?.Events?.FINISH);
-            widget.unbind(window.SC?.Widget?.Events?.ERROR);
-            soundCloudWidgetsRef.current.delete(key);
-          } catch (error) {
-            console.error('Error cleaning up widget:', error);
-          }
-        }
-      });
-    };
-  }, [unlockedTracks]);
-
   // REP Notification effect
   useEffect(() => {
     if (repNotification) {
@@ -606,143 +650,41 @@ export default function Home() {
     }
   }, [repNotification]);
 
-  // FIXED: Toggle play function
+  // Music control functions
   const togglePlay = () => {
-    const currentTrack = unlockedTracks[currentTrackIndex];
-    const isSoundCloud = currentTrack?.includes('soundcloud.com');
-
-    if (isSoundCloud) {
-      console.log('Toggling SoundCloud playback...');
+    if (unlockedTracks.length === 0) return;
+    
+    const iframeId = 'soundcloud-main-player';
+    const widget = soundCloudWidgetsRef.current.get(iframeId);
+    
+    if (widget && typeof widget.toggle === 'function') {
+      widget.toggle();
       
-      // Find the SoundCloud track
-      const soundCloudTrack = soundCloudTracks.find(t => t.url === currentTrack);
-      if (!soundCloudTrack?.iframeId) {
-        console.log('SoundCloud track not found or iframe not ready');
-        return;
-      }
-
-      // Get widget from ref
-      const widget = soundCloudWidgetsRef.current.get(soundCloudTrack.iframeId);
-      
-      if (widget && typeof widget.toggle === 'function') {
-        widget.toggle();
-        
-        // Update playing state
-        widget.isPaused((paused: boolean) => {
-          setIsPlaying(!paused);
-          console.log(`SoundCloud ${paused ? 'paused' : 'playing'}`);
-        });
-      } else {
-        console.error('No SoundCloud widget available or widget.toggle not a function');
-        // Try to play via iframe directly
-        const iframe = soundCloudIframesRef.current.get(soundCloudTrack.iframeId);
-        if (iframe) {
-          const iframeWindow = iframe.contentWindow;
-          if (iframeWindow && typeof iframeWindow.postMessage === 'function') {
-            iframeWindow.postMessage(JSON.stringify({
-              method: 'play'
-            }), 'https://w.soundcloud.com');
-          }
-        }
-      }
-      return;
-    }
-
-    // Local audio handling
-    if (!audioRef.current) return;
-
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      audioRef.current.play().catch(error => {
-        console.error('Error playing audio:', error);
-        setIsPlaying(false);
+      // Update playing state
+      widget.isPaused((paused: boolean) => {
+        setIsPlaying(!paused);
       });
+    } else {
+      // Initialize player if not ready
+      initializeMainPlayer();
       setIsPlaying(true);
     }
   };
 
-  // FIXED: Play next track function
   const playNextTrack = () => {
+    if (unlockedTracks.length === 0) return;
+    
     const nextIndex = (currentTrackIndex + 1) % unlockedTracks.length;
     setCurrentTrackIndex(nextIndex);
-
-    const nextTrack = unlockedTracks[nextIndex];
-    const isSoundCloud = nextTrack.includes('soundcloud.com');
-
-    console.log(`Playing next track: ${getTrackNameFromUrl(nextTrack)} (SoundCloud: ${isSoundCloud})`);
-
-    if (isSoundCloud) {
-      // Stop local audio if playing
-      if (audioRef.current && !audioRef.current.paused) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-      }
-
-      // Get widget for next track
-      const soundCloudTrack = soundCloudTracks.find(t => t.url === nextTrack);
-      if (soundCloudTrack?.iframeId) {
-        const widget = soundCloudWidgetsRef.current.get(soundCloudTrack.iframeId);
-        if (widget && typeof widget.play === 'function') {
-          widget.play();
-          setIsPlaying(true);
-        } else {
-          console.error('No widget found for next track');
-        }
-      }
-    } else {
-      // Handle local audio
-      if (audioRef.current) {
-        audioRef.current.src = `/${nextTrack}`;
-        audioRef.current.play().catch(error => {
-          console.error('Error playing audio:', error);
-          setIsPlaying(false);
-        });
-        setIsPlaying(true);
-      }
-    }
+    setIsPlaying(true);
   };
 
-  // FIXED: Play previous track function
   const playPreviousTrack = () => {
+    if (unlockedTracks.length === 0) return;
+    
     const prevIndex = currentTrackIndex > 0 ? currentTrackIndex - 1 : unlockedTracks.length - 1;
     setCurrentTrackIndex(prevIndex);
-
-    const prevTrack = unlockedTracks[prevIndex];
-    const isSoundCloud = prevTrack.includes('soundcloud.com');
-
-    console.log(`Playing previous track: ${getTrackNameFromUrl(prevTrack)} (SoundCloud: ${isSoundCloud})`);
-
-    if (isSoundCloud) {
-      // Stop local audio if playing
-      if (audioRef.current && !audioRef.current.paused) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-      }
-
-      // Get widget for previous track
-      const soundCloudTrack = soundCloudTracks.find(t => t.url === prevTrack);
-      if (soundCloudTrack?.iframeId) {
-        const widget = soundCloudWidgetsRef.current.get(soundCloudTrack.iframeId);
-        if (widget && typeof widget.play === 'function') {
-          widget.play();
-          setIsPlaying(true);
-        } else {
-          console.error('No widget found for previous track');
-        }
-      }
-    } else {
-      // Handle local audio
-      if (audioRef.current) {
-        audioRef.current.src = `/${prevTrack}`;
-        audioRef.current.play().catch(error => {
-          console.error('Error playing audio:', error);
-          setIsPlaying(false);
-        });
-        setIsPlaying(true);
-      }
-    }
+    setIsPlaying(true);
   };
 
   const getCurrentTrackName = () => {
@@ -760,11 +702,6 @@ export default function Home() {
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newVolume = parseFloat(e.target.value);
     setVolume(newVolume);
-    
-    // Update audio volume
-    if (audioRef.current) {
-      audioRef.current.volume = newVolume;
-    }
   };
 
   const calculateStreakBonus = (): number => {
@@ -1062,6 +999,14 @@ export default function Home() {
 
   const handleLogout = async () => {
     try {
+      // Pause music before logout
+      const iframeId = 'soundcloud-main-player';
+      const widget = soundCloudWidgetsRef.current.get(iframeId);
+      if (widget && typeof widget.pause === 'function') {
+        widget.pause();
+      }
+      setIsPlaying(false);
+      
       await signOut(auth);
     } catch (error: any) {
       setAuthError(error.message);
@@ -1144,6 +1089,7 @@ export default function Home() {
         setShowProfileSetup(false);
         setNextMarkerNumber(1);
         setLoadingUserProfile(false);
+        setIsPlaying(false);
       }
     });
     
@@ -1488,6 +1434,57 @@ export default function Home() {
     setShowPhotoModal(true);
   }, []);
 
+  // Handle music drop: save a song as a drop, player LOSES that song from their collection
+  const handleMusicDrop = useCallback(async () => {
+    if (!user || !userProfile || !pendingDropPosition) return;
+    const tracks = userProfile.unlockedTracks ?? unlockedTracks;
+    if (tracks.length === 0) return;
+
+    const trackToDrop = selectedTrackForMusicDrop || tracks[0];
+    try {
+      const newDrop: Drop = {
+        lat: pendingDropPosition.lat,
+        lng: pendingDropPosition.lng,
+        trackUrl: trackToDrop,
+        createdBy: user.uid,
+        timestamp: new Date(),
+        likes: [],
+        username: userProfile.username,
+        userProfilePic: userProfile.profilePicUrl,
+      };
+
+      const dropId = await saveDropToFirestore(newDrop);
+      if (!dropId) throw new Error('Failed to save drop');
+
+      const newTracks = tracks.filter((t) => t !== trackToDrop);
+
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        unlockedTracks: newTracks,
+        lastActive: Timestamp.now(),
+      });
+
+      setUserProfile((prev) =>
+        prev ? { ...prev, unlockedTracks: newTracks } : null
+      );
+      setUnlockedTracks(newTracks);
+      setSelectedTrackForMusicDrop(null);
+
+      setRepNotification({
+        show: true,
+        amount: 0,
+        message: `Music drop placed! You gave away "${getTrackNameFromUrl(trackToDrop)}". ${newTracks.length === 0 ? "You have no songs left." : `${newTracks.length} track(s) remaining.`}`,
+      });
+
+      await loadDrops();
+      setShowDropTypeModal(false);
+      setPendingDropPosition(null);
+    } catch (e) {
+      console.error('Error creating music drop:', e);
+      alert(`Failed to place music drop: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+  }, [user, userProfile, pendingDropPosition, selectedTrackForMusicDrop, unlockedTracks, loadDrops]);
+
   // Handle map click to add drop
   const handleMapClick = useCallback(async (e: any) => {
     if (isOfflineMode) {
@@ -1714,8 +1711,7 @@ export default function Home() {
                 width: '45px',
                 height: '45px',
                 borderRadius: '50%',
-                backgroundColor: (unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? 
-                  false : isPlaying) ? '#ef4444' : '#10b981',
+                backgroundColor: isPlaying ? '#ef4444' : '#10b981',
                 border: 'none',
                 color: 'white',
                 cursor: 'pointer',
@@ -1729,8 +1725,7 @@ export default function Home() {
               onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
               onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
             >
-              {(unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? 
-                false : isPlaying) ? '⏸️' : '▶️'}
+              {isPlaying ? '⏸️' : '▶️'}
             </button>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'white' }}>
@@ -1740,9 +1735,7 @@ export default function Home() {
                 Track {currentTrackIndex + 1} of {unlockedTracks.length} unlocked
               </div>
               <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
-                {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? 
-                  '🎧 SoundCloud' : 
-                  (isPlaying ? '● Now Playing' : 'Paused')}
+                {isPlaying ? '● Now Playing' : 'Paused'}
               </div>
             </div>
             <button
@@ -1800,49 +1793,39 @@ export default function Home() {
             </span>
           </div>
 
-          {/* SoundCloud Embed Container */}
-          {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && (
-            <div style={{ marginTop: '15px' }}>
-              <div style={{ 
-                fontSize: '12px', 
-                color: '#ff6b6b', 
-                marginBottom: '8px', 
-                fontWeight: 'bold',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                🎧 Playing via SoundCloud
+          <div style={{ 
+            marginTop: '15px',
+            minHeight: '166px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(255, 255, 255, 0.05)',
+            borderRadius: '8px',
+            overflow: 'hidden'
+          }}>
+            {isSoundCloudLoading ? (
+              <div style={{ padding: '20px', color: '#cbd5e1', fontSize: '12px' }}>
+                Loading SoundCloud track...
               </div>
-              <div style={{ 
-                marginTop: '10px',
-                minHeight: '166px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                borderRadius: '8px',
-                overflow: 'hidden'
-              }}>
-                {isSoundCloudLoading ? (
-                  <div style={{ padding: '20px', color: '#cbd5e1', fontSize: '12px' }}>
-                    Loading SoundCloud track...
-                  </div>
-                ) : (
-                  <iframe
-                    id="soundcloud-login-player"
-                    src={createSoundCloudIframeUrl(unlockedTracks[currentTrackIndex])}
-                    width="100%"
-                    height="166"
-                    frameBorder="no"
-                    scrolling="no"
-                    style={{ border: 'none', backgroundColor: 'transparent' }}
-                    title="SoundCloud Player"
-                  />
-                )}
+            ) : unlockedTracks.length > 0 ? (
+              <iframe
+                id="soundcloud-login-player"
+                src={createSoundCloudIframeUrl(unlockedTracks[currentTrackIndex])}
+                width="100%"
+                height="166"
+                frameBorder="no"
+                scrolling="no"
+                style={{ border: 'none', backgroundColor: 'transparent' }}
+                title="SoundCloud Player"
+                allow="autoplay"
+              />
+            ) : (
+              <div style={{ padding: '20px', color: '#cbd5e1', fontSize: '12px', textAlign: 'center' }}>
+                <div style={{ fontSize: '24px', marginBottom: '10px' }}>🎵</div>
+                No tracks available
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Main login card */}
@@ -2547,6 +2530,185 @@ export default function Home() {
         </div>
       )}
 
+        {/* Floating Mini Music Player - Position ABOVE bottom nav */}
+        <div style={{
+          position: 'fixed',
+          bottom: 80, // Position ABOVE the bottom nav (68px height + 12px gap)
+          right: 20,
+          background: 'rgba(15, 23, 42, 0.95)',
+          padding: '15px 20px',
+          borderRadius: '15px',
+          boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
+          zIndex: 0, // Higher than bottom nav (1100)
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          minWidth: '280px',
+          maxWidth: '400px',
+          color: 'white',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px'
+        }}>
+        {/* Now Playing Info */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          marginBottom: '8px'
+        }}>
+          <button
+            onClick={togglePlay}
+            style={{
+              width: '45px',
+              height: '45px',
+              borderRadius: '50%',
+              backgroundColor: isPlaying ? '#ef4444' : '#10b981',
+              border: 'none',
+              color: 'white',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '20px',
+              boxShadow: '0 6px 15px rgba(0,0,0,0.3)',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+            onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            {isPlaying ? '⏸️' : '▶️'}
+          </button>
+          
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ 
+              fontSize: '14px', 
+              fontWeight: 'bold', 
+              color: 'white',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}>
+              🎵 {getCurrentTrackName()}
+            </div>
+            <div style={{ 
+              fontSize: '12px', 
+              color: '#cbd5e1', 
+              marginTop: '4px',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}>
+              Track {currentTrackIndex + 1} of {unlockedTracks.length}
+            </div>
+          </div>
+          
+          <button
+            onClick={playNextTrack}
+            style={{
+              width: '35px',
+              height: '35px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(59, 130, 246, 0.2)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              color: '#4dabf7',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '16px',
+              boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = 'scale(1.1)';
+              e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.3)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.2)';
+            }}
+            title="Next Track"
+          >
+            ⏭️
+          </button>
+        </div>
+        
+        {/* Volume Control */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '14px', color: '#cbd5e1', minWidth: '20px' }}>
+            {volume === 0 ? '🔇' : volume < 0.5 ? '🔈' : '🔊'}
+          </span>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={volume}
+            onChange={handleVolumeChange}
+            style={{
+              flex: 1,
+              height: '6px',
+              borderRadius: '3px',
+              background: 'linear-gradient(to right, #ef4444, #f59e0b, #10b981)',
+              outline: 'none',
+              WebkitAppearance: 'none',
+              cursor: 'pointer'
+            }}
+          />
+          <span style={{ fontSize: '12px', color: 'white', minWidth: '40px', textAlign: 'right' }}>
+            {Math.round(volume * 100)}%
+          </span>
+        </div>
+
+        {/* Progress Bar */}
+        <div style={{ 
+          height: '4px', 
+          width: '100%', 
+          backgroundColor: 'rgba(255,255,255,0.1)', 
+          borderRadius: '2px',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            height: '100%',
+            width: '30%',
+            background: 'linear-gradient(90deg, #4dabf7, #8a2be2)',
+            borderRadius: '2px',
+            animation: 'progressPulse 2s infinite'
+          }}></div>
+        </div>
+        
+        {/* Quick Access to Full Music Panel */}
+        <button
+          onClick={() => {
+            setShowMusicPanel(true);
+            setShowProfilePanel(false);
+            setShowPhotosPanel(false);
+            setShowMessagesPanel(false);
+            setShowMapPanel(false);
+          }}
+          style={{
+            marginTop: '8px',
+            background: 'rgba(138, 43, 226, 0.2)',
+            border: '1px solid rgba(138, 43, 226, 0.3)',
+            color: '#8a2be2',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '12px',
+            textAlign: 'center',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.backgroundColor = 'rgba(138, 43, 226, 0.3)';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.backgroundColor = 'rgba(138, 43, 226, 0.2)';
+          }}
+        >
+          🎵 Open Music Panel ({unlockedTracks.length} tracks)
+        </button>
+      </div>
+
       <MapContainer
         center={
           isOfflineMode && lastKnownPosition ? lastKnownPosition :
@@ -2640,7 +2802,7 @@ export default function Home() {
                     </strong>
                     {isOfflineMode && (
                       <div style={{ fontSize: '12px', color: '#ef4444', marginTop: '5px', fontWeight: 'bold' }}>
-                        📍 Using last known location
+                        📍 GPS tracking paused (Offline Mode)
                       </div>
                     )}
                     {!isOfflineMode && nearbyCrewMembers.length > 0 && (
@@ -3175,8 +3337,77 @@ export default function Home() {
           );
         })}
 
-        {/* Marker drops (no photos) */}
-        {drops.filter(drop => !drop.photoUrl).map((drop) => {
+        {/* Music drops (trackUrl, no photo) */}
+        {drops.filter(drop => drop.trackUrl && !drop.photoUrl).map((drop) => {
+          const musicIcon = typeof window !== 'undefined' ?
+            new (require('leaflet').DivIcon)({
+              html: `
+                <div style="
+                  width: 28px;
+                  height: 28px;
+                  background-color: #8a2be2;
+                  border: 3px solid white;
+                  border-radius: 50%;
+                  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  color: white;
+                  font-weight: bold;
+                  font-size: 14px;
+                  position: relative;
+                ">
+                  ♫
+                  ${drop.likes && drop.likes.length > 0 ? `
+                    <div style="
+                      position: absolute;
+                      top: -5px;
+                      right: -5px;
+                      background-color: #8a2be2;
+                      color: white;
+                      border-radius: 50%;
+                      width: 16px;
+                      height: 16px;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      font-size: 9px;
+                      font-weight: bold;
+                      border: 2px solid white;
+                    ">
+                      ${drop.likes.length}
+                    </div>
+                  ` : ''}
+                </div>
+              `,
+              iconSize: [28, 28],
+              iconAnchor: [14, 14],
+              popupAnchor: [0, -14]
+            }) : undefined;
+
+          return (
+            <Marker
+              key={drop.id || drop.firestoreId}
+              position={[drop.lat, drop.lng]}
+              icon={musicIcon}
+            >
+              <DropPopup
+                drop={drop}
+                user={user}
+                onLikeUpdate={(dropId, newLikes) => {
+                  setDrops(prev =>
+                    prev.map(d =>
+                      d.firestoreId === dropId ? { ...d, likes: newLikes } : d
+                    )
+                  );
+                }}
+              />
+            </Marker>
+          );
+        })}
+
+        {/* Marker drops (no photo, no track) */}
+        {drops.filter(drop => !drop.photoUrl && !drop.trackUrl).map((drop) => {
           const markerIcon = typeof window !== 'undefined' ?
             new (require('leaflet').DivIcon)({
               html: `
@@ -3445,6 +3676,88 @@ export default function Home() {
                   </div>
                 </div>
               </button>
+
+              {/* Music Drop Option - save a song as drop, you lose that song */}
+              {unlockedTracks.length > 0 ? (
+                <>
+                  <label style={{
+                    color: '#f1f5f9',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    marginBottom: '4px',
+                    display: 'block'
+                  }}>
+                    MUSIC Drop (you lose this song):
+                  </label>
+                  <select
+                    value={selectedTrackForMusicDrop ?? unlockedTracks[0]}
+                    onChange={(e) => setSelectedTrackForMusicDrop(e.target.value || null)}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      borderRadius: '8px',
+                      border: '2px solid rgba(138, 43, 226, 0.4)',
+                      backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                      color: '#f1f5f9',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      marginBottom: '4px'
+                    }}
+                  >
+                    {unlockedTracks.map((url) => (
+                      <option key={url} value={url} style={{ backgroundColor: '#1e293b' }}>
+                        {getTrackNameFromUrl(url)}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleMusicDrop}
+                    style={{
+                      background: 'linear-gradient(135deg, #8a2be2, #6a1bb2)',
+                      border: 'none',
+                      borderRadius: '12px',
+                      padding: '18px',
+                      color: 'white',
+                      fontSize: '16px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      transition: 'all 0.3s ease',
+                      boxShadow: '0 4px 15px rgba(138, 43, 226, 0.3)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 8px 25px rgba(138, 43, 226, 0.4)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 4px 15px rgba(138, 43, 226, 0.3)';
+                    }}
+                  >
+                    <span style={{ fontSize: '24px' }}>MUSIC</span>
+                    <div style={{ textAlign: 'left' }}>
+                      <div>Place Music Drop</div>
+                      <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: 'normal' }}>
+                        Save song on map – you lose it from your collection
+                      </div>
+                    </div>
+                  </button>
+                </>
+              ) : (
+                <div style={{
+                  padding: '14px',
+                  borderRadius: '12px',
+                  background: 'rgba(138, 43, 226, 0.15)',
+                  border: '1px dashed rgba(138, 43, 226, 0.4)',
+                  color: '#a78bfa',
+                  fontSize: '13px',
+                  textAlign: 'center'
+                }}>
+                  MUSIC Drop – unlock tracks first (place marker or photo drops)
+                </div>
+              )}
             </div>
 
             <button
@@ -3494,8 +3807,8 @@ export default function Home() {
           if (!isOfflineMode) {
             if (gpsPosition) {
               setLastKnownPosition(gpsPosition);
-              console.log('Switching to offline mode, saved position:', gpsPosition);
-              alert('Switched to offline mode! Use the joystick at bottom-right to explore.');
+              console.log('Switched to offline mode');
+              alert('Switched to offline mode! GPS tracking paused.');
             } else {
               alert('No GPS position available. Please get GPS location first before going offline.');
               return;
@@ -3504,11 +3817,10 @@ export default function Home() {
             stopTracking();
           } else {
             setIsOfflineMode(false);
-            setJoystickPosition({ x: 0, y: 0 });
             if (!isTracking) {
               startTracking();
             }
-            console.log('Switching to online mode');
+            console.log('Switched to online mode');
           }
         }}
         style={{
@@ -3527,7 +3839,7 @@ export default function Home() {
           boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
         }}
       >
-        {isOfflineMode ? 'OFFLINE' : 'ONLINE'}
+        {isOfflineMode ? '🔴 OFFLINE' : '🟢 ONLINE'}
       </button>
 
       {/* Profile Stats Display - Top Right */}
@@ -3535,7 +3847,7 @@ export default function Home() {
         <div style={{
           position: 'absolute',
           top: 20,
-          right: 20,
+          left: 20,
           background: 'rgba(0,0,0,0.85)',
           color: '#e0e0e0',
           padding: '12px',
@@ -3581,149 +3893,6 @@ export default function Home() {
               {userMarkers.filter(m => m.userId === user?.uid).length} drops
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Joystick for Offline Mode */}
-      {isOfflineMode && (
-        <div
-          ref={joystickRef}
-          style={{
-            position: 'absolute',
-            bottom: 120,
-            right: 20,
-            width: 100,
-            height: 100,
-            backgroundColor: 'rgba(0,0,0,0.7)',
-            borderRadius: '50%',
-            border: '2px solid #ef4444',
-            zIndex: 1001,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'grab',
-            touchAction: 'none'
-          }}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            const rect = joystickRef.current?.getBoundingClientRect();
-            if (!rect) return;
-
-            const centerX = rect.left + rect.width / 2;
-            const centerY = rect.top + rect.height / 2;
-
-            const handleMouseMove = (moveEvent: MouseEvent) => {
-              const deltaX = moveEvent.clientX - centerX;
-              const deltaY = moveEvent.clientY - centerY;
-              const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-              const maxDistance = 35;
-
-              if (distance > maxDistance) {
-                const angle = Math.atan2(deltaY, deltaX);
-                setJoystickPosition({
-                  x: Math.cos(angle) * maxDistance,
-                  y: Math.sin(angle) * maxDistance
-                });
-              } else {
-                setJoystickPosition({ x: deltaX, y: deltaY });
-              }
-
-              if (lastKnownPosition && mapRef.current) {
-                const moveSpeed = 0.00001;
-                const newLat = lastKnownPosition[0] + (joystickPosition.y * moveSpeed);
-                const newLng = lastKnownPosition[1] + (joystickPosition.x * moveSpeed);
-
-                const clampedLat = Math.max(NZ_BOUNDS[0][0], Math.min(NZ_BOUNDS[1][0], newLat));
-                const clampedLng = Math.max(NZ_BOUNDS[0][1], Math.min(NZ_BOUNDS[1][1], newLng));
-
-                setLastKnownPosition([clampedLat, clampedLng]);
-                mapRef.current.setView([clampedLat, clampedLng], mapRef.current.getZoom());
-              }
-            };
-
-            const handleMouseUp = () => {
-              setJoystickPosition({ x: 0, y: 0 });
-              document.removeEventListener('mousemove', handleMouseMove);
-              document.removeEventListener('mouseup', handleMouseUp);
-            };
-
-            document.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseup', handleMouseUp);
-          }}
-          onTouchStart={(e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            const rect = joystickRef.current?.getBoundingClientRect();
-            if (!rect) return;
-
-            const centerX = rect.left + rect.width / 2;
-            const centerY = rect.top + rect.height / 2;
-
-            const handleTouchMove = (moveEvent: TouchEvent) => {
-              moveEvent.preventDefault();
-              const moveTouch = moveEvent.touches[0];
-              const deltaX = moveTouch.clientX - centerX;
-              const deltaY = moveTouch.clientY - centerY;
-              const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-              const maxDistance = 35;
-
-              if (distance > maxDistance) {
-                const angle = Math.atan2(deltaY, deltaX);
-                setJoystickPosition({
-                  x: Math.cos(angle) * maxDistance,
-                  y: Math.sin(angle) * maxDistance
-                });
-              } else {
-                setJoystickPosition({ x: deltaX, y: deltaY });
-              }
-
-              if (lastKnownPosition && mapRef.current) {
-                const moveSpeed = 0.001;
-                const newLat = lastKnownPosition[0] + (joystickPosition.y * moveSpeed);
-                const newLng = lastKnownPosition[1] + (joystickPosition.x * moveSpeed);
-
-                const clampedLat = Math.max(NZ_BOUNDS[0][0], Math.min(NZ_BOUNDS[1][0], newLat));
-                const clampedLng = Math.max(NZ_BOUNDS[0][1], Math.min(NZ_BOUNDS[1][1], newLng));
-
-                setLastKnownPosition([clampedLat, clampedLng]);
-                mapRef.current.setView([clampedLat, clampedLng], mapRef.current.getZoom());
-              }
-            };
-
-            const handleTouchEnd = () => {
-              setJoystickPosition({ x: 0, y: 0 });
-              document.removeEventListener('touchmove', handleTouchMove);
-              document.removeEventListener('touchend', handleTouchEnd);
-            };
-
-            document.addEventListener('touchmove', handleTouchMove);
-            document.addEventListener('touchend', handleTouchEnd);
-          }}
-        >
-          {/* Joystick Handle */}
-          <div
-            style={{
-              width: 30,
-              height: 30,
-              backgroundColor: '#ef4444',
-              borderRadius: '50%',
-              position: 'absolute',
-              left: '50%',
-              top: '50%',
-              transform: `translate(-50%, -50%) translate(${joystickPosition.x}px, ${joystickPosition.y}px)`,
-              transition: 'none',
-              border: '2px solid white',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
-            }}
-          />
-          {/* Joystick Base */}
-          <div style={{
-            width: 20,
-            height: 20,
-            backgroundColor: 'rgba(255,255,255,0.3)',
-            borderRadius: '50%',
-            position: 'absolute'
-          }} />
         </div>
       )}
 
@@ -4761,7 +4930,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* Music Panel - FIXED: Better SoundCloud implementation */}
+        {/* Music Panel */}
         {showMusicPanel && (
           <div style={{
             ...panelStyle,
@@ -4824,13 +4993,28 @@ export default function Home() {
                 borderRadius: '8px',
                 border: '1px solid rgba(138, 43, 226, 0.2)'
               }}>
-                <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'white', marginBottom: '5px' }}>
+                <div style={{ 
+                  fontSize: '14px', 
+                  fontWeight: 'bold', 
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <div style={{
+                    width: '10px',
+                    height: '10px',
+                    borderRadius: '50%',
+                    backgroundColor: isPlaying ? '#10b981' : '#ef4444',
+                    animation: isPlaying ? 'pulse 1s infinite' : 'none'
+                  }}></div>
                   Now Playing: {getCurrentTrackName()}
+                  {isPlaying && <span style={{ fontSize: '11px', color: '#10b981' }}>● LIVE</span>}
                 </div>
-                <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+                <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '4px' }}>
                   {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? 
-                    '🎧 Playing via SoundCloud Widget' : 
-                    `Track ${currentTrackIndex + 1} of ${unlockedTracks.length} unlocked`
+                    '🎧 Playing via SoundCloud' : 
+                    `Track ${currentTrackIndex + 1} of ${unlockedTracks.length}`
                   }
                 </div>
               </div>
@@ -4861,33 +5045,20 @@ export default function Home() {
                     </div>
                   ) : (
                     <div style={{ position: 'relative', width: '100%' }}>
-                      {/* Get iframe ID for current track */}
-                      {(() => {
-                        const soundCloudTrack = soundCloudTracks.find(t => t.url === unlockedTracks[currentTrackIndex]);
-                        const iframeId = soundCloudTrack?.iframeId || `soundcloud-player-${currentTrackIndex}`;
-                        
-                        return (
-                          <iframe
-                            id={iframeId}
-                            ref={(el) => {
-                              if (el && !soundCloudIframesRef.current.has(iframeId)) {
-                                soundCloudIframesRef.current.set(iframeId, el);
-                              }
-                            }}
-                            src={createSoundCloudIframeUrl(unlockedTracks[currentTrackIndex])}
-                            width="100%"
-                            height="166"
-                            frameBorder="no"
-                            scrolling="no"
-                            style={{ 
-                              border: 'none',
-                              backgroundColor: 'transparent'
-                            }}
-                            title="SoundCloud Player"
-                            allow="autoplay"
-                          />
-                        );
-                      })()}
+                      <iframe
+                        id="soundcloud-music-panel"
+                        src={createSoundCloudIframeUrl(unlockedTracks[currentTrackIndex])}
+                        width="100%"
+                        height="166"
+                        frameBorder="no"
+                        scrolling="no"
+                        style={{ 
+                          border: 'none',
+                          backgroundColor: 'transparent'
+                        }}
+                        title="SoundCloud Player"
+                        allow="autoplay"
+                      />
                     </div>
                   )}
                 </div>
@@ -4941,8 +5112,6 @@ export default function Home() {
                     const trackName = getTrackNameFromUrl(track);
                     const isSoundCloud = track.includes('soundcloud.com');
                     const isCurrentlyPlaying = index === currentTrackIndex;
-                    const soundCloudTrack = soundCloudTracks.find(t => t.url === track);
-                    const iframeId = soundCloudTrack?.iframeId || `soundcloud-player-${index}`;
 
                     return (
                       <div
@@ -4952,23 +5121,7 @@ export default function Home() {
                             togglePlay();
                           } else {
                             setCurrentTrackIndex(index);
-                            if (isSoundCloud) {
-                              // For SoundCloud tracks, play via widget if available
-                              const widget = soundCloudWidgetsRef.current.get(iframeId);
-                              if (widget && typeof widget.play === 'function') {
-                                widget.play();
-                                setIsPlaying(true);
-                              }
-                            } else {
-                              // Play local audio
-                              if (audioRef.current) {
-                                audioRef.current.src = `/${track}`;
-                                audioRef.current.play().catch(error => {
-                                  console.error('Error playing audio:', error);
-                                });
-                                setIsPlaying(true);
-                              }
-                            }
+                            setIsPlaying(true);
                           }
                         }}
                         style={{
@@ -5085,10 +5238,7 @@ export default function Home() {
                       transition: 'all 0.2s ease'
                     }}
                   >
-                    {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? 
-                      '⏯️' : 
-                      (isPlaying ? '⏸️' : '▶️')
-                    }
+                    {isPlaying ? '⏸️' : '▶️'}
                   </button>
 
                   <button
@@ -5593,77 +5743,86 @@ export default function Home() {
       {/* Legend */}
       {showLegend && (
         <div className="legend" style={{
-        position: 'absolute',
-        bottom: 20,
-        left: 20,
-        background: 'rgba(0,0,0,0.65)',
-        color: 'white',
-        padding: '10px 14px',
-        borderRadius: 8,
-        fontSize: 13,
-        zIndex: 900,
-        backdropFilter: 'blur(4px)',
-        maxWidth: '250px'
-      }}>
-        <div>📍 Your location {isOfflineMode ? '(Offline)' : '(NZ only)'}</div>
-        <div style={{color: selectedMarkerColor}}>● All drops (blue dot = yours)</div>
-        <div>{isOfflineMode ? '🔴' : '🟢'} 50m radius {isOfflineMode ? '(Offline Mode)' : '(Online Mode)'}</div>
-        <div>🎯 GPS accuracy {isOfflineMode ? '(Disabled)' : ''}</div>
-        <div style={{fontSize: '10px', color: isOfflineMode ? '#ef4444' : '#60a5fa', marginTop: '4px'}}>
-          {isOfflineMode ? '🎮 Offline Mode - Explore with joystick' : '🗺️ Blackout NZ - Street art across Aotearoa'}
-        </div>
-        <div style={{
-          marginTop: '8px',
-          fontSize: '11px',
-          color: gpsStatus === 'tracking' ? '#10b981' :
-                 gpsStatus === 'acquiring' ? '#f59e0b' :
-                 gpsStatus === 'error' ? '#ef4444' : '#6b7280'
+          position: 'absolute',
+          bottom: 20,
+          left: 20,
+          background: 'rgba(0,0,0,0.65)',
+          color: 'white',
+          padding: '10px 14px',
+          borderRadius: 8,
+          fontSize: 13,
+          zIndex: 900,
+          backdropFilter: 'blur(4px)',
+          maxWidth: '250px'
         }}>
-          📡 GPS: {
-            isOfflineMode ? 'Offline Mode' :
-            gpsStatus === 'tracking' ? 'Active' :
-            gpsStatus === 'acquiring' ? 'Acquiring...' :
-            gpsStatus === 'error' ? 'Error' : 'Initializing'
-          }
-          {gpsPosition && (
-            <div style={{ fontSize: '9px', marginTop: '2px', opacity: 0.8 }}>
-              {gpsPosition[0].toFixed(4)}, {gpsPosition[1].toFixed(4)}
-            </div>
+          <div>📍 Your location {isOfflineMode ? '(Offline)' : '(NZ only)'}</div>
+          <div style={{color: selectedMarkerColor}}>● All drops (blue dot = yours)</div>
+          <div>{isOfflineMode ? '🔴' : '🟢'} 50m radius {isOfflineMode ? '(Offline Mode)' : '(Online Mode)'}</div>
+          <div>🎯 GPS accuracy {isOfflineMode ? '(Disabled)' : ''}</div>
+          <div style={{fontSize: '10px', color: isOfflineMode ? '#ef4444' : '#60a5fa', marginTop: '4px'}}>
+            {isOfflineMode ? '🎮 Offline Mode' : '🗺️ Blackout NZ - Street art across Aotearoa'}
+          </div>
+          <div style={{
+            marginTop: '8px',
+            fontSize: '11px',
+            color: gpsStatus === 'tracking' ? '#10b981' :
+                   gpsStatus === 'acquiring' ? '#f59e0b' :
+                   gpsStatus === 'error' ? '#ef4444' : '#6b7280'
+          }}>
+            📡 GPS: {
+              isOfflineMode ? 'Offline Mode' :
+              gpsStatus === 'tracking' ? 'Active' :
+              gpsStatus === 'acquiring' ? 'Acquiring...' :
+              gpsStatus === 'error' ? 'Error' : 'Initializing'
+            }
+            {gpsPosition && (
+              <div style={{ fontSize: '9px', marginTop: '2px', opacity: 0.8 }}>
+                {gpsPosition[0].toFixed(4)}, {gpsPosition[1].toFixed(4)}
+              </div>
+            )}
+            {gpsError && (
+              <div style={{
+                fontSize: '9px',
+                marginTop: '2px',
+                color: '#ef4444',
+                maxWidth: '200px',
+                wordWrap: 'break-word'
+              }}>
+                {gpsError}
+              </div>
+            )}
+          </div>
+          {showTopPlayers && (
+            <>
+              <div style={{marginTop: '8px', color: '#fbbf24'}}>🥇 Top Writer</div>
+              <div style={{color: '#cbd5e1'}}>🥈 Runner-up</div>
+              <div style={{color: '#d97706'}}>🥉 Contender</div>
+            </>
           )}
-          {gpsError && (
-            <div style={{
-              fontSize: '9px',
-              marginTop: '2px',
-              color: '#ef4444',
-              maxWidth: '200px',
-              wordWrap: 'break-word'
-            }}>
-              {gpsError}
-            </div>
-          )}
+          <div style={{marginTop: '8px', fontSize: '11px', color: '#4dabf7'}}>
+            Total drops: {userMarkers.length}
+          </div>
+          <div style={{marginTop: '8px', fontSize: '11px', color: '#8a2be2'}}>
+            Music: {unlockedTracks.length} tracks unlocked
+          </div>
         </div>
-        {showTopPlayers && (
-          <>
-            <div style={{marginTop: '8px', color: '#fbbf24'}}>🥇 Top Writer</div>
-            <div style={{color: '#cbd5e1'}}>🥈 Runner-up</div>
-            <div style={{color: '#d97706'}}>🥉 Contender</div>
-          </>
-        )}
-        <div style={{marginTop: '8px', fontSize: '11px', color: '#4dabf7'}}>
-          Total drops: {userMarkers.length}
-        </div>
-        <div style={{marginTop: '8px', fontSize: '11px', color: '#8a2be2'}}>
-          Music: {unlockedTracks.length} tracks unlocked
-        </div>
-      </div>
       )}
 
-      {/* Hidden Audio Element for Local Files */}
-      <audio
-        ref={audioRef}
-        style={{ display: 'none' }}
-        onEnded={playNextTrack}
-      />
+      {/* Hidden SoundCloud Player for Background Music */}
+      <div style={{ position: 'absolute', top: '-9999px', left: '-9999px' }}>
+        <iframe
+          id="soundcloud-main-player"
+          src={unlockedTracks.length > 0 ? 
+            createSoundCloudIframeUrl(unlockedTracks[currentTrackIndex]) : 
+            ''
+          }
+          width="1"
+          height="1"
+          frameBorder="no"
+          scrolling="no"
+          allow="autoplay"
+        />
+      </div>
 
       <style>{`
         @keyframes popIn {
@@ -5686,6 +5845,18 @@ export default function Home() {
           0% { opacity: 1; }
           50% { opacity: 0.5; }
           100% { opacity: 1; }
+        }
+        
+        @keyframes progressPulse {
+          0% { opacity: 0.5; }
+          50% { opacity: 1; }
+          100% { opacity: 0.5; }
+        }
+        
+        @keyframes gradientBG {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
         }
       `}</style>
     </div>

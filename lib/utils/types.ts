@@ -49,6 +49,7 @@ export interface Drop {
   lat: number;
   lng: number;
   photoUrl?: string; // Optional - marker drops don't have photos
+  trackUrl?: string; // Optional - music drops: track saved with drop, placer loses it
   createdBy: string; // User UID
   timestamp: Date;
   likes: string[]; // Array of user UIDs who liked
@@ -145,3 +146,4 @@ export const NEW_ZEALAND_LOCATIONS = {
 // Keep EAST_AUCKLAND_LOCATIONS for backward compatibility but mark as deprecated
 /** @deprecated Use NEW_ZEALAND_LOCATIONS instead */
 export const EAST_AUCKLAND_LOCATIONS = NEW_ZEALAND_LOCATIONS;
+

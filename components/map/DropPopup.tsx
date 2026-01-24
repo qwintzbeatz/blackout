@@ -69,10 +69,22 @@ export default function DropPopup({ drop, user, onLikeUpdate }: DropPopupProps) 
     }).format(date);
   };
 
+  const getTrackNameFromUrl = (url: string): string => {
+    if (url === 'blackout-classic.mp3') return 'Blackout (Default)';
+    if (url.includes('soundcloud.com')) {
+      const segments = url.split('/');
+      const trackSegment = segments[segments.length - 1];
+      return trackSegment.split('-').map((word) =>
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ');
+    }
+    return 'Unknown Track';
+  };
+
   return (
     <Popup maxWidth={400} className="drop-popup">
       <div style={{ textAlign: 'center', minWidth: '300px' }}>
-        {/* Photo or Marker Icon */}
+        {/* Photo, Music, or Marker */}
         {drop.photoUrl ? (
           !imageError ? (
             <div
@@ -109,8 +121,32 @@ export default function DropPopup({ drop, user, onLikeUpdate }: DropPopupProps) 
               Failed to load image
             </div>
           )
+        ) : drop.trackUrl ? (
+          // Music drop (saved song, placer gave it away)
+          <div
+            style={{
+              padding: '24px',
+              background: 'linear-gradient(135deg, #8a2be2, #6a1bb2)',
+              borderRadius: '8px',
+              marginBottom: '12px',
+              color: 'white',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+          >
+            <div style={{ fontSize: '32px' }}>MUSIC</div>
+            <div style={{ fontSize: '16px', fontWeight: 'bold' }}>Music Drop</div>
+            <div style={{ fontSize: '13px', opacity: 0.95 }}>
+              {getTrackNameFromUrl(drop.trackUrl)}
+            </div>
+            <div style={{ fontSize: '11px', opacity: 0.8 }}>
+              Placer gave this song away
+            </div>
+          </div>
         ) : (
-          // Marker drop (no photo)
+          // Marker drop (no photo, no track)
           <div
             style={{
               padding: '40px',

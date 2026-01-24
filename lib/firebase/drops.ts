@@ -21,6 +21,7 @@ export const saveDropToFirestore = async (drop: {
   lat: number;
   lng: number;
   photoUrl?: string; // Optional - marker drops don't have photos
+  trackUrl?: string; // Optional - music drops
   createdBy: string;
   timestamp: Date;
   likes?: string[];
@@ -38,10 +39,8 @@ export const saveDropToFirestore = async (drop: {
       userProfilePic: drop.userProfilePic,
     };
 
-    // Only add photoUrl if it exists (for photo drops)
-    if (drop.photoUrl) {
-      dropData.photoUrl = drop.photoUrl;
-    }
+    if (drop.photoUrl) dropData.photoUrl = drop.photoUrl;
+    if (drop.trackUrl) dropData.trackUrl = drop.trackUrl;
 
     const docRef = await addDoc(collection(db, 'drops'), dropData);
     return docRef.id;
@@ -72,7 +71,8 @@ export const loadAllDrops = async (): Promise<Drop[]> => {
         firestoreId: doc.id,
         lat: data.lat,
         lng: data.lng,
-        photoUrl: data.photoUrl || undefined, // Optional field
+        photoUrl: data.photoUrl || undefined,
+        trackUrl: data.trackUrl || undefined,
         createdBy: data.createdBy,
         timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(),
         likes: data.likes || [],
