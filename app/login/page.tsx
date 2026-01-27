@@ -2,14 +2,17 @@
 'use client';
 
 import { useState } from 'react';
-import { auth, googleProvider } from '@/lib/firebase';
+import { auth } from '@/lib/firebase';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signInWithPopup, 
   signOut 
 } from 'firebase/auth';
+import { GoogleAuthProvider } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
+
+const googleProvider = new GoogleAuthProvider();
 
 export default function Login() {
   const [email, setEmail] = useState('');

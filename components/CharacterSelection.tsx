@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { User } from 'firebase/auth';
-import { UserProfile } from 'lib/types/blackout';
+import { UserProfile } from '@/lib/types/blackout';
 import { doc, updateDoc } from 'firebase/firestore';
-import { db } from 'lib/firebase';
+import { db } from '@/lib/firebase';
 
 interface CharacterSelectionProps {
   user: User;
