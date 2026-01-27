@@ -1,8 +1,7 @@
 {
-  "build": {
-    "env": {
-      "NEXT_TELEMETRY_DISABLED": "1"
-    },
-    "command": "next build"
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
   }
 }
