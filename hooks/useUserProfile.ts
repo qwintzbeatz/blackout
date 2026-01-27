@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
-import { UserProfile } from '@/lib/utils/types';
+import { UserProfile } from '@/lib/types/blackout';
 import { generateAvatarUrl } from '@/lib/utils/helpers';
 
 export const useUserProfile = (user: User | null) => {

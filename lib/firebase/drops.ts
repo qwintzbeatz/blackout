@@ -12,7 +12,7 @@ import {
   limit,
 } from 'firebase/firestore';
 import { db } from './config';
-import { Drop } from '@/lib/utils/types';
+import { Drop } from '@/lib/types/blackout';
 
 /**
  * Save a drop to Firestore 'drops' collection

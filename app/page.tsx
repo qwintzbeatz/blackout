@@ -1,5 +1,9 @@
 'use client';
 
+import { StoryManagerProvider } from '@/components/story/StoryManager';
+import StoryPanel from '@/components/story/StoryPanel';
+import { useMissionTriggers } from '@/hooks/useMissionTriggers';
+
 import { 
   doc, 
   setDoc, 
@@ -8,17 +12,17 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { 
-  ref, 
+  ref as storageRef, 
   uploadBytes, 
   getDownloadURL 
 } from 'firebase/storage';
-import { auth, db, storage } from '@/lib/firebase';
+import { auth, db, realtimeDb, storage } from '@/lib/firebase/config';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut, 
   onAuthStateChanged,
-  User 
+  User as FirebaseUser
 } from 'firebase/auth';
 import { 
   collection, 
@@ -31,15 +35,19 @@ import {
   orderBy,
   limit
 } from 'firebase/firestore';
+import { ref, push, onValue, query as rtdbQuery, orderByChild, limitToLast, off, set, remove } from 'firebase/database';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 import PhotoSelectionModal from '@/components/ui/PhotoSelectionModal';
 import DropPopup from '@/components/map/DropPopup';
+import MarkerPopupCard from '@/components/MarkerPopupCard';
+import DirectMessaging from '@/components/DirectMessaging';
 import { uploadImageToImgBB } from '@/lib/services/imgbb';
 import { saveDropToFirestore, loadAllDrops } from '@/lib/firebase/drops';
-import { Drop, NEW_ZEALAND_LOCATIONS } from '@/lib/utils/types';
+import { Crew } from '@/lib/types/blackout';
+import { CREWS } from '@/data/crews';
 import { useGPSTracker } from '@/hooks/useGPSTracker';
 
 const HIPHOP_TRACKS = [
@@ -48,8 +56,8 @@ const HIPHOP_TRACKS = [
   "https://soundcloud.com/e-u-g-hdub-connected/fight-music",
   "https://soundcloud.com/e-u-g-hdub-connected/rockin-in-the-club",
   "https://soundcloud.com/e-u-g-hdub-connected/we-dont-owe-u-shit-ft-koers",
-  "https://soundcloud.com/qwintz-one/i-wanna-be-your-gangsta",
-  "https://soundcloud.com/qwintz-one/mary-j-and-johnny-blaze-type",
+  "https://soundcloud.com/davidkdallas/runnin",
+  "https://soundcloud.com/eke_87/eke-hangn-about",
   "https://soundcloud.com/hustle-kangs/so-good",
   "https://soundcloud.com/e-u-g-hdub-connected/b-o-p-freestyle-at-western",
   "https://soundcloud.com/nzhiphop/ermehn-bank-job-feat-tuface-mr-sicc",
@@ -59,10 +67,280 @@ const HIPHOP_TRACKS = [
   "https://soundcloud.com/nzhiphop/tuface-otara-state-of-mind",
   "https://soundcloud.com/nzhiphop/mareko-city-line",
   "https://soundcloud.com/nzhiphop/tyna-iv-corners-djsmv-welcome-to-hamilton-city",
-  "https://soundcloud.com/nzhiphop/madis-start-to-an-end",
+  "https://soundcloud.com/truenelly/true-nelly-no-way-feat-dray-ryda",
   "https://soundcloud.com/colourway_records/colourway-put-your-colors-on",
-  "https://soundcloud.com/uiceheidd/too-smooth-juice",
+  "https://soundcloud.com/nzhiphop/usual-suspects-wreck-tee-feat-j1-tyson-tyler",
+  "https://soundcloud.com/enolasoldier/dont-give-a-fck-about-you",
+  "https://soundcloud.com/nzhiphop/dj-ali-the-summit-anthem-feat-mareko-flowz-scribe",
+  "https://soundcloud.com/strikaone/westcoast-ridin",
+  "https://soundcloud.com/user-223219940/crazy-samples",
+  "https://soundcloud.com/user-270967129/chch-hiphop",
+  "https://soundcloud.com/user-270967129/flow-wit-us-a1-blazeske-ekebeat-by-p1ne",
+  "https://soundcloud.com/seasidah/ocean-view",
+  "https://soundcloud.com/loopcrew/12-waka",
+  "https://soundcloud.com/nzhiphop/nesian-mystik-brothaz",
+  "https://soundcloud.com/fame-petuha/pulling-me-back",
+  "https://soundcloud.com/tui-graham/baddest-bitch-mixdown",
+  "https://soundcloud.com/ghostdirtysteath274/ghost-self-side-glow",
+  "https://soundcloud.com/ghostdirtysteath274/hustle-intently",
+  "https://soundcloud.com/oh6-offishalz/more-than-anything-remix-oh6-offishal",
+  "https://soundcloud.com/dennis-jnr-makalio/nizz-feat-teezee-hustlaz",
+  "https://soundcloud.com/user-596628786-171564320/oh6-offishal-this-is-where-the-heart-iz",
+  "https://soundcloud.com/southgate-entertainment/12-journeys-feat-random-klik",
+  "https://soundcloud.com/base-herbert/hammer-time-dtox-west-outlawz",
+  "https://soundcloud.com/davidkdallas/dont-rate-that",
+  "https://soundcloud.com/davidkdallas/southside",
+  "https://soundcloud.com/davidkdallas/david-dallas-caught-in-a-daze",
+  "https://soundcloud.com/davidkdallas/til-tomorrow",
+  "https://soundcloud.com/stallyano/auckland-connect-feat-k-kila",
+  "https://soundcloud.com/pswish/west-auckland-pswish",
+  "https://soundcloud.com/dopekrew/ace-ft-imageprod-aebeats",
+  "https://soundcloud.com/dopekrew/family-binis-ft-mikey-mayz",
+  "https://soundcloud.com/pnc-1/ambitionz-of-a-writer-pac-beats-freestyle",
+  "https://soundcloud.com/pnc-1/12-1-2kast",
+  "https://soundcloud.com/pnc-1/02-bazookas-theme",
+  "https://soundcloud.com/btdubsta187/roll-call-187-gravity-young-sid-fizek",
+  "https://soundcloud.com/tysontyler/tyson-tyler-pull-the-trigger",
+  "https://soundcloud.com/cbrook300/conquerors-haki-1",
+  "https://soundcloud.com/cbrook300/broken-wing-1",
+  "https://soundcloud.com/cbrook300/cbrook-yngskzr-crossfade",
+  "https://soundcloud.com/schemeofficial/belly-of-the-beast-ft-tommy-graffiti",
+  "https://soundcloud.com/terangihika/sync-hmewrk",
+  "https://soundcloud.com/colourway_records/colourway-put-your-colors-on",
+  "https://soundcloud.com/terangihika/01-rec-2024-09-10",
+  "https://soundcloud.com/noize_kontrolnz/nk-radio-w-observe-feat-windu-22042025-13",
+  "https://soundcloud.com/smashproof/smashproof-brother",
+  "https://soundcloud.com/savageofficial/savage-swing",
+  "https://soundcloud.com/david-dallas/david-dallas-til-next-time",
+  "https://soundcloud.com/chillibumps/chillibumps-sunshine",
+  "https://soundcloud.com/ladi6/ladi6-like-a-piano",
+  "https://soundcloud.com/avaruusavaruus/avaruus-flowers",
+  "https://soundcloud.com/seth-haunt/seth-haunt",
+  "https://soundcloud.com/teamdynasty/team-dynasty-claire",
+  "https://soundcloud.com/choirboysnz/choir-boys-choir",
+  "https://soundcloud.com/smokomusic/smoko-eats",
+  "https://soundcloud.com/louisknows/louis-baker-addict",
+  "https://soundcloud.com/melodownz/melodownz-waves",
+  "https://soundcloud.com/swidtmyson/swidt-flex",
+  "https://soundcloud.com/sid-diamond/sid-diamonds",
+  "https://soundcloud.com/chinesemanufacturer/cm-001",
+  "https://soundcloud.com/lewismccallum/lewis-mccallum-out-of-time",
+  "https://soundcloud.com/noah-slee/noah-slee-dreamboat",
+  "https://soundcloud.com/laharl/laharl-sleep",
+  "https://soundcloud.com/diggydupe/diggy-dupe-rain",
+  "https://soundcloud.com/chancetherapper/chance-nz-remix",
+  "https://soundcloud.com/jamestm/james-reid-track",
+  "https://soundcloud.com/mzwetwo/mz-we-two-battle",
+  "https://soundcloud.com/raiza-biza/raiza-biza-nairobi",
+  "https://soundcloud.com/tamahaschi/tama-haschi-fresh",
+  "https://soundcloud.com/sir-verb/sir-verb-the-light",
+  "https://soundcloud.com/che-fu/che-fu-chains",
+  "https://soundcloud.com/deach/deach-beats",
+  "https://soundcloud.com/the-knightstalkers/knightstalkers-night",
+  "https://soundcloud.com/opensouls/opensouls-hold-on",
+  "https://soundcloud.com/rika/rika-moa",
+  "https://soundcloud.com/imugi/imugi-dragonfruit",
+  "https://soundcloud.com/bennytony/benny-tony-coastin",
+  "https://soundcloud.com/louisknows/louis-baker-black-crow",
+  "https://soundcloud.com/tamahaschi/tama-haschi-returns",
+  "https://soundcloud.com/teamdynasty/team-dynasty-anthem",
+  "https://soundcloud.com/mikey-nobull/mikey-beats",
+  "https://soundcloud.com/alkalinofficial/alkalin-heat",
+  "https://soundcloud.com/solomoncrook/solomon-crook-track",
+  "https://soundcloud.com/noah-slee/noah-slee-twisted",
+  "https://soundcloud.com/djmanan/manan-mix",
+  "https://soundcloud.com/raiza-biza/raiza-biza-higher",
+  "https://soundcloud.com/ladi6/ladi6-diamonds",
+  "https://soundcloud.com/louisknows/louis-baker-rainbow",
+  "https://soundcloud.com/choirboysnz/choir-boys-holy",
+  "https://soundcloud.com/melodownz/melodownz-ready",
+  "https://soundcloud.com/swidtmyson/swidt-ride",
+  "https://soundcloud.com/avaruusavaruus/avaruus-space",
+  "https://soundcloud.com/homebrew/homebrew-benefit",
+  "https://soundcloud.com/tamahaschi/tama-haschi-last",
+  "https://soundcloud.com/smokomusic/smoko-eats-vol2"
+
 ];
+
+// 🔧 PERFORMANCE: Enable SoundCloud for music playback functionality
+const ENABLE_SOUNDCLOUD = true;
+
+// ========== TYPE DEFINITIONS ==========
+type MarkerName = 'Pole' | 'Sign' | 'E.Box' | 'Fence' | 'Wall' | 'Shutter' | 'Sewer' | 'Rooftop' | 'Ground' | 'Train' | 'Bridge' | 'Traffic Light' | 'Truck' | 'Van' | 'Post Box' | 'Speed Camera' | 'ATM Machine' | 'Bus Stop';
+type MarkerDescription = 'Sticker/Slap' | 'Stencil/Brand/Stamp' | 'Tag/Signature' | 'Etch/Scribe/Scratch' | 'Throw-Up' | 'Paste-Up/Poster' | 'Piece/Bombing' | 'Burner/Heater' | 'Roller/Blockbuster' | 'Extinguisher' | 'Mural';
+type CrewId = 'bqc' | 'sps' | 'lzt' | 'dgc' | null;
+type Gender = 'male' | 'female' | 'other' | 'prefer-not-to-say';
+
+interface UserProfile {
+  uid: string;
+  email: string;
+  username: string;
+  gender: Gender;
+  profilePicUrl: string;
+  rep: number;
+  level: number;
+  rank: string;
+  totalMarkers: number;
+  favoriteColor?: string;
+  createdAt: Date;
+  lastActive: Date;
+  isSolo?: boolean;
+  crewName?: string | null;
+  crewId?: string | null;
+  isLeader?: boolean;
+  unlockedTracks?: string[];
+  crewJoinedAt?: Date | null;
+  crewRank?: string;
+  crewRep?: number;
+  currentAct?: number;
+  storyProgress?: number;
+  markersPlaced?: number;
+  photosTaken?: number;
+  collaborations?: number;
+  blackoutEventsInvestigated?: number;
+  kaiTiakiEvaluationsReceived?: number;
+}
+
+interface TopPlayer {
+  uid: string;
+  username: string;
+  profilePicUrl: string;
+  rank: string;
+  rep: number;
+  level: number;
+  totalMarkers: number;
+  position?: [number, number];
+  lastActive: Date;
+}
+
+interface SoundCloudTrack {
+  url: string;
+  title: string;
+  isLoaded: boolean;
+  iframeId?: string;
+}
+
+interface CrewData {
+  id: string;
+  name: string;
+  leader: string;
+  description: string;
+  bonus: string;
+  color: string;
+  accentColor: string;
+}
+
+interface LocationInfo {
+  coords: [number, number];
+  description: string;
+}
+
+interface Comment {
+  id: string;
+  userId: string;
+  username: string;
+  text: string;
+  timestamp: Date;
+  userProfilePic?: string;
+}
+
+interface UserMarker {
+  id: string;
+  position: [number, number];
+  name: MarkerName;
+  description: MarkerDescription;
+  color: string;
+  timestamp: Date;
+  distanceFromCenter?: number;
+  userId?: string;
+  firestoreId?: string;
+  username?: string;
+  userProfilePic?: string;
+  repEarned?: number;
+  createdAt?: Date;
+  likes?: string[];
+  comments?: Comment[];
+}
+
+interface Drop {
+  id?: string;
+  firestoreId?: string;
+  lat: number;
+  lng: number;
+  photoUrl?: string;
+  trackUrl?: string;
+  createdBy: string;
+  timestamp: Date;
+  likes: string[];
+  username: string;
+  userProfilePic: string;
+}
+
+interface NearbyCrewMember {
+  uid: string;
+  username: string;
+  distance: number;
+}
+
+// 🆕 CREW CHAT MESSAGE TYPE
+interface CrewChatMessage {
+  id: string;
+  text: string;
+  uid: string;
+  username: string;
+  avatar?: string;
+  timestamp: number;
+}
+
+// 🆕 MESSAGING TYPES (for direct messages)
+interface DirectMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderProfilePic: string;
+  receiverId: string;
+  content: string;
+  timestamp: Date;
+  isRead: boolean;
+  type: 'text' | 'location' | 'photo' | 'crew_invite';
+  location?: [number, number];
+  photoUrl?: string;
+}
+
+interface DirectChat {
+  chatId: string;
+  participantIds: string[];
+  participantNames: string[];
+  participantProfilePics: string[];
+  lastMessage: string;
+  lastMessageTime: Date;
+  unreadCount: number;
+}
+
+// ========== END TYPE DEFINITIONS ==========
+
+const NEW_ZEALAND_LOCATIONS: Record<string, LocationInfo> = {
+  'Auckland': {
+    coords: [-36.8485, 174.7633],
+    description: 'City of Sails'
+  },
+  'Wellington': {
+    coords: [-41.2865, 174.7762],
+    description: 'Windy City'
+  },
+  'Christchurch': {
+    coords: [-43.5320, 172.6306],
+    description: 'Garden City'
+  },
+  'Queenstown': {
+    coords: [-45.0312, 168.6626],
+    description: 'Adventure Capital'
+  },
+  'Dunedin': {
+    coords: [-45.8788, 170.5028],
+    description: 'Edinburgh of the South'
+  }
+};
 
 // SoundCloud Widget API global declaration
 declare global {
@@ -89,64 +367,26 @@ declare global {
   }
 }
 
-// Dynamically import leaflet only on client side
-const MapContainer = dynamic(
-  () => import('react-leaflet').then((mod) => mod.MapContainer),
-  { ssr: false }
-);
-const TileLayer = dynamic(
-  () => import('react-leaflet').then((mod) => mod.TileLayer),
-  { ssr: false }
-);
-const Marker = dynamic(
-  () => import('react-leaflet').then((mod) => mod.Marker),
-  { ssr: false }
-);
-const Popup = dynamic(
-  () => import('react-leaflet').then((mod) => mod.Popup),
-  { ssr: false }
-);
-const Circle = dynamic(
-  () => import('react-leaflet').then((mod) => mod.Circle),
-  { ssr: false }
-);
-
 // Marker name options
-const MARKER_NAMES = ['Pole', 'Sign', 'E.Box', 'Fence', 'Wall', 'Shutter', 'Sewer', 'Rooftop', 'Ground', 'Train', 'Bridge', 'Traffic Light', 'Truck', 'Van', 'Post Box', 'Speed Camera', 'ATM Machine', 'Bus Stop'] as const;
-type MarkerName = typeof MARKER_NAMES[number];
+const MARKER_NAMES: MarkerName[] = ['Pole', 'Sign', 'E.Box', 'Fence', 'Wall', 'Shutter', 'Sewer', 'Rooftop', 'Ground', 'Train', 'Bridge', 'Traffic Light', 'Truck', 'Van', 'Post Box', 'Speed Camera', 'ATM Machine', 'Bus Stop'];
 
 // Marker description options
-const MARKER_DESCRIPTIONS = ['Sticker/Slap', 'Stencil/Brand/Stamp', 'Tag/Signature', 'Etch/Scribe/Scratch', 'Throw-Up', 'Paste-Up/Poster', 'Piece/Bombing', 'Burner/Heater', 'Roller/Blockbuster', 'Extinguisher', 'Mural'] as const;
-type MarkerDescription = typeof MARKER_DESCRIPTIONS[number];
+const MARKER_DESCRIPTIONS: MarkerDescription[] = ['Sticker/Slap', 'Stencil/Brand/Stamp', 'Tag/Signature', 'Etch/Scribe/Scratch', 'Throw-Up', 'Paste-Up/Poster', 'Piece/Bombing', 'Burner/Heater', 'Roller/Blockbuster', 'Extinguisher', 'Mural'];
 
 // Modern panel styling constant for consistency across all UI panels
 const panelStyle = {
   backgroundColor: 'rgba(0, 0, 0, 0.85)',
   color: '#e0e0e0',
   padding: '16px',
-  borderRadius: '8px',
-  boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
-  width: '320px',
-  maxHeight: '80vh',
+  borderRadius: '12px',
+  boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+  width: 'min(90vw, 400px)',
+  maxHeight: '75vh',
   overflowY: 'auto' as const,
-  border: '1px solid rgba(255,255,255,0.1)',
-  backdropFilter: 'blur(4px)',
-  zIndex: 1200
-};
-
-// Avatar generator function
-const generateAvatarUrl = (userId: string, username: string, gender?: string): string => {
-  const seed = username || userId;
-  const colors = ['4dabf7', '10b981', '8b5cf6', 'f59e0b', 'ec4899', 'f97316'];
-  const selectedColor = colors[Math.floor(Math.random() * colors.length)];
-  
-  let url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}`;
-  
-  if (gender === 'male' && Math.random() > 0.5) {
-    url += '&facialHair=beard';
-  }
-  
-  return url;
+  border: '1px solid rgba(255,255,255,0.15)',
+  backdropFilter: 'blur(8px)',
+  zIndex: 1200,
+  position: 'relative'
 };
 
 // Helper function to calculate distance between two coordinates in meters
@@ -235,65 +475,6 @@ const getTrackNameFromUrl = (url: string): string => {
   return 'Unknown Track';
 };
 
-// Type for user-placed markers
-interface UserMarker {
-  id: string;
-  position: [number, number];
-  name: MarkerName;
-  description: MarkerDescription;
-  color: string;
-  timestamp: Date;
-  distanceFromCenter?: number;
-  userId?: string;
-  firestoreId?: string;
-  username?: string;
-  userProfilePic?: string;
-  repEarned?: number;
-  createdAt?: Date;
-}
-
-// User profile interface
-interface UserProfile {
-  uid: string;
-  email: string;
-  username: string;
-  gender: 'male' | 'female' | 'other' | 'prefer-not-to-say';
-  profilePicUrl: string;
-  rep: number;
-  level: number;
-  rank: string;
-  totalMarkers: number;
-  favoriteColor?: string;
-  createdAt: Date;
-  lastActive: Date;
-  isSolo?: boolean;
-  crewName?: string;
-  crewId?: string;
-  isLeader?: boolean;
-  unlockedTracks?: string[];
-}
-
-// Top Player interface
-interface TopPlayer {
-  uid: string;
-  username: string;
-  profilePicUrl: string;
-  rank: string;
-  rep: number;
-  level: number;
-  totalMarkers: number;
-  position?: [number, number];
-  lastActive: Date;
-}
-
-// SoundCloud Track interface
-interface SoundCloudTrack {
-  url: string;
-  title: string;
-  isLoaded: boolean;
-  iframeId?: string;
-}
-
 // Marker colors
 const MARKER_COLORS = [
   { name: 'Green', value: '#10b981' },
@@ -346,30 +527,624 @@ const createSoundCloudIframeUrl = (trackUrl: string): string => {
   return `https://w.soundcloud.com/player/?${params.toString()}`;
 };
 
+// Updated avatar generator function with gender-specific avatars
+const generateAvatarUrl = (userId: string, username: string, gender?: Gender): string => {
+  const seed = username || userId;
+  
+  // Define avatar styles based on gender
+  let avatarStyle = 'open-peeps'; // default style
+  
+  if (gender === 'male') {
+    avatarStyle = 'adventurer'; // boyish/ masculine style
+  } else if (gender === 'female') {
+    avatarStyle = 'avataaars'; // girlish/ feminine style
+  } else if (gender === 'other') {
+    avatarStyle = 'bottts'; // alien/robot style for 'other'
+  } else if (gender === 'prefer-not-to-say') {
+    avatarStyle = 'identicon'; // android/geometric style
+  }
+  
+  // Color palette for avatars
+  const colors = [
+    '4dabf7', '10b981', '8b5cf6', 'f59e0b', 'ec4899', 'f97316',
+    '3b82f6', '06b6d4', '8b5cf6', 'ef4444', '84cc16', '14b8a6'
+  ];
+  const selectedColor = colors[Math.floor(Math.random() * colors.length)];
+  
+  // Construct URL based on style
+  let url = '';
+  
+  switch (avatarStyle) {
+    case 'adventurer': // Male (boyish)
+      url = `https://api.dicebear.com/7.x/adventurer/svg?seed=${seed}&backgroundColor=${selectedColor}`;
+      // Optional: Add some male-specific options
+      break;
+      
+    case 'avataaars': // Female (girlish)
+      url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}`;
+      // Optional: Add some female-specific options
+      break;
+      
+    case 'bottts': // Other (alien/robot)
+      url = `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}&backgroundColor=${selectedColor}`;
+      // Add some robot/alien features
+      break;
+      
+    case 'identicon': // Prefer not to say (android/geometric)
+      url = `https://api.dicebear.com/7.x/identicon/svg?seed=${seed}&backgroundColor=${selectedColor}`;
+      // Geometric/android style
+      break;
+      
+    default: // open-peeps as fallback
+      url = `https://api.dicebear.com/7.x/open-peeps/svg?seed=${seed}&backgroundColor=${selectedColor}`;
+  }
+  
+  return url;
+};
+
+// Dynamically import leaflet only on client side
+const MapContainer = dynamic(
+  () => import('react-leaflet').then((mod) => mod.MapContainer),
+  { ssr: false }
+);
+const TileLayer = dynamic(
+  () => import('react-leaflet').then((mod) => mod.TileLayer),
+  { ssr: false }
+);
+const Marker = dynamic(
+  () => import('react-leaflet').then((mod) => mod.Marker),
+  { ssr: false }
+);
+const Popup = dynamic(
+  () => import('react-leaflet').then((mod) => mod.Popup),
+  { ssr: false }
+);
+const Circle = dynamic(
+  () => import('react-leaflet').then((mod) => mod.Circle),
+  { ssr: false }
+);
+
+  // 🆕 CrewChat Component (FIXED version with DELETE button & Profile Pics)
+function CrewChatPanel({ crewId, onClose, userProfile }: { 
+  crewId: string | null, 
+  onClose: () => void,
+  userProfile: UserProfile | null 
+}) {
+  const [messages, setMessages] = useState<CrewChatMessage[]>([]);
+  const [text, setText] = useState('');
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
+
+  // Get current user from auth
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Load messages in real-time
+  useEffect(() => {
+    if (!crewId) return;
+    
+    console.log('Setting up chat listener for crew:', crewId);
+    
+    const messagesRef = ref(realtimeDb, `crew-chat/${crewId}`);
+    
+    const unsubscribe = onValue(messagesRef, (snapshot) => {
+      const messagesData: CrewChatMessage[] = [];
+      
+      if (snapshot.exists()) {
+        snapshot.forEach((childSnapshot) => {
+          const data = childSnapshot.val();
+          messagesData.push({
+            id: childSnapshot.key || Date.now().toString(),
+            text: data.text || '',
+            uid: data.uid || '',
+            username: data.username || 'Anonymous',
+            avatar: data.avatar || generateAvatarUrl(data.uid || 'unknown', data.username || 'User'),
+            timestamp: data.timestamp || Date.now()
+          });
+        });
+        
+        // Sort by timestamp (oldest to newest)
+        messagesData.sort((a, b) => a.timestamp - b.timestamp);
+        setMessages(messagesData);
+        console.log(`Loaded ${messagesData.length} messages`);
+      } else {
+        console.log('No messages yet for crew:', crewId);
+        setMessages([]);
+      }
+    }, (error) => {
+      console.error('Error loading chat messages:', error);
+    });
+    
+    return () => {
+      // Cleanup listener
+    };
+  }, [crewId]);
+
+  const sendMessage = () => {
+    if (!text.trim() || !crewId || !currentUser || !userProfile) {
+      console.log('Cannot send message: missing required data');
+      return;
+    }
+    
+    console.log('Sending message to crew:', crewId);
+    
+    setIsSending(true);
+    
+    const messagesRef = ref(realtimeDb, `crew-chat/${crewId}`);
+    const messageData = {
+      text: text.trim(),
+      uid: currentUser.uid,
+      username: userProfile.username || 'Anonymous',
+      avatar: userProfile.profilePicUrl || generateAvatarUrl(currentUser.uid, userProfile.username || 'User'),
+      timestamp: Date.now()
+    };
+    
+    // Use push which automatically generates a unique key
+    push(messagesRef, messageData)
+      .then(() => {
+        console.log('✅ Message sent successfully');
+        setText('');
+      })
+      .catch((error) => {
+        console.error('❌ Error sending message:', error);
+        alert(`Failed to send message: ${error.message}`);
+      })
+      .finally(() => {
+        setIsSending(false);
+      });
+  };
+
+  // Function to delete a message
+  const deleteMessage = async (messageId: string) => {
+    if (!crewId || !messageId || !currentUser) {
+      console.log('Cannot delete message: missing required data');
+      return;
+    }
+
+    // Find the message to check ownership
+    const messageToDelete = messages.find(msg => msg.id === messageId);
+    if (!messageToDelete) {
+      console.log('Message not found');
+      return;
+    }
+
+    // Check if current user is the message owner or has admin rights
+    if (messageToDelete.uid !== currentUser.uid) {
+      alert('You can only delete your own messages.');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to delete this message?')) {
+      return;
+    }
+
+    setDeletingMessageId(messageId);
+    
+    try {
+      const messageRef = ref(realtimeDb, `crew-chat/${crewId}/${messageId}`);
+      await remove(messageRef);
+      console.log('✅ Message deleted successfully');
+      
+      // Update local state immediately
+      setMessages(prev => prev.filter(msg => msg.id !== messageId));
+    } catch (error: any) {
+      console.error('❌ Error deleting message:', error);
+      alert(`Failed to delete message: ${error.message}`);
+    } finally {
+      setDeletingMessageId(null);
+    }
+  };
+
+  // Debug log
+  useEffect(() => {
+    console.log('CrewChatPanel rendered with:', {
+      crewId,
+      userProfile,
+      currentUser,
+      messageCount: messages.length
+    });
+  }, [crewId, userProfile, currentUser, messages.length]);
+
+  // Scroll to bottom when messages update
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  return (
+    <div style={{
+      ...panelStyle,
+      position: 'fixed',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      width: '450px', // Slightly wider for better layout
+      maxHeight: '600px',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '15px',
+        borderBottom: '1px solid rgba(16, 185, 129, 0.3)',
+        paddingBottom: '10px'
+      }}>
+        <h3 style={{ 
+          margin: 0, 
+          color: '#10b981', 
+          fontSize: '18px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <span>👥</span>
+          Crew Chat - {crewId?.toUpperCase()}
+          <span style={{
+            fontSize: '12px',
+            backgroundColor: 'rgba(16, 185, 129, 0.2)',
+            padding: '2px 8px',
+            borderRadius: '10px'
+          }}>
+            {messages.length} messages
+          </span>
+        </h3>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'rgba(16, 185, 129, 0.2)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            color: '#10b981',
+            width: '28px',
+            height: '28px',
+            borderRadius: '50%',
+            cursor: 'pointer',
+            fontSize: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          ✕
+        </button>
+      </div>
+
+      <div style={{ 
+        flex: 1, 
+        overflowY: 'auto', 
+        padding: '15px',
+        backgroundColor: 'rgba(255,255,255,0.03)',
+        borderRadius: '6px',
+        marginBottom: '15px',
+        maxHeight: '400px'
+      }}>
+        {messages.length === 0 ? (
+          <div style={{ 
+            textAlign: 'center', 
+            color: '#666', 
+            padding: '40px 20px',
+            fontStyle: 'italic'
+          }}>
+            <div style={{ fontSize: '32px', marginBottom: '10px' }}>💬</div>
+            No messages yet. Start the conversation!
+          </div>
+        ) : (
+          <>
+            {messages.map(msg => {
+              const isOwnMessage = msg.uid === currentUser?.uid;
+              const isDeleting = deletingMessageId === msg.id;
+              const profilePicUrl = msg.avatar || generateAvatarUrl(msg.uid, msg.username);
+              
+              return (
+                <div 
+                  key={msg.id} 
+                  style={{ 
+                    margin: '15px 0',
+                    display: 'flex',
+                    flexDirection: isOwnMessage ? 'row-reverse' : 'row',
+                    gap: '12px',
+                    alignItems: 'flex-start',
+                    position: 'relative'
+                  }}
+                  onMouseEnter={(e) => {
+                    // Show delete button on hover for own messages
+                    if (isOwnMessage && !isDeleting) {
+                      const deleteBtn = e.currentTarget.querySelector('.delete-btn') as HTMLElement;
+                      if (deleteBtn) deleteBtn.style.display = 'block';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    // Hide delete button when not hovering
+                    if (isOwnMessage) {
+                      const deleteBtn = e.currentTarget.querySelector('.delete-btn') as HTMLElement;
+                      if (deleteBtn) deleteBtn.style.display = 'none';
+                    }
+                  }}
+                >
+                  {/* Profile Picture - Always show for all messages */}
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                    minWidth: '50px'
+                  }}>
+                    <img
+                      src={profilePicUrl}
+                      alt={msg.username}
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        border: isOwnMessage ? '2px solid #10b981' : '2px solid #4dabf7',
+                        objectFit: 'cover',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
+                      }}
+                      onError={(e) => {
+                        // Fallback if image fails to load
+                        const target = e.target as HTMLImageElement;
+                        target.src = generateAvatarUrl(msg.uid, msg.username);
+                      }}
+                    />
+                    <span style={{
+                      fontSize: '9px',
+                      color: isOwnMessage ? '#10b981' : '#94a3b8',
+                      maxWidth: '50px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      textAlign: 'center'
+                    }}>
+                      {msg.username}
+                    </span>
+                  </div>
+                  
+                  {/* Message Bubble */}
+                  <div style={{
+                    maxWidth: 'calc(100% - 70px)',
+                    background: isOwnMessage ? 'rgba(16, 185, 129, 0.3)' : 'rgba(59, 130, 246, 0.2)',
+                    color: 'white',
+                    padding: '12px 15px',
+                    borderRadius: isOwnMessage ? '18px 18px 0 18px' : '18px 18px 18px 0',
+                    wordBreak: 'break-word',
+                    position: 'relative',
+                    opacity: isDeleting ? 0.6 : 1,
+                    border: isOwnMessage ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(59, 130, 246, 0.3)',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                  }}>
+                    {/* Delete Button (only for own messages) */}
+                    {isOwnMessage && !isDeleting && (
+                      <button
+                        className="delete-btn"
+                        onClick={() => deleteMessage(msg.id)}
+                        style={{
+                          position: 'absolute',
+                          top: '-8px',
+                          right: isOwnMessage ? '-8px' : 'auto',
+                          left: isOwnMessage ? 'auto' : '-8px',
+                          background: '#ef4444',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          color: 'white',
+                          width: '22px',
+                          height: '22px',
+                          borderRadius: '50%',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          display: 'none', // Hidden by default, shown on hover
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          zIndex: 1,
+                          transition: 'all 0.2s ease',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+                        }}
+                        title="Delete message"
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.transform = 'scale(1.2)';
+                          e.currentTarget.style.background = '#dc2626';
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.transform = 'scale(1)';
+                          e.currentTarget.style.background = '#ef4444';
+                        }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                    
+                    {/* Deleting indicator */}
+                    {isDeleting && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        background: 'rgba(0,0,0,0.8)',
+                        color: 'white',
+                        padding: '6px 10px',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        zIndex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}>
+                        <div style={{ 
+                          width: '12px', 
+                          height: '12px', 
+                          border: '2px solid white', 
+                          borderTopColor: 'transparent',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite'
+                        }}></div>
+                        Deleting...
+                      </div>
+                    )}
+                    
+                    {/* Message Content */}
+                    <div style={{ 
+                      fontSize: '14px',
+                      lineHeight: '1.4',
+                      color: isOwnMessage ? '#e0e0e0' : '#f1f5f9'
+                    }}>
+                      {msg.text}
+                    </div>
+                    
+                    {/* Timestamp */}
+                    <div style={{ 
+                      fontSize: '10px', 
+                      color: isOwnMessage ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.6)',
+                      textAlign: isOwnMessage ? 'right' : 'left',
+                      marginTop: '6px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <span>
+                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <span style={{ fontSize: '9px', opacity: 0.6 }}>
+                        {new Date(msg.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={messagesEndRef} />
+          </>
+        )}
+      </div>
+
+      <div style={{ 
+        display: 'flex', 
+        padding: '10px 0 0',
+        borderTop: '1px solid #444',
+        gap: '10px',
+        alignItems: 'center'
+      }}>
+        {/* Current User Profile Pic */}
+        {userProfile && (
+          <img
+            src={userProfile.profilePicUrl}
+            alt="You"
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              border: '2px solid #10b981',
+              objectFit: 'cover',
+              flexShrink: 0
+            }}
+          />
+        )}
+        
+        <input
+          value={text}
+          onChange={e => setText(e.target.value)}
+          placeholder="Type your message..."
+          style={{ 
+            flex: 1, 
+            padding: '12px 15px', 
+            borderRadius: '8px', 
+            border: '1px solid #555', 
+            backgroundColor: 'rgba(255,255,255,0.05)',
+            color: 'white',
+            fontSize: '14px'
+          }}
+          onKeyDown={e => e.key === 'Enter' && sendMessage()}
+          disabled={isSending}
+        />
+        <button 
+          onClick={sendMessage} 
+          disabled={!text.trim() || isSending}
+          style={{ 
+            padding: '12px 20px', 
+            background: !text.trim() || isSending ? '#555' : '#10b981', 
+            border: 'none', 
+            borderRadius: '8px',
+            color: 'white',
+            fontWeight: 'bold',
+            cursor: !text.trim() || isSending ? 'not-allowed' : 'pointer',
+            transition: 'all 0.2s ease',
+            opacity: !text.trim() || isSending ? 0.7 : 1,
+            fontSize: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+          onMouseOver={(e) => {
+            if (text.trim() && !isSending) {
+              e.currentTarget.style.opacity = '0.9';
+              e.currentTarget.style.transform = 'translateY(-1px)';
+            }
+          }}
+          onMouseOut={(e) => {
+            if (text.trim() && !isSending) {
+              e.currentTarget.style.opacity = '1';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }
+          }}
+        >
+          {isSending ? (
+            <>
+              <div style={{ 
+                width: '14px', 
+                height: '14px', 
+                border: '2px solid white', 
+                borderTopColor: 'transparent',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }}></div>
+              Sending...
+            </>
+          ) : (
+            <>
+              <span>📤</span>
+              Send
+            </>
+          )}
+        </button>
+      </div>
+
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export default function Home() {
+  // ========== STATE DECLARATIONS ==========
   const [mapReady, setMapReady] = useState(false);
-  const [zoom, setZoom] = useState<number>(15);
-  // New Zealand bounds and center
+  const [zoom, setZoom] = useState<number>(4);
   const NZ_BOUNDS: [[number, number], [number, number]] = [
     [-47.5, 165.0],
     [-34.0, 179.0]
   ];
   const NZ_CENTER: [number, number] = [-40.9006, 174.8860];
-  const NZ_DEFAULT_ZOOM = 6;
-  const GPS_DEFAULT_ZOOM = 15;
-
+  const NZ_DEFAULT_ZOOM = 4;
+  const GPS_DEFAULT_ZOOM = 80;
+  const [showStoryPanel, setShowStoryPanel] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [isClient, setIsClient] = useState(false);
   const [show50mRadius, setShow50mRadius] = useState(true);
   const [userMarkers, setUserMarkers] = useState<UserMarker[]>([]);
   const [nextMarkerNumber, setNextMarkerNumber] = useState(1);
-  const mapRef = useRef<any>(null);
-
+  
   // Offline/Online mode states
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [lastKnownPosition, setLastKnownPosition] = useState<[number, number] | null>(null);
   
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
   const [showSignup, setShowSignup] = useState(false);
@@ -383,7 +1158,7 @@ export default function Home() {
   const [showProfileSetup, setShowProfileSetup] = useState(false);
   const [loadingUserProfile, setLoadingUserProfile] = useState(false);
   const [profileUsername, setProfileUsername] = useState('');
-  const [profileGender, setProfileGender] = useState<'male' | 'female' | 'other' | 'prefer-not-to-say'>('prefer-not-to-say');
+  const [profileGender, setProfileGender] = useState<Gender>('prefer-not-to-say');
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileCrewChoice, setProfileCrewChoice] = useState<'crew' | 'solo'>('crew');
   const [profileCrewName, setProfileCrewName] = useState('');
@@ -401,9 +1176,6 @@ export default function Home() {
   const [soundCloudTracks, setSoundCloudTracks] = useState<SoundCloudTrack[]>([]);
   const [isSoundCloudLoading, setIsSoundCloudLoading] = useState(false);
   
-  // SoundCloud widgets ref
-  const soundCloudWidgetsRef = useRef<Map<string, any>>(new Map());
-  
   // REP Notification state
   const [repNotification, setRepNotification] = useState<{ show: boolean, amount: number, message: string } | null>(null);
   
@@ -417,7 +1189,7 @@ export default function Home() {
   const [selectedTrackForMusicDrop, setSelectedTrackForMusicDrop] = useState<string | null>(null);
 
   // Crew states
-  const [nearbyCrewMembers, setNearbyCrewMembers] = useState<Array<{ uid: string; username: string; distance: number }>>([]);
+  const [nearbyCrewMembers, setNearbyCrewMembers] = useState<NearbyCrewMember[]>([]);
   const [expandedRadius, setExpandedRadius] = useState(50);
   
   // Last marker date for streak bonus
@@ -425,7 +1197,7 @@ export default function Home() {
   
   // Top players state
   const [topPlayers, setTopPlayers] = useState<TopPlayer[]>([]);
-  const [showTopPlayers, setShowTopPlayers] = useState(true);
+  const [showTopPlayers, setShowTopPlayers] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   
   // Filter toggle
@@ -434,33 +1206,89 @@ export default function Home() {
   // Error state
   const [error, setError] = useState<string | null>(null);
   
+  // Selected marker state
+  const [selectedMarker, setSelectedMarker] = useState<UserMarker | null>(null);
+  
   // Panel control states
   const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [showPhotosPanel, setShowPhotosPanel] = useState(false);
   const [showMessagesPanel, setShowMessagesPanel] = useState(false);
   const [showMapPanel, setShowMapPanel] = useState(false);
   const [showMusicPanel, setShowMusicPanel] = useState(false);
+  const [showCrewChat, setShowCrewChat] = useState(false);
+  
+  // 🆕 Mission notification state
+  const [missionNotification, setMissionNotification] = useState<{
+    show: boolean;
+    title: string;
+    description: string;
+    reward: number;
+  } | null>(null);
 
   // Refreshing state
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Crew selection state
+  const [selectedCrew, setSelectedCrew] = useState<string>('');
+  const [crewChoice, setCrewChoice] = useState<'crew' | 'solo'>('crew');
+  
+  // ========== PERFORMANCE SETTINGS ==========
+  const [crewDetectionEnabled, setCrewDetectionEnabled] = useState(true);
+  const [markerQuality, setMarkerQuality] = useState<'low' | 'medium' | 'high'>('medium');
+  
+  // ========== REFS ==========
+  const mapRef = useRef<L.Map | null>(null);
+  const soundCloudWidgetsRef = useRef<Map<string, any>>(new Map());
+  
+  // 🆕 Story Manager Context
+  const [storyManagerInitialized, setStoryManagerInitialized] = useState(false);
+
+  // ========== HOOKS ==========
+const {
+  position: gpsPosition,
+  accuracy,
+  speed,
+  heading,
+  error: gpsError,
+  isTracking,
+  isLoading: gpsLoading,
+  startTracking,
+  stopTracking
+} = useGPSTracker();
+
+  // 🆕 MISSION TRIGGERS HOOK - Moved before useEffect dependencies
+  const {
+    triggerDisappearance,
+    checkMissionCompletion,
+    triggerMissionEvent,
+    triggerMessagingEvent,
+    activeMissions,
+    completedMissions
+  } = useMissionTriggers({
+    userMarkers,
+    gpsPosition,
+    userProfile
+  });
+
+  // Derive GPS status from state
+  const gpsStatus = gpsLoading ? 'acquiring' : gpsError ? 'error' : isTracking ? 'tracking' : 'idle';
+
+  // ========== EXISTING FUNCTIONS ==========
+  
   // Load SoundCloud Widget API
   useEffect(() => {
+    if (!ENABLE_SOUNDCLOUD) return;
+
     const loadSoundCloudAPI = () => {
       if (typeof window !== 'undefined') {
-        // Check if already loaded
         if (window.SC) {
-          console.log('SoundCloud Widget API already loaded');
           return;
         }
 
-        console.log('Loading SoundCloud Widget API...');
         const script = document.createElement('script');
         script.src = 'https://w.soundcloud.com/player/api.js';
         script.async = true;
         script.onload = () => {
-          console.log('SoundCloud Widget API loaded successfully');
-          // Initialize main player after API loads
           initializeMainPlayer();
         };
         script.onerror = (error) => {
@@ -472,9 +1300,8 @@ export default function Home() {
 
     loadSoundCloudAPI();
 
-    // Cleanup function
     return () => {
-      // Clean up all widgets
+      if (!ENABLE_SOUNDCLOUD) return;
       soundCloudWidgetsRef.current.forEach((widget, key) => {
         try {
           if (widget && typeof widget.unbind === 'function') {
@@ -492,9 +1319,8 @@ export default function Home() {
     };
   }, []);
 
-  // Initialize main SoundCloud player
   const initializeMainPlayer = useCallback(() => {
-    if (typeof window === 'undefined' || !window.SC || unlockedTracks.length === 0) return;
+    if (!ENABLE_SOUNDCLOUD || typeof window === 'undefined' || !window.SC || unlockedTracks.length === 0) return;
 
     const currentTrack = unlockedTracks[currentTrackIndex];
     if (!currentTrack || !currentTrack.includes('soundcloud.com')) return;
@@ -503,7 +1329,6 @@ export default function Home() {
     let iframe = document.getElementById(iframeId) as HTMLIFrameElement;
     
     if (!iframe) {
-      // Create iframe if it doesn't exist
       iframe = document.createElement('iframe');
       iframe.id = iframeId;
       iframe.src = createSoundCloudIframeUrl(currentTrack);
@@ -517,30 +1342,24 @@ export default function Home() {
       document.body.appendChild(iframe);
     }
 
-    // Initialize widget
     if (!soundCloudWidgetsRef.current.has(iframeId)) {
       try {
         const widget = window.SC.Widget(iframe);
         soundCloudWidgetsRef.current.set(iframeId, widget);
         
         widget.bind(window.SC.Widget.Events.READY, () => {
-          console.log('Main SoundCloud player ready');
-          // Set initial volume
           widget.setVolume(Math.round(volume * 100));
         });
         
         widget.bind(window.SC.Widget.Events.PLAY, () => {
-          console.log('Main SoundCloud player playing');
           setIsPlaying(true);
         });
         
         widget.bind(window.SC.Widget.Events.PAUSE, () => {
-          console.log('Main SoundCloud player paused');
           setIsPlaying(false);
         });
         
         widget.bind(window.SC.Widget.Events.FINISH, () => {
-          console.log('Main SoundCloud player finished');
           setIsPlaying(false);
           playNextTrack();
         });
@@ -555,9 +1374,10 @@ export default function Home() {
     }
   }, [unlockedTracks, currentTrackIndex, volume]);
 
-  // Update SoundCloud player when track changes
   useEffect(() => {
     if (unlockedTracks.length === 0) return;
+
+    if (!ENABLE_SOUNDCLOUD) return;
 
     const iframeId = 'soundcloud-main-player';
     const widget = soundCloudWidgetsRef.current.get(iframeId);
@@ -565,20 +1385,17 @@ export default function Home() {
     if (widget && window.SC) {
       const currentTrack = unlockedTracks[currentTrackIndex];
       if (currentTrack && currentTrack.includes('soundcloud.com')) {
-        // Update iframe source
         const iframe = document.getElementById(iframeId) as HTMLIFrameElement;
         if (iframe) {
           iframe.src = createSoundCloudIframeUrl(currentTrack);
         }
         
-        // Reinitialize widget with new track
         setTimeout(() => {
           try {
             const newWidget = window.SC.Widget(iframe);
             soundCloudWidgetsRef.current.set(iframeId, newWidget);
             
             newWidget.bind(window.SC.Widget.Events.READY, () => {
-              console.log('Track loaded, setting volume:', volume);
               newWidget.setVolume(Math.round(volume * 100));
               if (isPlaying) {
                 newWidget.play();
@@ -606,7 +1423,6 @@ export default function Home() {
     }
   }, [currentTrackIndex, unlockedTracks, isPlaying, volume]);
 
-  // Update volume when changed
   useEffect(() => {
     const iframeId = 'soundcloud-main-player';
     const widget = soundCloudWidgetsRef.current.get(iframeId);
@@ -616,7 +1432,6 @@ export default function Home() {
     }
   }, [volume]);
 
-  // Initialize SoundCloud tracks when unlocked tracks change
   useEffect(() => {
     const initializeSoundCloudTracks = async () => {
       const soundCloudUrls = unlockedTracks.filter(track => track.includes('soundcloud.com'));
@@ -625,7 +1440,6 @@ export default function Home() {
       
       setIsSoundCloudLoading(true);
       
-      // Create track objects
       const tracks = soundCloudUrls.map((url, index) => ({
         url,
         title: getTrackNameFromUrl(url),
@@ -640,7 +1454,6 @@ export default function Home() {
     initializeSoundCloudTracks();
   }, [unlockedTracks]);
 
-  // REP Notification effect
   useEffect(() => {
     if (repNotification) {
       const timer = setTimeout(() => {
@@ -650,7 +1463,6 @@ export default function Home() {
     }
   }, [repNotification]);
 
-  // Music control functions
   const togglePlay = () => {
     if (unlockedTracks.length === 0) return;
     
@@ -658,16 +1470,19 @@ export default function Home() {
     const widget = soundCloudWidgetsRef.current.get(iframeId);
     
     if (widget && typeof widget.toggle === 'function') {
-      widget.toggle();
-      
-      // Update playing state
-      widget.isPaused((paused: boolean) => {
-        setIsPlaying(!paused);
-      });
+      try {
+        widget.toggle();
+        widget.isPaused((paused: boolean) => {
+          setIsPlaying(!paused);
+        });
+      } catch (error) {
+        console.error('Error toggling play:', error);
+        setIsPlaying(!isPlaying);
+      }
     } else {
-      // Initialize player if not ready
+      // Fallback: try to initialize or just toggle state
+      setIsPlaying(!isPlaying);
       initializeMainPlayer();
-      setIsPlaying(true);
     }
   };
 
@@ -713,14 +1528,15 @@ export default function Home() {
     return 25;
   };
 
-  // Function to load ALL markers from Firestore
-  const loadAllMarkers = async () => {
+  const loadAllMarkers = async (): Promise<void> => {
     setLoadingMarkers(true);
     try {
+      // 🔧 PERFORMANCE: Dynamic limit based on marker quality - Ultra aggressive
+      const markerLimit = markerQuality === 'low' ? 12 : markerQuality === 'medium' ? 25 : 50;
       const q = query(
         collection(db, 'markers'),
         orderBy('createdAt', 'desc'),
-        limit(100)
+        limit(markerLimit)
       );
       
       const querySnapshot = await getDocs(q);
@@ -757,8 +1573,7 @@ export default function Home() {
     }
   };
 
-  // Function to load top players
-  const loadTopPlayers = async () => {
+  const loadTopPlayers = async (): Promise<void> => {
     try {
       const usersRef = collection(db, 'users');
       const usersSnapshot = await getDocs(usersRef);
@@ -817,8 +1632,7 @@ export default function Home() {
     }
   };
 
-  // Function to handle profile creation
-  const handleProfileSetup = async (e: React.FormEvent) => {
+  const handleProfileSetup = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     
     if (!user || !profileUsername.trim()) {
@@ -835,37 +1649,40 @@ export default function Home() {
       let crewName: string | null = null;
       const isSolo = profileCrewChoice === 'solo';
       
-      if (!isSolo && profileCrewName.trim()) {
-        const crewNameLower = profileCrewName.trim().toLowerCase();
+      if (!isSolo && selectedCrew) {
+        // selectedCrew should be 'bqc', 'sps', 'lzt', or 'dgc'
+        crewId = selectedCrew; // ✅ This should be the crew code
+        const selectedCrewData = CREWS.find(c => c.id === selectedCrew);
+        crewName = selectedCrewData?.name || null;
+        
         const crewsRef = collection(db, 'crews');
-        const crewQuery = query(crewsRef, where('nameLower', '==', crewNameLower));
+        const crewQuery = query(crewsRef, where('id', '==', crewId));
         const crewSnapshot = await getDocs(crewQuery);
         
         if (crewSnapshot.empty) {
           const newCrewRef = doc(crewsRef);
-          crewId = newCrewRef.id;
           await setDoc(newCrewRef, {
-            name: profileCrewName.trim(),
-            nameLower: crewNameLower,
+            id: crewId,
+            name: crewName,
             members: [user.uid],
             createdAt: Timestamp.now(),
-            createdBy: user.uid
+            createdBy: user.uid,
+            rep: 0,
+            color: selectedCrewData?.color || '#4dabf7',
+            description: selectedCrewData?.description || ''
           });
-          crewName = profileCrewName.trim();
         } else {
           const crewDoc = crewSnapshot.docs[0];
-          crewId = crewDoc.id;
-          crewName = crewDoc.data().name;
           const currentMembers = crewDoc.data().members || [];
           if (!currentMembers.includes(user.uid)) {
-            await updateDoc(doc(db, 'crews', crewId), {
+            await updateDoc(doc(db, 'crews', crewDoc.id), {
               members: [...currentMembers, user.uid]
             });
           }
         }
       }
       
-      const userProfileData = {
+      const userProfileData: UserProfile = {
         uid: user.uid,
         email: user.email || '',
         username: profileUsername.trim(),
@@ -877,24 +1694,50 @@ export default function Home() {
         totalMarkers: 0,
         favoriteColor: selectedMarkerColor,
         unlockedTracks: ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'],
-        createdAt: Timestamp.now(),
-        lastActive: Timestamp.now(),
+        createdAt: new Date(),
+        lastActive: new Date(),
         crewId: crewId,
         crewName: crewName,
-        isSolo: isSolo
+        isSolo: isSolo,
+        crewJoinedAt: crewId ? new Date() : null,
+        crewRank: 'RECRUIT',
+        crewRep: 0,
+        currentAct: 1,
+        storyProgress: 0,
+        markersPlaced: 0,
+        photosTaken: 0,
+        collaborations: 0,
+        blackoutEventsInvestigated: 0,
+        kaiTiakiEvaluationsReceived: 0
       };
       
       const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, userProfileData);
-      
-      setUserProfile({
+      await setDoc(userRef, {
         ...userProfileData,
-        createdAt: new Date(),
-        lastActive: new Date()
-      } as UserProfile);
+        createdAt: Timestamp.now(),
+        lastActive: Timestamp.now(),
+        crewJoinedAt: crewId ? Timestamp.now() : null
+      });
+      
+      const storyRef = doc(db, 'story', user.uid);
+      await setDoc(storyRef, {
+        userId: user.uid,
+        currentAct: 1,
+        storyProgress: 0,
+        completedMissions: [],
+        activeMissions: ['act1_intro'],
+        crewTrust: { bqc: 0, sps: 0, lzt: 0, dgc: 0 },
+        plotRevealed: false,
+        lastUpdated: Timestamp.now()
+      });
+      
+      setUserProfile(userProfileData);
       
       setShowProfileSetup(false);
       setProfileUsername('');
+      setProfileCrewName('');
+      setSelectedCrew('');
+      setProfileCrewChoice('crew');
       
       await loadTopPlayers();
       await loadAllMarkers();
@@ -906,72 +1749,8 @@ export default function Home() {
       setProfileLoading(false);
     }
   };
-
-  // Function to load user profile
-  const loadUserProfile = async (currentUser: any): Promise<boolean> => {
-    try {
-      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        
-        let profilePicUrl = data.profilePicUrl;
-        if (!profilePicUrl || profilePicUrl === '') {
-          profilePicUrl = generateAvatarUrl(currentUser.uid, data.username, data.gender);
-        }
-        
-        const favoriteColor = data.favoriteColor || '#10b981';
-        setSelectedMarkerColor(favoriteColor);
-
-        const userUnlockedTracks = data.unlockedTracks || ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'];
-        setUnlockedTracks(userUnlockedTracks);
-
-        setUserProfile({
-          uid: data.uid,
-          email: data.email,
-          username: data.username,
-          gender: data.gender || 'prefer-not-to-say',
-          profilePicUrl: profilePicUrl,
-          rep: data.rep || 0,
-          level: data.level || 1,
-          rank: data.rank || 'TOY',
-          totalMarkers: data.totalMarkers || 0,
-          favoriteColor: favoriteColor,
-          unlockedTracks: userUnlockedTracks,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          lastActive: data.lastActive?.toDate() || new Date(),
-          crewId: data.crewId || null,
-          crewName: data.crewName || null,
-          isSolo: data.isSolo || false
-        });
-        setShowProfileSetup(false);
-        return true;
-      } else {
-        setShowProfileSetup(true);
-        setUserProfile(null);
-        return false;
-      }
-    } catch (error) {
-      console.error('Error loading user profile:', error);
-      return false;
-    }
-  };
   
-  const {
-    position: gpsPosition,
-    accuracy,
-    speed,
-    heading,
-    error: gpsError,
-    isTracking,
-    isLoading: gpsLoading,
-    gpsStatus,
-    startTracking,
-    stopTracking
-  } = useGPSTracker();
-
-  // ========== AUTH FUNCTIONS ==========
-  
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     setAuthError(null);
     try {
@@ -984,7 +1763,7 @@ export default function Home() {
     }
   };
 
-  const handleSignup = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     setAuthError(null);
     try {
@@ -997,9 +1776,8 @@ export default function Home() {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async (): Promise<void> => {
     try {
-      // Pause music before logout
       const iframeId = 'soundcloud-main-player';
       const widget = soundCloudWidgetsRef.current.get(iframeId);
       if (widget && typeof widget.pause === 'function') {
@@ -1013,8 +1791,7 @@ export default function Home() {
     }
   };
 
-  // Function to save favorite color to user profile
-  const saveFavoriteColor = async (color: string) => {
+  const saveFavoriteColor = async (color: string): Promise<void> => {
     if (!user || !userProfile) return;
     
     try {
@@ -1034,7 +1811,6 @@ export default function Home() {
     }
   };
 
-  // Initialize Leaflet icons only on client side
   useEffect(() => {
     setIsClient(true);
     
@@ -1051,16 +1827,85 @@ export default function Home() {
     }
   }, []);
 
-  // Load drops from Firestore
-  const loadDrops = useCallback(async () => {
+  const loadDrops = useCallback(async (): Promise<void> => {
     try {
       const loadedDrops = await loadAllDrops();
-      setDrops(loadedDrops);
-      console.log(`Loaded ${loadedDrops.length} drops`);
+      // 🔧 PERFORMANCE: Ultra aggressive drop limiting
+      const dropLimit = markerQuality === 'low' ? 30 : markerQuality === 'medium' ? 75 : 150;
+      const limitedDrops = (loadedDrops as Drop[]).slice(0, dropLimit);
+      setDrops(limitedDrops);
     } catch (error) {
       console.error('Error loading drops:', error);
     }
-  }, []);
+  }, [markerQuality]);
+
+  const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
+    try {
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        
+        let profilePicUrl = data.profilePicUrl;
+        if (!profilePicUrl || profilePicUrl === '') {
+          profilePicUrl = generateAvatarUrl(currentUser.uid, data.username, data.gender);
+        }
+        
+        const favoriteColor = data.favoriteColor || '#10b981';
+        setSelectedMarkerColor(favoriteColor);
+  
+        const userUnlockedTracks = data.unlockedTracks || ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'];
+        setUnlockedTracks(userUnlockedTracks);
+  
+        const userProfileData: UserProfile = {
+          uid: data.uid || currentUser.uid,
+          email: data.email || currentUser.email || '',
+          username: data.username || 'Anonymous',
+          gender: data.gender || 'prefer-not-to-say',
+          profilePicUrl: profilePicUrl,
+          rep: data.rep || 0,
+          level: data.level || 1,
+          rank: data.rank || 'TOY',
+          totalMarkers: data.totalMarkers || 0,
+          favoriteColor: favoriteColor,
+          unlockedTracks: userUnlockedTracks,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          lastActive: data.lastActive?.toDate() || new Date(),
+          // Make sure crewId is the short code, not Firestore ID
+          crewId: data.crewId || null,
+          crewName: data.crewName || null,
+          isSolo: data.isSolo !== undefined ? data.isSolo : true,
+          crewJoinedAt: data.crewJoinedAt?.toDate() || null,
+          crewRank: data.crewRank || 'RECRUIT',
+          crewRep: data.crewRep || 0,
+          currentAct: data.currentAct || 1,
+          storyProgress: data.storyProgress || 0,
+          markersPlaced: data.markersPlaced || 0,
+          photosTaken: data.photosTaken || 0,
+          collaborations: data.collaborations || 0,
+          blackoutEventsInvestigated: data.blackoutEventsInvestigated || 0,
+          kaiTiakiEvaluationsReceived: data.kaiTiakiEvaluationsReceived || 0
+        };
+        
+        console.log('Loaded user profile:', {
+          username: userProfileData.username,
+          crewId: userProfileData.crewId,
+          crewName: userProfileData.crewName,
+          isSolo: userProfileData.isSolo
+        });
+        
+        setUserProfile(userProfileData);
+        setShowProfileSetup(false);
+        return true;
+      } else {
+        setShowProfileSetup(true);
+        setUserProfile(null);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+      return false;
+    }
+  };
 
   // Check auth state
   useEffect(() => {
@@ -1072,12 +1917,16 @@ export default function Home() {
         setLoadingUserProfile(true);
         try {
           const hasProfile = await loadUserProfile(currentUser);
-          await loadTopPlayers();
-
           if (hasProfile) {
-            await loadAllMarkers();
-            await loadDrops();
+            // Load all data
+            await Promise.all([
+              loadTopPlayers(),
+              loadAllMarkers(),
+              loadDrops()
+            ]);
           }
+        } catch (error) {
+          console.error('Error during initialization:', error);
         } finally {
           setLoadingUserProfile(false);
         }
@@ -1090,18 +1939,28 @@ export default function Home() {
         setNextMarkerNumber(1);
         setLoadingUserProfile(false);
         setIsPlaying(false);
+        setShowCrewChat(false);
       }
     });
     
     return () => unsubscribe();
-  }, []);
+  }, [loadDrops]);
 
-  // Load drops on component mount
+  // Initialize Story Manager when user is authenticated
+  useEffect(() => {
+    if (user && userProfile) {
+      setStoryManagerInitialized(true);
+    } else {
+      setStoryManagerInitialized(false);
+    }
+  }, [user, userProfile]);
+
+  
+
   useEffect(() => {
     loadDrops();
   }, [loadDrops]);
 
-  // Detect nearby crew members and calculate expanded radius
   useEffect(() => {
     if (!gpsPosition || !userProfile || !user || userProfile.isSolo || !userProfile.crewId) {
       setExpandedRadius(50);
@@ -1129,7 +1988,7 @@ export default function Home() {
           return;
         }
 
-        const nearbyMembers: Array<{ uid: string; username: string; distance: number }> = [];
+        const nearbyMembers: NearbyCrewMember[] = [];
         
         topPlayers.forEach((player) => {
           if (otherMemberIds.includes(player.uid) && player.position) {
@@ -1162,11 +2021,12 @@ export default function Home() {
 
     detectNearbyCrewMembers();
     
-    const interval = setInterval(detectNearbyCrewMembers, 5000);
+    // 🔧 PERFORMANCE: Increased to 20s+ to minimize CPU impact - only when enabled
+    const detectionInterval = crewDetectionEnabled ? 20000 : 60000;
+    const interval = setInterval(detectNearbyCrewMembers, detectionInterval);
     return () => clearInterval(interval);
   }, [gpsPosition, userProfile, user, topPlayers]);
-
-  // Set initial map center to GPS position when available
+  
   useEffect(() => {
     if (gpsPosition && !mapCenter) {
       const [lat, lng] = gpsPosition;
@@ -1186,7 +2046,6 @@ export default function Home() {
     }
   }, [gpsPosition, mapCenter]);
 
-  // Center map when GPS position updates during tracking
   useEffect(() => {
     if (gpsPosition && isTracking && mapRef.current) {
       setMapCenter(gpsPosition);
@@ -1203,8 +2062,7 @@ export default function Home() {
     }
   }, []);
 
-  // Save a marker to Firestore
-  const saveMarkerToFirestore = async (marker: UserMarker) => {
+  const saveMarkerToFirestore = async (marker: UserMarker): Promise<string | null> => {
     if (!user || !userProfile) return null;
     
     try {
@@ -1271,7 +2129,6 @@ export default function Home() {
     }
   };
 
-  // Handle photo upload and drop creation
   const handlePhotoSelected = useCallback(async (file: File) => {
     if (!user || !userProfile || !pendingDropPosition) {
       return;
@@ -1346,95 +2203,92 @@ export default function Home() {
     }
   }, [user, userProfile, pendingDropPosition]);
 
-  // Handle marker-only drop placement
-  const handleMarkerDrop = useCallback(async () => {
-    if (!user || !userProfile || !pendingDropPosition) {
-      return;
+const handleMarkerDrop = useCallback(async () => {
+  if (!user || !userProfile || !pendingDropPosition) {
+    return;
+  }
+
+  try {
+    const newDrop: Drop = {
+      lat: pendingDropPosition.lat,
+      lng: pendingDropPosition.lng,
+      createdBy: user.uid,
+      timestamp: new Date(),
+      likes: [],
+      username: userProfile.username,
+      userProfilePic: userProfile.profilePicUrl,
+    };
+
+    const dropId = await saveDropToFirestore(newDrop);
+
+    const markerData: UserMarker = {
+      id: `temp-${Date.now()}`,
+      position: [pendingDropPosition.lat, pendingDropPosition.lng],
+      name: 'Pole',
+      description: selectedMarkerType,
+      color: selectedMarkerColor, // USE SELECTED COLOR HERE
+      timestamp: new Date(),
+      userId: user.uid,
+      username: userProfile.username,
+      userProfilePic: userProfile.profilePicUrl,
+    };
+
+    const markerId = await saveMarkerToFirestore(markerData);
+
+    if (dropId && markerId) {
+      const repEarned = 5;
+      const newRep = (userProfile.rep || 0) + repEarned;
+      const newRank = calculateRank(newRep);
+      const newLevel = calculateLevel(newRep);
+
+      const currentTracks = userProfile.unlockedTracks || ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'];
+      const newTracks = unlockRandomTrack(currentTracks);
+
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        rep: newRep,
+        level: newLevel,
+        rank: newRank,
+        unlockedTracks: newTracks,
+      });
+
+      setUserProfile(prev => prev ? {
+        ...prev,
+        rep: newRep,
+        level: newLevel,
+        rank: newRank,
+        unlockedTracks: newTracks
+      } : null);
+
+      setUnlockedTracks(newTracks);
+
+      const trackUnlocked = newTracks.length > currentTracks.length;
+      const unlockedTrackName = trackUnlocked ? getTrackNameFromUrl(newTracks[newTracks.length - 1]) : '';
+
+      const notificationMessage = trackUnlocked
+        ? `🎵 ${unlockedTrackName} Unlocked! 🎵\n${selectedMarkerType} marker placed!`
+        : `${selectedMarkerType} marker placed!`;
+
+      setRepNotification({ show: true, amount: repEarned, message: notificationMessage });
+
+      await loadDrops();
+      await loadAllMarkers();
     }
 
-    try {
-      const newDrop: Drop = {
-        lat: pendingDropPosition.lat,
-        lng: pendingDropPosition.lng,
-        createdBy: user.uid,
-        timestamp: new Date(),
-        likes: [],
-        username: userProfile.username,
-        userProfilePic: userProfile.profilePicUrl,
-      };
+    setShowDropTypeModal(false);
+    setPendingDropPosition(null);
 
-      const dropId = await saveDropToFirestore(newDrop);
+  } catch (error) {
+    console.error('Error creating marker drop:', error);
+    alert(`Failed to create marker drop: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}, [user, userProfile, pendingDropPosition, selectedMarkerType, selectedMarkerColor, loadDrops]); // ADD selectedMarkerColor TO DEPENDENCIES
 
-      const markerData: UserMarker = {
-        id: `temp-${Date.now()}`,
-        position: [pendingDropPosition.lat, pendingDropPosition.lng],
-        name: 'Pole',
-        description: selectedMarkerType,
-        color: '#10b981',
-        timestamp: new Date(),
-        userId: user.uid,
-        username: userProfile.username,
-        userProfilePic: userProfile.profilePicUrl,
-      };
-
-      const markerId = await saveMarkerToFirestore(markerData);
-
-      if (dropId && markerId) {
-        const repEarned = 5;
-        const newRep = (userProfile.rep || 0) + repEarned;
-        const newRank = calculateRank(newRep);
-        const newLevel = calculateLevel(newRep);
-
-        const currentTracks = userProfile.unlockedTracks || ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'];
-        const newTracks = unlockRandomTrack(currentTracks);
-
-        const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, {
-          rep: newRep,
-          level: newLevel,
-          rank: newRank,
-          unlockedTracks: newTracks,
-        });
-
-        setUserProfile(prev => prev ? {
-          ...prev,
-          rep: newRep,
-          level: newLevel,
-          rank: newRank,
-          unlockedTracks: newTracks
-        } : null);
-
-        setUnlockedTracks(newTracks);
-
-        const trackUnlocked = newTracks.length > currentTracks.length;
-        const unlockedTrackName = trackUnlocked ? getTrackNameFromUrl(newTracks[newTracks.length - 1]) : '';
-
-        const notificationMessage = trackUnlocked
-          ? `🎵 ${unlockedTrackName} Unlocked! 🎵\n${selectedMarkerType} marker placed!`
-          : `${selectedMarkerType} marker placed!`;
-
-        setRepNotification({ show: true, amount: repEarned, message: notificationMessage });
-
-        await loadDrops();
-        await loadAllMarkers();
-      }
-
-      setShowDropTypeModal(false);
-      setPendingDropPosition(null);
-
-    } catch (error) {
-      console.error('Error creating marker drop:', error);
-      alert(`Failed to create marker drop: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }, [user, userProfile, pendingDropPosition, selectedMarkerType, loadDrops]);
-
-  // Handle photo drop selection
   const handlePhotoDrop = useCallback(() => {
     setShowDropTypeModal(false);
     setShowPhotoModal(true);
   }, []);
 
-  // Handle music drop: save a song as a drop, player LOSES that song from their collection
   const handleMusicDrop = useCallback(async () => {
     if (!user || !userProfile || !pendingDropPosition) return;
     const tracks = userProfile.unlockedTracks ?? unlockedTracks;
@@ -1485,8 +2339,7 @@ export default function Home() {
     }
   }, [user, userProfile, pendingDropPosition, selectedTrackForMusicDrop, unlockedTracks, loadDrops]);
 
-  // Handle map click to add drop
-  const handleMapClick = useCallback(async (e: any) => {
+  const handleMapClick = useCallback(async (e: L.LeafletMouseEvent) => {
     if (isOfflineMode) {
       alert('Cannot place markers in offline mode. Switch to online mode to place drops.');
       return;
@@ -1498,7 +2351,7 @@ export default function Home() {
     }
 
     if (loadingUserProfile) {
-      alert('Loading your profile—try again in a moment.');
+      //alert('Loading your profile—try again in a moment.');
       return;
     }
 
@@ -1509,9 +2362,27 @@ export default function Home() {
 
     const { lat, lng } = e.latlng;
 
+    // Check if click is within the radius circle
+    if (!gpsPosition) {
+      alert('GPS location not available. Enable location services to place drops.');
+      return;
+    }
+
+    const distanceFromGPS = calculateDistance(
+      gpsPosition[0],
+      gpsPosition[1],
+      lat,
+      lng
+    );
+
+    if (distanceFromGPS > expandedRadius) {
+      //alert(`❌ Too far! You can only place drops within ${expandedRadius}m of your location.\n\nDistance: ${Math.round(distanceFromGPS)}m`);
+      return;
+    }
+
     setPendingDropPosition({ lat, lng });
     setShowDropTypeModal(true);
-  }, [user, userProfile, loadingUserProfile, showProfileSetup, isOfflineMode]);
+  }, [user, userProfile, loadingUserProfile, showProfileSetup, isOfflineMode, gpsPosition, expandedRadius]);
 
   const toggleTracking = () => {
     if (isTracking) {
@@ -1521,7 +2392,6 @@ export default function Home() {
     }
   };
 
-  // Function to manually center on GPS position
   const centerOnGPS = useCallback(() => {
     if (gpsPosition && mapRef.current) {
       setMapCenter(gpsPosition);
@@ -1532,7 +2402,6 @@ export default function Home() {
     }
   }, [gpsPosition]);
 
-  // Function to update a marker's info
   const updateMarker = (id: string, updates: Partial<UserMarker>) => {
     setUserMarkers(prev => 
       prev.map(marker => 
@@ -1541,8 +2410,7 @@ export default function Home() {
     );
   };
 
-  // Function to delete a marker
-  const deleteMarker = async (id: string) => {
+  const deleteMarker = async (id: string): Promise<void> => {
     const markerToDelete = userMarkers.find(marker => marker.id === id);
     
     if (markerToDelete?.firestoreId) {
@@ -1568,8 +2436,7 @@ export default function Home() {
     setUserMarkers(prev => prev.filter(marker => marker.id !== id));
   };
 
-  // Function to delete all markers
-  const deleteAllMarkers = async () => {
+  const deleteAllMarkers = async (): Promise<void> => {
     if (userMarkers.length > 0 && window.confirm(`Are you sure you want to delete all ${userMarkers.length} markers?`)) {
       const userMarkerIds = userMarkers
         .filter(marker => marker.userId === user?.uid && marker.firestoreId)
@@ -1598,16 +2465,13 @@ export default function Home() {
     }
   };
 
-  // Function to go to a marker
   const goToMarker = (marker: UserMarker) => {
     centerMap(marker.position, 18);
   };
 
-  // New Zealand locations for the game
   const newZealandLocations = NEW_ZEALAND_LOCATIONS;
 
-  // Handle refresh all data
-  const handleRefreshAll = async () => {
+  const handleRefreshAll = async (): Promise<void> => {
     setIsRefreshing(true);
     try {
       await loadAllMarkers();
@@ -1620,6 +2484,47 @@ export default function Home() {
       setIsRefreshing(false);
     }
   };
+
+
+  // ========== MISSION TRIGGERS ==========
+  // Trigger missions when markers are placed
+  useEffect(() => {
+    if (userProfile && userProfile.markersPlaced && triggerMissionEvent) {
+      // Trigger missions based on markers placed
+      if (userProfile.markersPlaced >= 3) {
+        triggerMissionEvent('place_3_markers', {
+          count: userProfile.markersPlaced,
+          timestamp: new Date()
+        });
+      }
+      
+      if (userProfile.markersPlaced >= 10) {
+        triggerMissionEvent('place_10_markers', {
+          count: userProfile.markersPlaced,
+          timestamp: new Date()
+        });
+      }
+    }
+  }, [userProfile?.markersPlaced, triggerMissionEvent]);
+
+  // Trigger missions when REP increases
+  useEffect(() => {
+    if (userProfile?.rep && triggerMissionEvent) {
+      if (userProfile.rep >= 50) {
+        triggerMissionEvent('reach_50_rep', {
+          rep: userProfile.rep,
+          timestamp: new Date()
+        });
+      }
+      
+      if (userProfile.rep >= 100) {
+        triggerMissionEvent('reach_100_rep', {
+          rep: userProfile.rep,
+          timestamp: new Date()
+        });
+      }
+    }
+  }, [userProfile?.rep, triggerMissionEvent]);
 
   // ========== AUTH LOADING CHECK ==========
   if (loadingAuth) {
@@ -1669,7 +2574,6 @@ export default function Home() {
         position: 'relative',
         overflow: 'hidden'
       }}>
-        {/* Animated background elements */}
         <div style={{
           position: 'absolute',
           top: 0,
@@ -1683,7 +2587,6 @@ export default function Home() {
           zIndex: 1
         }}></div>
         
-        {/* Audio Player */}
         <div style={{
           position: 'absolute',
           top: 20,
@@ -1828,7 +2731,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Main login card */}
         <div style={{
           backgroundColor: 'rgba(15, 23, 42, 0.9)',
           padding: '40px',
@@ -1871,7 +2773,6 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Login Form */}
           {showLogin ? (
             <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <h2 style={{ fontSize: '22px', color: 'white', marginBottom: '5px', textAlign: 'left' }}>Sign In</h2>
@@ -2213,6 +3114,8 @@ export default function Home() {
     );
   }
 
+  
+
   // ========== PROFILE SETUP UI ==========
   if (showProfileSetup && user) {
     return (
@@ -2232,12 +3135,12 @@ export default function Home() {
           borderRadius: '16px',
           boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
           width: '100%',
-          maxWidth: '400px',
+          maxWidth: '500px',
           textAlign: 'center'
         }}>
           <h2 style={{ color: '#1e3a8a', marginBottom: '10px' }}>Create Your Profile</h2>
           <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '30px' }}>
-            Join the crew and see everyone's drops
+            Choose your crew and begin the Blackout NZ story
           </p>
           
           <form onSubmit={handleProfileSetup}>
@@ -2278,7 +3181,7 @@ export default function Home() {
                 Custom avatar generated from your username
               </div>
             </div>
-
+  
             <div style={{ marginBottom: '15px' }}>
               <input
                 type="text"
@@ -2296,7 +3199,7 @@ export default function Home() {
                 maxLength={20}
               />
             </div>
-
+  
             <div style={{ marginBottom: '25px' }}>
               <div style={{ fontSize: '14px', color: '#374151', marginBottom: '10px', textAlign: 'left' }}>
                 Gender:
@@ -2332,84 +3235,155 @@ export default function Home() {
                 ))}
               </div>
             </div>
-
-            {/* Crew Selection */}
+  
             <div style={{ marginBottom: '25px' }}>
               <div style={{ fontSize: '14px', color: '#374151', marginBottom: '10px', textAlign: 'left' }}>
                 Choose Your Path:
               </div>
               <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-                <label 
-                  style={{ 
+                <button
+                  type="button"
+                  onClick={() => setProfileCrewChoice('crew')}
+                  style={{
                     flex: 1,
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    cursor: 'pointer',
                     padding: '12px',
                     backgroundColor: profileCrewChoice === 'crew' ? '#e0f2fe' : '#f9fafb',
                     borderRadius: '8px',
-                    border: `2px solid ${profileCrewChoice === 'crew' ? '#4dabf7' : '#e5e7eb'}`
+                    border: `2px solid ${profileCrewChoice === 'crew' ? '#4dabf7' : '#e5e7eb'}`,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '5px'
                   }}
                 >
-                  <input
-                    type="radio"
-                    name="crewChoice"
-                    value="crew"
-                    checked={profileCrewChoice === 'crew'}
-                    onChange={() => setProfileCrewChoice('crew')}
-                    style={{ marginRight: '8px' }}
-                  />
-                  <span style={{ fontSize: '13px', fontWeight: '500' }}>
-                    👥 Join/Create Crew
-                  </span>
-                </label>
-                <label 
-                  style={{ 
+                  <div style={{ fontSize: '20px' }}>👥</div>
+                  <div style={{ fontSize: '13px', fontWeight: '500' }}>
+                    Join a Story Crew
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                    Team up with a pre-defined crew
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProfileCrewChoice('solo')}
+                  style={{
                     flex: 1,
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    cursor: 'pointer',
                     padding: '12px',
                     backgroundColor: profileCrewChoice === 'solo' ? '#e0f2fe' : '#f9fafb',
                     borderRadius: '8px',
-                    border: `2px solid ${profileCrewChoice === 'solo' ? '#4dabf7' : '#e5e7eb'}`
+                    border: `2px solid ${profileCrewChoice === 'solo' ? '#4dabf7' : '#e5e7eb'}`,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '5px'
                   }}
                 >
-                  <input
-                    type="radio"
-                    name="crewChoice"
-                    value="solo"
-                    checked={profileCrewChoice === 'solo'}
-                    onChange={() => setProfileCrewChoice('solo')}
-                    style={{ marginRight: '8px' }}
-                  />
-                  <span style={{ fontSize: '13px', fontWeight: '500' }}>
-                    🎯 Go Solo
-                  </span>
-                </label>
+                  <div style={{ fontSize: '20px' }}>🎯</div>
+                  <div style={{ fontSize: '13px', fontWeight: '500' }}>
+                    Go Solo
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                    Play independently
+                  </div>
+                </button>
               </div>
               
               {profileCrewChoice === 'crew' && (
                 <div>
-                  <input
-                    type="text"
-                    placeholder="Enter crew name (or join existing)"
-                    value={profileCrewName}
-                    onChange={(e) => setProfileCrewName(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '12px 15px',
-                      border: '2px solid #d1d5db',
-                      borderRadius: '8px',
-                      fontSize: '14px'
-                    }}
-                    maxLength={30}
-                  />
-                  <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '5px', textAlign: 'left' }}>
-                    💡 Tip: If crew exists, you'll join it. Otherwise, a new crew is created.
+                  <div style={{ fontSize: '13px', color: '#374151', marginBottom: '10px', textAlign: 'left' }}>
+                    Select Your Story Crew:
                   </div>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '15px' }}>
+                    {CREWS.map((crew: CrewData) => (
+                      <div
+                        key={crew.id}
+                        onClick={() => {
+                          setSelectedCrew(crew.id || '');
+                          setProfileCrewName(crew.name);
+                        }}
+                        style={{
+                          padding: '12px',
+                          backgroundColor: selectedCrew === crew.id ? `${crew.color}20` : '#f9fafb',
+                          border: `2px solid ${selectedCrew === crew.id ? crew.color : '#e5e7eb'}`,
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '50%',
+                            backgroundColor: crew.color,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: crew.accentColor,
+                            fontWeight: 'bold',
+                            fontSize: '16px'
+                          }}>
+                            {crew.name.charAt(0)}
+                          </div>
+                          <div style={{ textAlign: 'left', flex: 1 }}>
+                            <div style={{ fontWeight: 'bold', color: crew.color, fontSize: '13px' }}>
+                              {crew.name}
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                              {crew.leader}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {selectedCrew === crew.id && (
+                          <div style={{ 
+                            marginTop: '10px', 
+                            padding: '8px',
+                            backgroundColor: `${crew.color}10`,
+                            borderRadius: '6px',
+                            borderLeft: `3px solid ${crew.color}`
+                          }}>
+                            <div style={{ fontSize: '11px', color: '#374151', fontWeight: '500' }}>
+                              {crew.description}
+                            </div>
+                            <div style={{ fontSize: '10px', color: '#6b7280', marginTop: '4px' }}>
+                              Bonus: {crew.bonus}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {selectedCrew && (
+                    <div style={{ 
+                      fontSize: '12px', 
+                      color: '#6b7280',
+                      backgroundColor: '#f0f9ff',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      textAlign: 'left',
+                      marginTop: '15px'
+                    }}>
+                      <div style={{ fontWeight: 'bold', color: '#1e3a8a', marginBottom: '5px' }}>
+                        ⚠️ Important Choice:
+                      </div>
+                      <div style={{ fontSize: '11px' }}>
+                        Your crew choice affects:
+                        <ul style={{ margin: '8px 0 8px 20px' }}>
+                          <li>Story progression and missions</li>
+                          <li>Special abilities and bonuses</li>
+                          <li>Crew-specific plot twists</li>
+                          <li>Multiplayer interactions</li>
+                        </ul>
+                        You can change crews later, but you'll lose crew-specific progress.
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               
@@ -2417,19 +3391,29 @@ export default function Home() {
                 <div style={{ 
                   fontSize: '12px', 
                   color: '#6b7280', 
-                  padding: '10px',
+                  padding: '12px',
                   backgroundColor: '#f0f9ff',
                   borderRadius: '8px',
-                  textAlign: 'left'
+                  textAlign: 'left',
+                  marginTop: '10px'
                 }}>
-                  🎯 Solo players can join a crew later from their profile.
+                  <div style={{ fontWeight: 'bold', color: '#1e3a8a', marginBottom: '5px' }}>
+                    🎯 Solo Path Selected
+                  </div>
+                  <div style={{ fontSize: '11px' }}>
+                    You can join a crew later from your profile. 
+                    Play at your own pace and choose when to team up.
+                    <div style={{ marginTop: '8px', fontStyle: 'italic' }}>
+                      Note: Some story missions require crew membership.
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
-
+  
             <button
               type="submit"
-              disabled={profileLoading || (profileCrewChoice === 'crew' && !profileCrewName.trim())}
+              disabled={profileLoading || (profileCrewChoice === 'crew' && !selectedCrew)}
               style={{
                 backgroundColor: '#4dabf7',
                 color: 'white',
@@ -2438,12 +3422,30 @@ export default function Home() {
                 borderRadius: '8px',
                 fontSize: '14px',
                 fontWeight: 'bold',
-                cursor: (profileLoading || (profileCrewChoice === 'crew' && !profileCrewName.trim())) ? 'not-allowed' : 'pointer',
+                cursor: (profileLoading || (profileCrewChoice === 'crew' && !selectedCrew)) ? 'not-allowed' : 'pointer',
                 width: '100%',
-                opacity: (profileLoading || (profileCrewChoice === 'crew' && !profileCrewName.trim())) ? 0.7 : 1
+                opacity: (profileLoading || (profileCrewChoice === 'crew' && !selectedCrew)) ? 0.7 : 1,
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                if (!profileLoading && !(profileCrewChoice === 'crew' && !selectedCrew)) {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 6px 12px rgba(59, 130, 246, 0.3)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
               }}
             >
-              {profileLoading ? 'Creating Profile...' : profileCrewChoice === 'crew' ? 'Join the Crew! 👥' : 'Go Solo! 🎯'}
+              {profileLoading 
+                ? 'Creating Profile...' 
+                : profileCrewChoice === 'crew' 
+                  ? selectedCrew 
+                    ? `Join ${CREWS.find(c => c.id === selectedCrew)?.name || 'Crew'}! 👥` 
+                    : 'Select a Crew'
+                  : 'Start Solo Journey! 🎯'
+              }
             </button>
             
             <div style={{ 
@@ -2452,12 +3454,17 @@ export default function Home() {
               color: '#6b7280',
               textAlign: 'left',
               backgroundColor: '#f0f9ff',
-              padding: '10px',
+              padding: '12px',
               borderRadius: '8px'
             }}>
-              <strong>👁️ You'll see ALL drops</strong>
-              <div style={{ marginTop: '5px' }}>
+              <div style={{ fontWeight: 'bold', color: '#1e3a8a', marginBottom: '5px' }}>
+                👁️ You'll see ALL drops
+              </div>
+              <div style={{ fontSize: '11px' }}>
                 Every writer's tags will appear on your map in real-time!
+                <div style={{ marginTop: '5px', fontStyle: 'italic' }}>
+                  The Blackout story begins after your first 3 markers...
+                </div>
               </div>
             </div>
           </form>
@@ -2500,46 +3507,59 @@ export default function Home() {
     );
   }
 
-  return (
-    <div style={{ height: '100vh', width: '100vw', position: 'relative' }}>
-      {/* REP Notification */}
-      {repNotification && (
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          backgroundColor: 'rgba(16, 185, 129, 0.95)',
-          color: 'white',
-          padding: '20px 30px',
-          borderRadius: '15px',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
-          zIndex: 2000,
-          textAlign: 'center',
-          animation: 'popIn 0.5s ease-out'
-        }}>
-          <div style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '10px' }}>
-            🎉 +{repNotification.amount} REP!
-          </div>
-          <div style={{ fontSize: '16px' }}>
-            {repNotification.message}
-          </div>
-          <div style={{ fontSize: '12px', marginTop: '10px', opacity: 0.8 }}>
-            Total: {userProfile?.rep || 0} REP • Rank: {userProfile?.rank || 'TOY'}
-          </div>
-        </div>
-      )}
+  if (!user) {
+    return null;
+  }
 
-        {/* Floating Mini Music Player - Position ABOVE bottom nav */}
+  return (
+    <StoryManagerProvider user={user} userProfile={userProfile}>
+      <div style={{ height: '100vh', width: '100vw', position: 'relative' as const }}>
+        {/* REP Notification */}
+        {repNotification && (
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: 'rgba(16, 185, 129, 0.95)',
+            color: 'white',
+            padding: '20px 30px',
+            borderRadius: '15px',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+            zIndex: 2000,
+            textAlign: 'center',
+            animation: 'popIn 0.5s ease-out'
+          }}>
+            <div style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '10px' }}>
+              🎉 +{repNotification.amount} REP!
+            </div>
+            <div style={{ fontSize: '16px' }}>
+              {repNotification.message}
+            </div>
+            <div style={{ fontSize: '12px', marginTop: '10px', opacity: 0.8 }}>
+              Total: {userProfile?.rep || 0} REP • Rank: {userProfile?.rank || 'TOY'}
+            </div>
+          </div>
+        )}
+
+    {showCrewChat && userProfile?.crewId && user && (
+      <CrewChatPanel 
+        crewId={userProfile.crewId} 
+        onClose={() => setShowCrewChat(false)}
+        userProfile={userProfile}
+      />
+    )}
+
+        {/* Floating Mini Music Player */}
         <div style={{
           position: 'fixed',
-          bottom: 80, // Position ABOVE the bottom nav (68px height + 12px gap)
+          bottom: 90,
           right: 20,
           background: 'rgba(15, 23, 42, 0.95)',
           padding: '15px 20px',
           borderRadius: '15px',
           boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
-          zIndex: 0, // Higher than bottom nav (1100)
+          zIndex: 0,
           backdropFilter: 'blur(10px)',
           border: '1px solid rgba(255, 255, 255, 0.1)',
           minWidth: '280px',
@@ -2549,7 +3569,6 @@ export default function Home() {
           flexDirection: 'column',
           gap: '12px'
         }}>
-        {/* Now Playing Info */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -2633,7 +3652,6 @@ export default function Home() {
           </button>
         </div>
         
-        {/* Volume Control */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ fontSize: '14px', color: '#cbd5e1', minWidth: '20px' }}>
             {volume === 0 ? '🔇' : volume < 0.5 ? '🔈' : '🔊'}
@@ -2660,7 +3678,6 @@ export default function Home() {
           </span>
         </div>
 
-        {/* Progress Bar */}
         <div style={{ 
           height: '4px', 
           width: '100%', 
@@ -2677,7 +3694,6 @@ export default function Home() {
           }}></div>
         </div>
         
-        {/* Quick Access to Full Music Panel */}
         <button
           onClick={() => {
             setShowMusicPanel(true);
@@ -2708,7 +3724,7 @@ export default function Home() {
           🎵 Open Music Panel ({unlockedTracks.length} tracks)
         </button>
       </div>
-
+          
       <MapContainer
         center={
           isOfflineMode && lastKnownPosition ? lastKnownPosition :
@@ -2721,12 +3737,18 @@ export default function Home() {
         maxBoundsViscosity={1.0}
         minZoom={5}
         maxZoom={18}
-        whenCreated={(mapInstance) => {
-          mapRef.current = mapInstance;
-          mapInstance.setMaxBounds(NZ_BOUNDS);
-        }}
-        eventHandlers={{
-          click: isOfflineMode ? undefined : handleMapClick
+        ref={(mapInstance: any) => {
+          if (mapInstance) {
+            mapRef.current = mapInstance;
+            mapInstance.setMaxBounds(NZ_BOUNDS);
+            
+            // Use proper Leaflet click event instead of overlay div
+            if (!isOfflineMode) {
+              mapInstance.on('click', (e: L.LeafletMouseEvent) => {
+                handleMapClick(e);
+              });
+            }
+          }
         }}
       >
         <TileLayer
@@ -3079,6 +4101,7 @@ export default function Home() {
                     font-weight: bold;
                     font-size: 10px;
                     position: relative;
+                    cursor: pointer;
                   ">
                     ${marker.username?.charAt(0).toUpperCase() || 'U'}
                     ${marker.userId === user?.uid ? `
@@ -3105,6 +4128,9 @@ export default function Home() {
                 key={marker.id}
                 position={marker.position}
                 icon={customIcon}
+                eventHandlers={{
+                  click: () => setSelectedMarker(marker)
+                }}
               >
                 <Popup>
                   <div style={{ textAlign: 'center', minWidth: '300px' }}>
@@ -3267,6 +4293,18 @@ export default function Home() {
             );
           })
         }
+
+        {/* Marker Popup Card */}
+        {selectedMarker && (
+          <MarkerPopupCard
+            marker={selectedMarker}
+            onClose={() => setSelectedMarker(null)}
+            user={user}
+            userProfile={userProfile}
+            mapRef={mapRef}
+            expandedRadius={expandedRadius}
+          />
+        )}
 
         {/* Drops with photos */}
         {drops.filter(drop => drop.photoUrl).map((drop) => {
@@ -3677,7 +4715,7 @@ export default function Home() {
                 </div>
               </button>
 
-              {/* Music Drop Option - save a song as drop, you lose that song */}
+              {/* Music Drop Option */}
               {unlockedTracks.length > 0 ? (
                 <>
                   <label style={{
@@ -3856,8 +4894,99 @@ export default function Home() {
           border: '1px solid rgba(255,255,255,0.1)',
           zIndex: 1001,
           minWidth: '200px',
-          backdropFilter: 'blur(4px)'
+          backdropFilter: 'blur(4px)',
+          paddingTop: '18px' // Added padding to make room for plate
         }}>
+          {/* License Plate - Shows ONE for solo, crew initials for crew */}
+          <div style={{
+            position: 'absolute',
+            top: '-12px', // Moved up slightly
+            right: '15px', // Moved in from edge
+            width: '55px', // Slightly smaller
+            height: '24px', // Slightly shorter
+            zIndex: 1002
+          }}>
+            <svg 
+              width="55" 
+              height="24" 
+              viewBox="0 0 55 24"
+              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }}
+            >
+              {/* License plate base - smaller */}
+              <rect 
+                x="2" y="2" 
+                width="51" height="20" 
+                rx="3" ry="3"
+                fill="#1e293b"
+                stroke={userProfile.isSolo ? '#f59e0b' : 
+                        userProfile.crewId === 'bqc' ? '#ef4444' : 
+                        userProfile.crewId === 'sps' ? '#4dabf7' : 
+                        userProfile.crewId === 'lzt' ? '#10b981' : 
+                        userProfile.crewId === 'dgc' ? '#8b5cf6' : '#9ca3af'}
+                strokeWidth="1.5"
+              />
+              
+              {/* Inner shine effect */}
+              <rect 
+                x="4" y="4" 
+                width="47" height="16" 
+                rx="2" ry="2"
+                fill="url(#plateGradient)"
+                opacity="0.8"
+              />
+              
+              {/* Text: ONE for solo, crew initials for crew */}
+              <text
+                x="27.5"
+                y="16"
+                textAnchor="middle"
+                fill="white"
+                fontSize="12" // Smaller font
+                fontWeight="bold"
+                fontFamily="monospace"
+                style={{ 
+                  textTransform: 'uppercase',
+                  letterSpacing: userProfile.isSolo ? '0.5px' : 'normal'
+                }}
+              >
+                {userProfile.isSolo ? 'ONE' : userProfile.crewId?.toUpperCase() || 'SOLO'}
+              </text>
+              
+              {/* Simple border highlight */}
+              <rect 
+                x="3" y="3" 
+                width="49" height="18" 
+                rx="2.5" ry="2.5"
+                fill="none"
+                stroke="rgba(255,255,255,0.2)"
+                strokeWidth="0.5"
+              />
+              
+              <defs>
+                <linearGradient id="plateGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="rgba(255,255,255,0.1)" />
+                  <stop offset="100%" stopColor="rgba(255,255,255,0.05)" />
+                </linearGradient>
+              </defs>
+            </svg>
+            
+            {/* Tiny status dot */}
+            <div style={{
+              position: 'absolute',
+              top: '26px',
+              right: '5px',
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: userProfile.isSolo ? '#f59e0b' :
+                    userProfile.crewId === 'bqc' ? '#ef4444' : 
+                    userProfile.crewId === 'sps' ? '#4dabf7' : 
+                    userProfile.crewId === 'lzt' ? '#10b981' : 
+                    userProfile.crewId === 'dgc' ? '#8b5cf6' : '#9ca3af',
+              boxShadow: '0 0 4px currentColor'
+            }} />
+          </div>
+          
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -3871,13 +5000,24 @@ export default function Home() {
                 width: '40px',
                 height: '40px',
                 borderRadius: '50%',
-                border: '2px solid #ff6b6b',
+                border: `2px solid ${userProfile.isSolo ? '#f59e0b' : '#ff6b6b'}`,
                 objectFit: 'cover'
               }}
             />
             <div>
-              <div style={{ fontWeight: 'bold', fontSize: '14px' }}>{userProfile.username}</div>
-              <div style={{ color: '#ff6b6b', fontSize: '12px' }}>{userProfile.rank} • Lv {userProfile.level}</div>
+              <div style={{ 
+                fontWeight: 'bold', 
+                fontSize: '14px',
+                color: userProfile.isSolo ? '#f59e0b' : '#ff6b6b'
+              }}>
+                {userProfile.username}
+              </div>
+              <div style={{ 
+                color: userProfile.isSolo ? '#f59e0b' : '#ff6b6b', 
+                fontSize: '12px' 
+              }}>
+                {userProfile.rank} • Lv {userProfile.level}
+              </div>
             </div>
           </div>
           <div style={{
@@ -3893,14 +5033,30 @@ export default function Home() {
               {userMarkers.filter(m => m.userId === user?.uid).length} drops
             </div>
           </div>
+          
+          {/* Crew/Solo status indicator - more subtle */}
+          <div style={{
+            marginTop: '8px',
+            fontSize: '9px',
+            color: userProfile.isSolo ? '#f59e0b' : '#10b981',
+            textAlign: 'center',
+            backgroundColor: userProfile.isSolo ? 
+              'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+            padding: '2px 4px',
+            borderRadius: '3px',
+            border: userProfile.isSolo ? 
+              '1px solid rgba(245, 158, 11, 0.2)' : '1px solid rgba(16, 185, 129, 0.2)'
+          }}>
+            {userProfile.isSolo ? '🎯 SOLO' : `👥 ${userProfile.crewName || 'CREW'}`}
+          </div>
         </div>
       )}
 
       {/* ========== DUAL CONTROL PANELS ========== */}
       <div style={{
         position: 'absolute',
-        top: 70,
-        left: 70,
+        top: 80,
+        left: 0,
         display: 'flex',
         gap: '15px',
         zIndex: 1200,
@@ -3908,13 +5064,14 @@ export default function Home() {
       }}>
         {/* Left Panel - Profile & Stats (Blackbook) */}
         {showProfilePanel && (
-          <div style={{
-            ...panelStyle,
-            border: '1px solid #333',
-            display: 'flex',
-            flexDirection: 'column',
-            animation: 'slideInLeft 0.3s ease-out'
-          }}>
+            <div style={{
+              ...panelStyle,
+              border: '1px solid #333',
+              display: 'flex',
+              flexDirection: 'column',
+              animation: 'slideInLeft 0.3s ease-out',
+              position: 'relative'
+            }}>
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -4093,6 +5250,47 @@ export default function Home() {
                     Radius expanded to {expandedRadius}m
                   </span>
                 </div>
+              )}
+
+              {/* 🆕 Crew Chat Button */}
+              {userProfile?.crewId && !userProfile.isSolo && (
+                <button
+                  onClick={() => {
+                    setShowCrewChat(true);
+                    setShowProfilePanel(false);
+                    setShowPhotosPanel(false);
+                    setShowMessagesPanel(false);
+                    setShowMapPanel(false);
+                    setShowMusicPanel(false);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    background: '#10b981',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    marginTop: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  💬 Open Crew Chat
+                </button>
               )}
 
               {userProfile?.isSolo && (
@@ -4397,10 +5595,14 @@ export default function Home() {
                 Sign Out
               </button>
 
+                {/* Reset Profile Button - Updated to sign out after reset */}
               <button
                 onClick={async () => {
-                  if (!window.confirm('Delete ALL your markers permanently?')) return;
+                  if (!window.confirm('Reset ALL your markers and stats permanently?\n\nThis will:\n• Delete all your markers\n• Reset REP to 0\n• Reset Rank to TOY\n• Reset Level to 1\n• Sign you out immediately')) return;
+                  if (!user || !userProfile) return;
+                  
                   try {
+                    if (!user) return;
                     const userMarkersQuery = query(
                       collection(db, 'markers'),
                       where('userId', '==', user.uid)
@@ -4418,7 +5620,8 @@ export default function Home() {
                       totalMarkers: 0,
                       rep: 0,
                       rank: 'TOY',
-                      level: 1
+                      level: 1,
+                      unlockedTracks: ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1']
                     });
                     
                     setUserProfile(prev => prev ? {
@@ -4426,27 +5629,65 @@ export default function Home() {
                       totalMarkers: 0,
                       rep: 0,
                       rank: 'TOY',
-                      level: 1
+                      level: 1,
+                      unlockedTracks: ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1']
                     } : null);
                     
+                    // Also reset local unlocked tracks state
+                    setUnlockedTracks(['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1']);
+                    setCurrentTrackIndex(0);
+                    
+                    // Pause music if playing
+                    const iframeId = 'soundcloud-main-player';
+                    const widget = soundCloudWidgetsRef.current.get(iframeId);
+                    if (widget && typeof widget.pause === 'function') {
+                      widget.pause();
+                    }
+                    setIsPlaying(false);
+                    
                     await loadAllMarkers();
-                    alert('All your markers deleted and stats reset!');
-                  } catch (err) {
+                    
+                    // Show success message first
+                    alert('✅ Profile reset successful!\n\n• All markers deleted\n• Stats reset to zero\n• Signing out now...');
+                    
+                    // Sign out after a short delay
+                    setTimeout(async () => {
+                      await handleLogout();
+                    }, 1000);
+                    
+                  } catch (err: any) {
                     console.error(err);
-                    alert('Delete failed');
+                    alert('❌ Reset failed: ' + err.message);
                   }
                 }}
                 style={{
-                  background: '#dc2626',
+                  background: 'linear-gradient(135deg, #dc2626, #b91c1c)',
                   color: 'white',
                   border: 'none',
-                  padding: '10px',
-                  borderRadius: '6px',
+                  padding: '12px',
+                  borderRadius: '8px',
                   cursor: 'pointer',
-                  fontWeight: 'bold'
+                  fontWeight: 'bold',
+                  fontSize: '14px',
+                  marginTop: '8px',
+                  transition: 'all 0.3s ease',
+                  boxShadow: '0 4px 12px rgba(220, 38, 38, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(220, 38, 38, 0.4)';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.3)';
                 }}
               >
-                Reset My Profile
+                <span style={{ fontSize: '16px' }}>🔄</span>
+                Reset & Sign Out
               </button>
             </div>
           </div>
@@ -4459,7 +5700,8 @@ export default function Home() {
             border: '1px solid #333',
             display: 'flex',
             flexDirection: 'column',
-            animation: 'slideInRight 0.3s ease-out'
+            animation: 'slideInRight 0.3s ease-out',
+            position: 'relative' as const
           }}>
             <div style={{
               display: 'flex',
@@ -4762,551 +6004,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Messages Panel */}
-        {showMessagesPanel && (
-          <div style={{
-            ...panelStyle,
-            border: '1px solid #333',
-            display: 'flex',
-            flexDirection: 'column',
-            animation: 'slideInRight 0.3s ease-out'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '10px',
-              paddingBottom: '10px',
-              borderBottom: '1px solid rgba(16, 185, 129, 0.3)'
-            }}>
-              <h3 style={{
-                margin: 0,
-                color: '#10b981',
-                fontSize: '18px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <span>📱</span>
-                MESSAGES
-              </h3>
-              <button
-                onClick={() => setShowMessagesPanel(false)}
-                style={{
-                  background: 'rgba(16, 185, 129, 0.2)',
-                  border: '1px solid rgba(16, 185, 129, 0.3)',
-                  color: '#10b981',
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Crew Members Section */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{
-                fontSize: '16px',
-                color: '#10b981',
-                fontWeight: 'bold',
-                marginBottom: '12px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}>
-                <span>👥 Crew Members</span>
-                <span style={{ fontSize: '12px', color: '#aaa' }}>
-                  {nearbyCrewMembers.length}/{nearbyCrewMembers.length}
-                </span>
-              </div>
-
-              {nearbyCrewMembers.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {nearbyCrewMembers.map((member) => (
-                    <div
-                      key={member.uid}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '10px',
-                        background: 'rgba(16, 185, 129, 0.1)',
-                        borderRadius: '8px',
-                        border: '1px solid rgba(16, 185, 129, 0.3)'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: '50%',
-                          background: 'linear-gradient(135deg, #10b981, #059669)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '16px'
-                        }}>
-                          👤
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 'bold', fontSize: '14px' }}>
-                            {member.username}
-                          </div>
-                          <div style={{ fontSize: '11px', color: '#aaa' }}>
-                            {member.distance}m away
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => alert(`Message ${member.username} (coming soon!)`)}
-                        style={{
-                          background: 'rgba(16, 185, 129, 0.2)',
-                          border: '1px solid #10b981',
-                          color: '#10b981',
-                          padding: '6px 12px',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontSize: '12px'
-                        }}
-                      >
-                        💬
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{
-                  textAlign: 'center',
-                  padding: '30px 20px',
-                  background: 'rgba(255,255,255,0.03)',
-                  borderRadius: '8px',
-                  border: '1px dashed #444'
-                }}>
-                  <div style={{ fontSize: '48px', marginBottom: '10px' }}>👥</div>
-                  <div style={{ color: '#aaa', marginBottom: '15px' }}>
-                    No crew members nearby
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>
-                    Get within 200m of other writers to see them here
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Recent Messages */}
-            <div>
-              <div style={{
-                fontSize: '16px',
-                color: '#f59e0b',
-                fontWeight: 'bold',
-                marginBottom: '12px'
-              }}>
-                💬 Recent Messages
-              </div>
-
-              <div style={{
-                textAlign: 'center',
-                padding: '20px',
-                background: 'rgba(245, 158, 11, 0.1)',
-                borderRadius: '8px',
-                border: '1px solid rgba(245, 158, 11, 0.3)'
-              }}>
-                <div style={{ fontSize: '32px', marginBottom: '10px' }}>💬</div>
-                <div style={{ color: '#aaa' }}>
-                  No messages yet
-                </div>
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-                  Start chatting with crew members!
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Music Panel */}
-        {showMusicPanel && (
-          <div style={{
-            ...panelStyle,
-            border: '1px solid #333',
-            display: 'flex',
-            flexDirection: 'column',
-            animation: 'slideInRight 0.3s ease-out',
-            minWidth: '350px'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '10px',
-              paddingBottom: '10px',
-              borderBottom: '1px solid rgba(138, 43, 226, 0.3)'
-            }}>
-              <h3 style={{
-                margin: 0,
-                color: '#8a2be2',
-                fontSize: '18px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <span>🎵</span>
-                MUSIC COLLECTION
-              </h3>
-              <button
-                onClick={() => setShowMusicPanel(false)}
-                style={{
-                  background: 'rgba(138, 43, 226, 0.2)',
-                  border: '1px solid rgba(138, 43, 226, 0.3)',
-                  color: '#8a2be2',
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Music Player Section */}
-            <div style={{
-              marginBottom: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '15px'
-            }}>
-              {/* Now Playing Info */}
-              <div style={{
-                background: 'rgba(138, 43, 226, 0.1)',
-                padding: '12px',
-                borderRadius: '8px',
-                border: '1px solid rgba(138, 43, 226, 0.2)'
-              }}>
-                <div style={{ 
-                  fontSize: '14px', 
-                  fontWeight: 'bold', 
-                  color: 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
-                  <div style={{
-                    width: '10px',
-                    height: '10px',
-                    borderRadius: '50%',
-                    backgroundColor: isPlaying ? '#10b981' : '#ef4444',
-                    animation: isPlaying ? 'pulse 1s infinite' : 'none'
-                  }}></div>
-                  Now Playing: {getCurrentTrackName()}
-                  {isPlaying && <span style={{ fontSize: '11px', color: '#10b981' }}>● LIVE</span>}
-                </div>
-                <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '4px' }}>
-                  {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? 
-                    '🎧 Playing via SoundCloud' : 
-                    `Track ${currentTrackIndex + 1} of ${unlockedTracks.length}`
-                  }
-                </div>
-              </div>
-
-              {/* SoundCloud Player */}
-              {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && (
-                <div style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  border: '1px solid #444',
-                  minHeight: '166px',
-                  position: 'relative'
-                }}>
-                  {isSoundCloudLoading ? (
-                    <div style={{ 
-                      padding: '30px', 
-                      color: '#cbd5e1', 
-                      fontSize: '12px',
-                      textAlign: 'center',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '10px'
-                    }}>
-                      <div style={{ fontSize: '24px' }}>⏳</div>
-                      Loading SoundCloud track...
-                    </div>
-                  ) : (
-                    <div style={{ position: 'relative', width: '100%' }}>
-                      <iframe
-                        id="soundcloud-music-panel"
-                        src={createSoundCloudIframeUrl(unlockedTracks[currentTrackIndex])}
-                        width="100%"
-                        height="166"
-                        frameBorder="no"
-                        scrolling="no"
-                        style={{ 
-                          border: 'none',
-                          backgroundColor: 'transparent'
-                        }}
-                        title="SoundCloud Player"
-                        allow="autoplay"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Local Audio Player */}
-              {!unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && unlockedTracks[currentTrackIndex] && (
-                <div style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  borderRadius: '8px',
-                  padding: '15px',
-                  border: '1px solid #444',
-                  textAlign: 'center'
-                }}>
-                  <div style={{ fontSize: '32px', marginBottom: '10px' }}>💿</div>
-                  <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
-                    Local Audio File
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '5px' }}>
-                    Using browser audio player
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Unlocked Tracks List */}
-            <div style={{ flex: 1, overflowY: 'auto', marginBottom: '15px' }}>
-              <div style={{ fontSize: '14px', color: '#cbd5e1', marginBottom: '10px', fontWeight: 'bold' }}>
-                🎵 Your Collection ({unlockedTracks.length} tracks)
-              </div>
-
-              {unlockedTracks.length === 0 ? (
-                <div style={{
-                  textAlign: 'center',
-                  padding: '30px 20px',
-                  background: 'rgba(255,255,255,0.03)',
-                  borderRadius: '8px',
-                  border: '1px dashed #444'
-                }}>
-                  <div style={{ fontSize: '32px', marginBottom: '10px' }}>🎵</div>
-                  <div style={{ color: '#aaa' }}>
-                    No tracks unlocked yet
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-                    Place drops to unlock music!
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {unlockedTracks.map((track, index) => {
-                    const trackName = getTrackNameFromUrl(track);
-                    const isSoundCloud = track.includes('soundcloud.com');
-                    const isCurrentlyPlaying = index === currentTrackIndex;
-
-                    return (
-                      <div
-                        key={index}
-                        onClick={() => {
-                          if (isCurrentlyPlaying) {
-                            togglePlay();
-                          } else {
-                            setCurrentTrackIndex(index);
-                            setIsPlaying(true);
-                          }
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                          padding: '10px',
-                          background: isCurrentlyPlaying ? 'rgba(138, 43, 226, 0.2)' : 'rgba(255,255,255,0.03)',
-                          borderRadius: '6px',
-                          border: isCurrentlyPlaying ? '1px solid rgba(138, 43, 226, 0.4)' : '1px solid #333',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease'
-                        }}
-                      >
-                        <div style={{
-                          fontSize: '18px',
-                          minWidth: '24px',
-                          textAlign: 'center'
-                        }}>
-                          {isSoundCloud ? '🎵' : '💿'}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{
-                            fontSize: '13px',
-                            fontWeight: isCurrentlyPlaying ? 'bold' : 'normal',
-                            color: isCurrentlyPlaying ? '#8a2be2' : 'white'
-                          }}>
-                            {trackName}
-                            {isCurrentlyPlaying && (
-                              <span style={{
-                                marginLeft: '8px',
-                                fontSize: '11px',
-                                color: '#10b981',
-                                animation: 'pulse 1s infinite'
-                              }}>
-                                ● NOW PLAYING
-                              </span>
-                            )}
-                          </div>
-                          <div style={{
-                            fontSize: '11px',
-                            color: isSoundCloud ? '#ff6b6b' : '#10b981',
-                            marginTop: '2px'
-                          }}>
-                            {isSoundCloud ? 'SoundCloud' : 'Local Audio'}
-                          </div>
-                        </div>
-                        {isSoundCloud && (
-                          <div style={{
-                            fontSize: '12px',
-                            color: '#ff6b6b'
-                          }}>
-                            🎧
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Music Controls */}
-            {unlockedTracks.length > 0 && (
-              <div style={{
-                marginTop: '15px',
-                paddingTop: '15px',
-                borderTop: '1px solid rgba(138, 43, 226, 0.3)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px'
-              }}>
-                {/* Playback Controls */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px'
-                }}>
-                  <button
-                    onClick={playPreviousTrack}
-                    style={{
-                      background: 'rgba(138, 43, 226, 0.2)',
-                      border: '1px solid rgba(138, 43, 226, 0.3)',
-                      color: '#8a2be2',
-                      width: '36px',
-                      height: '36px',
-                      borderRadius: '50%',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    ⏮️
-                  </button>
-
-                  <button
-                    onClick={togglePlay}
-                    style={{
-                      background: 'rgba(138, 43, 226, 0.2)',
-                      border: '1px solid rgba(138, 43, 226, 0.3)',
-                      color: '#8a2be2',
-                      width: '48px',
-                      height: '48px',
-                      borderRadius: '50%',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    {isPlaying ? '⏸️' : '▶️'}
-                  </button>
-
-                  <button
-                    onClick={playNextTrack}
-                    style={{
-                      background: 'rgba(138, 43, 226, 0.2)',
-                      border: '1px solid rgba(138, 43, 226, 0.3)',
-                      color: '#8a2be2',
-                      width: '36px',
-                      height: '36px',
-                      borderRadius: '50%',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    ⏭️
-                  </button>
-                </div>
-
-                {/* Volume Control */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px' }}>
-                  <span style={{ fontSize: '14px', color: '#cbd5e1' }}>🔈</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={volume}
-                    onChange={handleVolumeChange}
-                    style={{
-                      flex: 1,
-                      height: '6px',
-                      borderRadius: '3px',
-                      background: 'linear-gradient(to right, #8a2be2, #6b21a8)',
-                      outline: 'none',
-                      WebkitAppearance: 'none',
-                      cursor: 'pointer'
-                    }}
-                  />
-                  <span style={{ fontSize: '12px', color: 'white', minWidth: '40px', textAlign: 'right' }}>
-                    {Math.round(volume * 100)}%
-                  </span>
-                </div>
-
-                {/* Track Info */}
-                <div style={{
-                  fontSize: '11px',
-                  color: '#94a3b8',
-                  textAlign: 'center',
-                  padding: '8px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                  borderRadius: '6px',
-                  marginTop: '10px'
-                }}>
-                  {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? 
-                    'SoundCloud tracks play directly in app 🎧' :
-                    'Local audio files play via browser audio'
-                  }
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Map Control Panel */}
         {showMapPanel && (
           <div style={{
@@ -5410,33 +6107,155 @@ export default function Home() {
               </div>
 
               {/* Color Picker */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                <div style={{ fontSize: '14px', color: '#ff6b6b', marginBottom: '8px' }}>
-                  Marker Color
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
-                  {MARKER_COLORS.map((color) => (
-                    <button
-                      key={color.value}
-                      onClick={() => {
-                        setSelectedMarkerColor(color.value);
-                        saveFavoriteColor(color.value);
-                      }}
-                      style={{
-                        width: '100%',
-                        aspectRatio: '1/1',
-                        backgroundColor: color.value,
-                        border: selectedMarkerColor === color.value ? '3px solid #ff6b6b' : '1px solid #444',
-                        borderRadius: '6px',
-                        cursor: 'pointer'
-                      }}
-                    />
-                  ))}
-                </div>
-                <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
-                  Choose your default marker color
-                </span>
-              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+  <div style={{ fontSize: '15px', color: '#ff6b6b', marginBottom: '8px', fontWeight: 'bold' }}>
+    🎨 MARKER COLOR
+  </div>
+  <div style={{ 
+    display: 'grid', 
+    gridTemplateColumns: 'repeat(5, 1fr)', 
+    gap: '10px',
+    padding: '12px',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: '10px',
+    border: '1px solid rgba(255, 107, 107, 0.2)',
+    width: '100%'
+  }}>
+    {MARKER_COLORS.map((color) => (
+      <div 
+        key={color.value}
+        onClick={() => {
+          setSelectedMarkerColor(color.value);
+          saveFavoriteColor(color.value);
+        }}
+        style={{
+          position: 'relative',
+          width: '36px',  // Larger size
+          height: '36px', // Larger size
+          backgroundColor: color.value,
+          border: selectedMarkerColor === color.value ? 
+            '3px solid #ff6b6b' : '2px solid rgba(255,255,255,0.3)',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          transition: 'all 0.2s ease',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: selectedMarkerColor === color.value ? 
+            '0 0 12px rgba(255, 107, 107, 0.5)' : '0 2px 6px rgba(0,0,0,0.3)',
+          transform: selectedMarkerColor === color.value ? 'scale(1.1)' : 'scale(1)'
+        }}
+        onMouseEnter={(e) => {
+          if (selectedMarkerColor !== color.value) {
+            e.currentTarget.style.transform = 'scale(1.05)';
+            e.currentTarget.style.boxShadow = '0 0 8px rgba(255,255,255,0.2)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (selectedMarkerColor !== color.value) {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
+          }
+        }}
+      >
+        {/* Selected indicator */}
+        {selectedMarkerColor === color.value && (
+          <div style={{
+            position: 'absolute',
+            top: '-6px',
+            right: '-6px',
+            width: '16px',
+            height: '16px',
+            backgroundColor: '#ff6b6b',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '10px',
+            color: 'white',
+            fontWeight: 'bold',
+            border: '2px solid rgba(0,0,0,0.5)',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+          }}>
+            ✓
+          </div>
+        )}
+        
+        {/* Color name tooltip on hover */}
+        <div style={{
+          position: 'absolute',
+          bottom: '100%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: 'rgba(0,0,0,0.9)',
+          color: 'white',
+          padding: '6px 10px',
+          borderRadius: '6px',
+          fontSize: '11px',
+          fontWeight: 'bold',
+          whiteSpace: 'nowrap',
+          opacity: 0,
+          pointerEvents: 'none',
+          transition: 'opacity 0.2s',
+          marginBottom: '8px',
+          border: '1px solid rgba(255,255,255,0.2)',
+          zIndex: 1
+        }} className="color-tooltip">
+          {color.name}
+        </div>
+      </div>
+    ))}
+  </div>
+  
+  {/* Current color display */}
+  <div style={{
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '10px',
+    marginTop: '8px',
+    padding: '10px',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: '8px',
+    border: '1px solid rgba(255,255,255,0.1)',
+    width: '100%'
+  }}>
+    <div style={{
+      width: '24px',
+      height: '24px',
+      borderRadius: '50%',
+      backgroundColor: selectedMarkerColor,
+      border: '2px solid white',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+    }} />
+    <div style={{
+      fontSize: '12px',
+      color: '#e0e0e0',
+      fontWeight: 'bold'
+    }}>
+      {MARKER_COLORS.find(c => c.value === selectedMarkerColor)?.name || 'Custom'}
+    </div>
+    <div style={{
+      fontSize: '10px',
+      color: '#94a3b8',
+      backgroundColor: 'rgba(255,255,255,0.05)',
+      padding: '2px 6px',
+      borderRadius: '4px',
+      fontFamily: 'monospace'
+    }}>
+      {selectedMarkerColor}
+    </div>
+  </div>
+  
+  <span style={{ 
+    fontSize: '11px', 
+    color: '#94a3b8', 
+    textAlign: 'center',
+    marginTop: '4px'
+  }}>
+    Click to choose marker color
+  </span>
+</div>
 
               {/* Refresh Drops */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
@@ -5518,6 +6337,145 @@ export default function Home() {
 
             </div>
 
+            {/* ⚙️ PERFORMANCE SETTINGS SECTION */}
+            <div style={{
+              marginTop: '20px',
+              paddingTop: '20px',
+              borderTop: '1px solid rgba(255,255,255,0.1)'
+            }}>
+              <div style={{
+                fontSize: '16px',
+                fontWeight: 'bold',
+                color: '#fbbf24',
+                marginBottom: '15px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                ⚙️ PERFORMANCE
+              </div>
+
+              {/* Crew Detection Toggle */}
+              <div style={{
+                marginBottom: '15px',
+                padding: '12px',
+                background: 'rgba(255,255,255,0.03)',
+                borderRadius: '8px',
+                border: '1px solid #444'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '8px'
+                }}>
+                  <label style={{
+                    fontSize: '13px',
+                    fontWeight: 'bold',
+                    color: '#cbd5e1',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    👥 Crew Detection
+                    <input
+                      type="checkbox"
+                      checked={crewDetectionEnabled}
+                      onChange={(e) => setCrewDetectionEnabled(e.target.checked)}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </label>
+                  <span style={{
+                    fontSize: '11px',
+                    color: crewDetectionEnabled ? '#10b981' : '#ef4444'
+                  }}>
+                    {crewDetectionEnabled ? 'ON' : 'OFF'}
+                  </span>
+                </div>
+                <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                  {crewDetectionEnabled 
+                    ? '✓ Scans crew members every 10s'
+                    : '✗ Disabled (faster, less CPU)'}
+                </div>
+              </div>
+
+              {/* Marker Quality Selector */}
+              <div style={{
+                marginBottom: '15px',
+                padding: '12px',
+                background: 'rgba(255,255,255,0.03)',
+                borderRadius: '8px',
+                border: '1px solid #444'
+              }}>
+                <div style={{
+                  fontSize: '13px',
+                  fontWeight: 'bold',
+                  color: '#cbd5e1',
+                  marginBottom: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  🎨 Marker Quality
+                </div>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {(['low', 'medium', 'high'] as const).map((quality) => (
+                    <button
+                      key={quality}
+                      onClick={() => setMarkerQuality(quality)}
+                      style={{
+                        flex: 1,
+                        padding: '8px',
+                        background: markerQuality === quality 
+                          ? 'rgba(77, 171, 247, 0.3)' 
+                          : 'rgba(255,255,255,0.05)',
+                        border: markerQuality === quality 
+                          ? '1px solid #4dabf7' 
+                          : '1px solid #555',
+                        color: markerQuality === quality ? '#4dabf7' : '#cbd5e1',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        transition: 'all 0.2s ease',
+                        textTransform: 'uppercase'
+                      }}
+                    >
+                      {quality === 'low' ? '⚡ Low' : quality === 'medium' ? '⭐ Med' : '🔥 Max'}
+                    </button>
+                  ))}
+                </div>
+                <div style={{
+                  fontSize: '11px',
+                  color: '#94a3b8',
+                  marginTop: '8px',
+                  paddingTop: '8px',
+                  borderTop: '1px solid #444'
+                }}>
+                  {markerQuality === 'low' && '⚡ 25 markers (fastest)'}
+                  {markerQuality === 'medium' && '⭐ 50 markers (balanced)'}
+                  {markerQuality === 'high' && '🔥 100+ markers (slower)'}
+                </div>
+              </div>
+
+              {/* Performance Status */}
+              <div style={{
+                padding: '10px',
+                background: 'rgba(16, 185, 129, 0.1)',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                borderRadius: '6px',
+                fontSize: '11px',
+                color: '#10b981'
+              }}>
+                <strong>💚 Performance Status</strong>
+                <div style={{ marginTop: '6px', fontSize: '10px', color: '#cbd5e1' }}>
+                  {crewDetectionEnabled ? '✓' : '✗'} Crew detection {crewDetectionEnabled ? 'ON' : 'OFF'}<br/>
+                  {markerQuality === 'low' ? '⚡' : markerQuality === 'medium' ? '⭐' : '🔥'} {markerQuality.charAt(0).toUpperCase() + markerQuality.slice(1)} quality mode
+                </div>
+              </div>
+            </div>
+
             {/* Status Info */}
             <div style={{
               marginTop: '20px',
@@ -5553,9 +6511,424 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {/* Music Panel */}
+            {showMusicPanel && (
+              <div style={{
+                ...panelStyle,
+                border: '1px solid #333',
+                display: 'flex',
+                flexDirection: 'column',
+                animation: 'slideInRight 0.3s ease-out',
+                minWidth: '350px'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '10px',
+                  paddingBottom: '10px',
+                  borderBottom: '1px solid rgba(138, 43, 226, 0.3)'
+                }}>
+                  <h3 style={{
+                    margin: 0,
+                    color: '#8a2be2',
+                    fontSize: '18px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <span>🎵</span>
+                    MUSIC COLLECTION
+                  </h3>
+                  <button
+                    onClick={() => setShowMusicPanel(false)}
+                    style={{
+                      background: 'rgba(138, 43, 226, 0.2)',
+                      border: '1px solid rgba(138, 43, 226, 0.3)',
+                      color: '#8a2be2',
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '50%',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+                
+                {/* Music Player Section */}
+                <div style={{
+                  marginBottom: '20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '15px'
+                }}>
+                  {/* Now Playing Info */}
+                  <div style={{
+                    background: 'rgba(138, 43, 226, 0.1)',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(138, 43, 226, 0.2)'
+                  }}>
+                    <div style={{ 
+                      fontSize: '14px', 
+                      fontWeight: 'bold', 
+                      color: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}>
+                      <div style={{
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        backgroundColor: isPlaying ? '#10b981' : '#ef4444',
+                        animation: isPlaying ? 'pulse 1s infinite' : 'none'
+                      }}></div>
+                      Now Playing: {getCurrentTrackName()}
+                      {isPlaying && <span style={{ fontSize: '11px', color: '#10b981' }}>● LIVE</span>}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '4px' }}>
+                      {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? 
+                        '🎧 Playing via SoundCloud' : 
+                        `Track ${currentTrackIndex + 1} of ${unlockedTracks.length}`
+                      }
+                    </div>
+                  </div>
+
+                  {/* SoundCloud Player */}
+                  {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && (
+                    <div style={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      borderRadius: '8px',
+                      overflow: 'hidden',
+                      border: '1px solid #444',
+                      minHeight: '166px',
+                      position: 'relative'
+                    }}>
+                      {isSoundCloudLoading ? (
+                        <div style={{ 
+                          padding: '30px', 
+                          color: '#cbd5e1', 
+                          fontSize: '12px',
+                          textAlign: 'center',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: '10px'
+                        }}>
+                          <div style={{ fontSize: '24px' }}>⏳</div>
+                          Loading SoundCloud track...
+                        </div>
+                      ) : (
+                        <div style={{ position: 'relative', width: '100%' }}>
+                          <iframe
+                            id="soundcloud-music-panel"
+                            src={createSoundCloudIframeUrl(unlockedTracks[currentTrackIndex])}
+                            width="100%"
+                            height="166"
+                            frameBorder="no"
+                            scrolling="no"
+                            style={{ 
+                              border: 'none',
+                              backgroundColor: 'transparent'
+                            }}
+                            title="SoundCloud Player"
+                            allow="autoplay"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Local Audio Player */}
+                  {!unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && unlockedTracks[currentTrackIndex] && (
+                    <div style={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      borderRadius: '8px',
+                      padding: '15px',
+                      border: '1px solid #444',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '32px', marginBottom: '10px' }}>💿</div>
+                      <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+                        Local Audio File
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '5px' }}>
+                        Using browser audio player
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Unlocked Tracks List */}
+                <div style={{ flex: 1, overflowY: 'auto', marginBottom: '15px' }}>
+                  <div style={{ fontSize: '14px', color: '#cbd5e1', marginBottom: '10px', fontWeight: 'bold' }}>
+                    🎵 Your Collection ({unlockedTracks.length} tracks)
+                  </div>
+
+                  {unlockedTracks.length === 0 ? (
+                    <div style={{
+                      textAlign: 'center',
+                      padding: '30px 20px',
+                      background: 'rgba(255,255,255,0.03)',
+                      borderRadius: '8px',
+                      border: '1px dashed #444'
+                    }}>
+                      <div style={{ fontSize: '32px', marginBottom: '10px' }}>🎵</div>
+                      <div style={{ color: '#aaa' }}>
+                        No tracks unlocked yet
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                        Place drops to unlock music!
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {unlockedTracks.map((track, index) => {
+                        const trackName = getTrackNameFromUrl(track);
+                        const isSoundCloud = track.includes('soundcloud.com');
+                        const isCurrentlyPlaying = index === currentTrackIndex;
+
+                        return (
+                          <div
+                            key={index}
+                            onClick={() => {
+                              if (isCurrentlyPlaying) {
+                                togglePlay();
+                              } else {
+                                setCurrentTrackIndex(index);
+                                setIsPlaying(true);
+                              }
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '10px',
+                              padding: '10px',
+                              background: isCurrentlyPlaying ? 'rgba(138, 43, 226, 0.2)' : 'rgba(255,255,255,0.03)',
+                              borderRadius: '6px',
+                              border: isCurrentlyPlaying ? '1px solid rgba(138, 43, 226, 0.4)' : '1px solid #333',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            <div style={{
+                              fontSize: '18px',
+                              minWidth: '24px',
+                              textAlign: 'center'
+                            }}>
+                              {isSoundCloud ? '🎵' : '💿'}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{
+                                fontSize: '13px',
+                                fontWeight: isCurrentlyPlaying ? 'bold' : 'normal',
+                                color: isCurrentlyPlaying ? '#8a2be2' : 'white'
+                              }}>
+                                {trackName}
+                                {isCurrentlyPlaying && (
+                                  <span style={{
+                                    marginLeft: '8px',
+                                    fontSize: '11px',
+                                    color: '#10b981',
+                                    animation: 'pulse 1s infinite'
+                                  }}>
+                                    ● NOW PLAYING
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{
+                                fontSize: '11px',
+                                color: isSoundCloud ? '#ff6b6b' : '#10b981',
+                                marginTop: '2px'
+                              }}>
+                                {isSoundCloud ? 'SoundCloud' : 'Local Audio'}
+                              </div>
+                            </div>
+                            {isSoundCloud && (
+                              <div style={{
+                                fontSize: '12px',
+                                color: '#ff6b6b'
+                              }}>
+                                🎧
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Music Controls */}
+                {unlockedTracks.length > 0 && (
+                  <div style={{
+                    marginTop: '15px',
+                    paddingTop: '15px',
+                    borderTop: '1px solid rgba(138, 43, 226, 0.3)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px'
+                  }}>
+                    {/* Playback Controls */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}>
+                      <button
+                        onClick={playPreviousTrack}
+                        style={{
+                          background: 'rgba(138, 43, 226, 0.2)',
+                          border: '1px solid rgba(138, 43, 226, 0.3)',
+                          color: '#8a2be2',
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '50%',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        ⏮️
+                      </button>
+
+                      <button
+                        onClick={togglePlay}
+                        style={{
+                          background: 'rgba(138, 43, 226, 0.2)',
+                          border: '1px solid rgba(138, 43, 226, 0.3)',
+                          color: '#8a2be2',
+                          width: '48px',
+                          height: '48px',
+                          borderRadius: '50%',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        {isPlaying ? '⏸️' : '▶️'}
+                      </button>
+
+                      <button
+                        onClick={playNextTrack}
+                        style={{
+                          background: 'rgba(138, 43, 226, 0.2)',
+                          border: '1px solid rgba(138, 43, 226, 0.3)',
+                          color: '#8a2be2',
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '50%',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        ⏭️
+                      </button>
+                    </div>
+
+
+
+                  </div>
+                )}
+              </div>
+            )}
       </div>
 
       {/* ========== END DUAL CONTROL PANELS ========== */}
+
+        {/* Crew Chat Panel */}
+        {showCrewChat && userProfile?.crewId && user && (
+          <CrewChatPanel 
+            crewId={userProfile.crewId} 
+            onClose={() => setShowCrewChat(false)}
+            userProfile={userProfile}
+          />
+        )}
+
+        {/* Direct Messaging Panel */}
+        {showMessagesPanel && userProfile && (
+          <DirectMessaging
+            isOpen={showMessagesPanel}
+            onClose={() => setShowMessagesPanel(false)}
+            userProfile={userProfile}
+            gpsPosition={gpsPosition}
+          />
+        )}
+
+        {/* Story Panel - Separate from other panels */}
+        {showStoryPanel && (
+          <div style={{
+            ...panelStyle,
+            position: 'absolute',
+            top: 80,
+            left: 0,
+            border: '1px solid #8b5cf6',
+            animation: 'slideInLeft 0.3s ease-out',
+            minWidth: '350px',
+            maxHeight: '80vh',
+            zIndex: 1300
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '15px',
+              paddingBottom: '10px',
+              borderBottom: '1px solid rgba(139, 92, 246, 0.3)'
+            }}>
+              <h3 style={{ 
+                margin: 0, 
+                color: '#8b5cf6', 
+                fontSize: '18px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <span>📖</span>
+                BLACKOUT STORY
+              </h3>
+              <button
+                onClick={() => setShowStoryPanel(false)}
+                style={{
+                  background: 'rgba(139, 92, 246, 0.2)',
+                  border: '1px solid rgba(139, 92, 246, 0.3)',
+                  color: '#8b5cf6',
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ maxHeight: 'calc(80vh - 60px)', overflowY: 'auto' }}>
+              <StoryPanel />
+            </div>
+          </div>
+        )}
 
       {/* Bottom Navigation */}
       <div style={{
@@ -5582,6 +6955,7 @@ export default function Home() {
             setShowPhotosPanel(false);
             setShowMessagesPanel(false);
             setShowMusicPanel(false);
+            setShowStoryPanel(false);
           }}
           style={{
             background: showMapPanel ? 'rgba(77, 171, 247, 0.2)' : 'none',
@@ -5615,6 +6989,7 @@ export default function Home() {
             setShowMessagesPanel(false);
             setShowMapPanel(false);
             setShowMusicPanel(false);
+            setShowStoryPanel(false);
           }}
           style={{
             background: showProfilePanel ? 'rgba(255, 107, 107, 0.2)' : 'none',
@@ -5648,6 +7023,7 @@ export default function Home() {
             setShowMessagesPanel(false);
             setShowMapPanel(false);
             setShowMusicPanel(false);
+            setShowStoryPanel(false);
           }}
           style={{
             background: showPhotosPanel ? 'rgba(77, 171, 247, 0.2)' : 'none',
@@ -5673,19 +7049,20 @@ export default function Home() {
           Camera
         </button>
 
-        {/* Messages - Crew & Friends */}
+        {/* Story Button */}
         <button
           onClick={() => {
-            setShowMessagesPanel(!showMessagesPanel);
+            setShowStoryPanel(!showStoryPanel);
             setShowProfilePanel(false);
             setShowPhotosPanel(false);
+            setShowMessagesPanel(false);
             setShowMapPanel(false);
             setShowMusicPanel(false);
           }}
           style={{
-            background: showMessagesPanel ? 'rgba(16, 185, 129, 0.2)' : 'none',
-            border: showMessagesPanel ? '1px solid rgba(16, 185, 129, 0.3)' : 'none',
-            color: showMessagesPanel ? '#10b981' : '#cbd5e1',
+            background: showStoryPanel ? 'rgba(139, 92, 246, 0.2)' : 'none',
+            border: showStoryPanel ? '1px solid rgba(139, 92, 246, 0.3)' : 'none',
+            color: showStoryPanel ? '#8b5cf6' : '#cbd5e1',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -5699,11 +7076,11 @@ export default function Home() {
         >
           <div style={{
             fontSize: '24px',
-            transform: showMessagesPanel ? 'scale(1.1)' : 'scale(1)'
+            transform: showStoryPanel ? 'scale(1.1)' : 'scale(1)'
           }}>
-            📱
+            📖
           </div>
-          Messages
+          Story
         </button>
 
         {/* Music - Toggles Music Panel */}
@@ -5714,6 +7091,7 @@ export default function Home() {
             setShowPhotosPanel(false);
             setShowMessagesPanel(false);
             setShowMapPanel(false);
+            setShowStoryPanel(false);
           }}
           style={{
             background: showMusicPanel ? 'rgba(138, 43, 226, 0.2)' : 'none',
@@ -5738,6 +7116,41 @@ export default function Home() {
           </div>
           Music
         </button>
+
+        {/* Messages - Toggles Messages Panel */}
+          <button
+            onClick={() => {
+              setShowCrewChat(!showCrewChat);
+              setShowProfilePanel(false);
+              setShowPhotosPanel(false);
+              setShowMessagesPanel(false);
+              setShowMusicPanel(false);
+              setShowMapPanel(false);
+              setShowStoryPanel(false);
+            }}
+            style={{
+              background: showCrewChat ? 'rgba(16, 185, 129, 0.2)' : 'none',
+              border: showCrewChat ? '1px solid rgba(16, 185, 129, 0.3)' : 'none',
+              color: showCrewChat ? '#10b981' : '#cbd5e1',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              fontSize: '11px',
+              gap: '3px',
+              padding: '6px 12px',
+              cursor: 'pointer',
+              borderRadius: '8px',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            <div style={{
+              fontSize: '24px',
+              transform: showCrewChat ? 'scale(1.1)' : 'scale(1)'
+            }}>
+              👥
+            </div>
+            Crew Chat
+          </button>
       </div>
 
       {/* Legend */}
@@ -5805,6 +7218,12 @@ export default function Home() {
           <div style={{marginTop: '8px', fontSize: '11px', color: '#8a2be2'}}>
             Music: {unlockedTracks.length} tracks unlocked
           </div>
+          {/* 🆕 Add Crew Chat Status */}
+          {userProfile?.crewId && !userProfile?.isSolo && (
+            <div style={{marginTop: '8px', fontSize: '11px', color: '#10b981'}}>
+              Crew: {userProfile.crewName} (Chat available)
+            </div>
+          )}
         </div>
       )}
 
@@ -5860,5 +7279,6 @@ export default function Home() {
         }
       `}</style>
     </div>
+    </StoryManagerProvider>
   );
 }

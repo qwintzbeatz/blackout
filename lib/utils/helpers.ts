@@ -14,6 +14,194 @@ export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2
   return R * c;
 };
 
+// Enhanced ranking system with 70 unique ranks
+export const calculateRank = (rep: number): string => {
+  // Apprentice Phase
+  if (rep >= 20000) return 'GRAFFITI OMEGA ⭐⭐⭐';
+  if (rep >= 15000) return 'URBAN ETERNAL ♾️';
+  if (rep >= 12000) return 'STREET IMMORTAL ♾️';
+  if (rep >= 10000) return 'WALL PANTHEON 🏛️';
+  if (rep >= 9000) return 'SPRAY DEITY 🏛️';
+  if (rep >= 8000) return 'GRAFFITI TITAN 🏛️';
+  if (rep >= 7000) return 'CITY CELESTIAL ⭐⭐';
+  if (rep >= 6000) return 'URBAN ARCHMAGE ⭐⭐';
+  if (rep >= 5000) return 'STREET SORCERER 🧙‍♂️';
+  if (rep >= 4500) return 'WALL WARLOCK 🧙‍♂️';
+  if (rep >= 4000) return 'SPRAY CAN SAGE 🔥';
+  if (rep >= 3500) return 'GRAFFITI DEMIGOD 🔥';
+  
+  // Mythical Phase
+  if (rep >= 3000) return 'URBAN MYTH 🌟';
+  if (rep >= 2800) return 'STREET SOVEREIGN 👑';
+  if (rep >= 2600) return "BUFFER'S BANE 👻";
+  if (rep >= 2400) return 'CITY SHADOW 👻';
+  if (rep >= 2200) return 'URBAN NINJA ⚔️';
+  if (rep >= 2000) return 'STREET SAMURAI ⚔️';
+  if (rep >= 1800) return 'WALL WHISPERER 🎨';
+  if (rep >= 1600) return 'SPRAY GOD 🎨';
+  if (rep >= 1400) return 'GRAFFITI DEITY ⭐';
+  if (rep >= 1200) return 'URBAN LEGEND ⭐';
+  
+  // Elite Phase
+  if (rep >= 1000) return 'STREET LEGEND ⭐';
+  if (rep >= 980) return 'METROPOLIS MONARCH 👑';
+  if (rep >= 950) return 'URBAN EMPEROR 👑';
+  if (rep >= 920) return 'STREET KING 👑';
+  if (rep >= 890) return 'BUFFER BREAKER';
+  if (rep >= 860) return 'CITY MARKER';
+  if (rep >= 830) return 'STREET PHILOSOPHER';
+  if (rep >= 800) return 'URBAN PIONEER';
+  if (rep >= 770) return 'RAIL ROYALTY';
+  if (rep >= 740) return 'UNDERGROUND LEGEND';
+  if (rep >= 710) return 'BUFFER NEMESIS';
+  if (rep >= 680) return 'STYLE INNOVATOR';
+  if (rep >= 650) return 'CITY COVERER';
+  if (rep >= 620) return 'STREET ARTIST';
+  if (rep >= 590) return 'WALL CONQUEROR';
+  if (rep >= 560) return 'BOMBING GENERAL';
+  if (rep >= 530) return 'PIECE MASTER';
+  
+  // Advanced Phase
+  if (rep >= 500) return 'WRITER';
+  if (rep >= 480) return 'STREET VETERAN';
+  if (rep >= 460) return 'STYLE DEVELOPER';
+  if (rep >= 440) return 'AREA DOMINATOR';
+  if (rep >= 420) return 'BUFF RESISTANT';
+  if (rep >= 400) return 'STREET TACTICIAN';
+  if (rep >= 380) return 'LAYER LORD';
+  if (rep >= 360) return 'COLOR THEORIST';
+  if (rep >= 340) return 'OUTLINE SPECIALIST';
+  if (rep >= 320) return 'TAG TEAMER';
+  if (rep >= 300) return 'STREET SOLDIER';
+  if (rep >= 280) return 'WALL CLAIMER';
+  if (rep >= 260) return 'BURNER APPRENTICE';
+  if (rep >= 240) return 'THROW-UP KING';
+  if (rep >= 220) return 'FADE MASTER';
+  if (rep >= 200) return 'SUBWAY RUNNER';
+  if (rep >= 180) return 'NIGHT SHIFTER';
+  if (rep >= 160) return 'WHEELMAN';
+  if (rep >= 140) return 'SLAPPER';
+  if (rep >= 120) return 'BOMBER';
+  
+  // Intermediate Phase
+  if (rep >= 100) return 'VANDAL';
+  if (rep >= 90) return 'BUFFER ESCAPER';
+  if (rep >= 80) return 'ROLLER';
+  if (rep >= 70) return 'STENCILER';
+  if (rep >= 60) return 'FILL-IN';
+  if (rep >= 50) return 'STREET TOY';
+  if (rep >= 40) return 'SKETCHER';
+  if (rep >= 30) return 'OUTLINE';
+  if (rep >= 20) return 'MARKER KID';
+  if (rep >= 10) return 'SCRIBBLER';
+  
+  // Apprentice Phase
+  return 'TOY';
+};
+
+// Enhanced level calculation for more frequent level ups
+export const calculateLevel = (rep: number): number => {
+  return Math.floor(rep / 50) + 1; // More frequent level ups
+};
+
+// Rank tiers for progression tracking
+const rankTiers = [
+  { name: 'TOY', repRequired: 0 },
+  { name: 'SCRIBBLER', repRequired: 10 },
+  { name: 'MARKER KID', repRequired: 20 },
+  { name: 'OUTLINE', repRequired: 30 },
+  { name: 'SKETCHER', repRequired: 40 },
+  { name: 'STREET TOY', repRequired: 50 },
+  { name: 'FILL-IN', repRequired: 60 },
+  { name: 'STENCILER', repRequired: 70 },
+  { name: 'ROLLER', repRequired: 80 },
+  { name: 'BUFFER ESCAPER', repRequired: 90 },
+  { name: 'VANDAL', repRequired: 100 },
+  { name: 'BOMBER', repRequired: 120 },
+  { name: 'SLAPPER', repRequired: 140 },
+  { name: 'WHEELMAN', repRequired: 160 },
+  { name: 'NIGHT SHIFTER', repRequired: 180 },
+  { name: 'SUBWAY RUNNER', repRequired: 200 },
+  { name: 'FADE MASTER', repRequired: 220 },
+  { name: 'THROW-UP KING', repRequired: 240 },
+  { name: 'BURNER APPRENTICE', repRequired: 260 },
+  { name: 'WALL CLAIMER', repRequired: 280 },
+  { name: 'STREET SOLDIER', repRequired: 300 },
+  { name: 'TAG TEAMER', repRequired: 320 },
+  { name: 'OUTLINE SPECIALIST', repRequired: 340 },
+  { name: 'COLOR THEORIST', repRequired: 360 },
+  { name: 'LAYER LORD', repRequired: 380 },
+  { name: 'STREET TACTICIAN', repRequired: 400 },
+  { name: 'BUFF RESISTANT', repRequired: 420 },
+  { name: 'AREA DOMINATOR', repRequired: 440 },
+  { name: 'STYLE DEVELOPER', repRequired: 460 },
+  { name: 'STREET VETERAN', repRequired: 480 },
+  { name: 'WRITER', repRequired: 500 },
+  { name: 'PIECE MASTER', repRequired: 530 },
+  { name: 'BOMBING GENERAL', repRequired: 560 },
+  { name: 'WALL CONQUEROR', repRequired: 590 },
+  { name: 'STREET ARTIST', repRequired: 620 },
+  { name: 'CITY COVERER', repRequired: 650 },
+  { name: 'STYLE INNOVATOR', repRequired: 680 },
+  { name: 'BUFFER NEMESIS', repRequired: 710 },
+  { name: 'UNDERGROUND LEGEND', repRequired: 740 },
+  { name: 'RAIL ROYALTY', repRequired: 770 },
+  { name: 'URBAN PIONEER', repRequired: 800 },
+  { name: 'STREET PHILOSOPHER', repRequired: 830 },
+  { name: 'CITY MARKER', repRequired: 860 },
+  { name: 'BUFFER BREAKER', repRequired: 890 },
+  { name: 'STREET KING', repRequired: 920 },
+  { name: 'URBAN EMPEROR', repRequired: 950 },
+  { name: 'METROPOLIS MONARCH', repRequired: 980 },
+  { name: 'STREET LEGEND ⭐', repRequired: 1000 },
+  { name: 'URBAN LEGEND ⭐', repRequired: 1200 },
+  { name: 'GRAFFITI DEITY ⭐', repRequired: 1400 },
+  { name: 'SPRAY GOD 🎨', repRequired: 1600 },
+  { name: 'WALL WHISPERER 🎨', repRequired: 1800 },
+  { name: 'STREET SAMURAI ⚔️', repRequired: 2000 },
+  { name: 'URBAN NINJA ⚔️', repRequired: 2200 },
+  { name: 'CITY SHADOW 👻', repRequired: 2400 },
+  { name: "BUFFER'S BANE 👻", repRequired: 2600 },
+  { name: 'STREET SOVEREIGN 👑', repRequired: 2800 },
+  { name: 'URBAN MYTH 🌟', repRequired: 3000 },
+  { name: 'GRAFFITI DEMIGOD 🔥', repRequired: 3500 },
+  { name: 'SPRAY CAN SAGE 🔥', repRequired: 4000 },
+  { name: 'WALL WARLOCK 🧙‍♂️', repRequired: 4500 },
+  { name: 'STREET SORCERER 🧙‍♂️', repRequired: 5000 },
+  { name: 'URBAN ARCHMAGE ⭐⭐', repRequired: 6000 },
+  { name: 'CITY CELESTIAL ⭐⭐', repRequired: 7000 },
+  { name: 'GRAFFITI TITAN 🏛️', repRequired: 8000 },
+  { name: 'SPRAY DEITY 🏛️', repRequired: 9000 },
+  { name: 'WALL PANTHEON 🏛️', repRequired: 10000 },
+  { name: 'STREET IMMORTAL ♾️', repRequired: 12000 },
+  { name: 'URBAN ETERNAL ♾️', repRequired: 15000 },
+  { name: 'GRAFFITI OMEGA ⭐⭐⭐', repRequired: 20000 }
+];
+
+// Helper function to get rank progression info
+export const getRankInfo = (rep: number) => {
+  const currentRank = calculateRank(rep);
+  const currentIndex = rankTiers.findIndex(tier => tier.name === currentRank);
+  const nextRank = currentIndex < rankTiers.length - 1 ? rankTiers[currentIndex + 1].name : null;
+  const repToNext = nextRank ? rankTiers[currentIndex + 1].repRequired - rep : 0;
+  
+  let progress = 0;
+  if (nextRank && currentIndex >= 0) {
+    const currentTierRep = rankTiers[currentIndex].repRequired;
+    const nextTierRep = rankTiers[currentIndex + 1].repRequired;
+    progress = ((rep - currentTierRep) / (nextTierRep - currentTierRep)) * 100;
+  } else {
+    progress = 100;
+  }
+  
+  return { 
+    currentRank, 
+    nextRank, 
+    repToNext, 
+    progress: Math.max(0, Math.min(100, progress))
+  };
+};
+
 // Avatar generator function
 export const generateAvatarUrl = (userId: string, username: string, gender?: string): string => {
   // Use DiceBear API for free avatars

@@ -8,7 +8,7 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { db } from './config';
-import { UserMarker } from '@/lib/utils/types';
+import { UserMarker } from '@/lib/types/blackout';
 
 export const saveMarkerToFirestore = async (marker: UserMarker): Promise<string | null> => {
   try {
