@@ -5,6 +5,7 @@ import { realtimeDb } from '@/lib/firebase';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { useMissionTriggers } from '@/hooks/useMissionTriggers';
+import { Gender } from '@/types';
 
 interface DirectMessage {
   id: string;
@@ -240,7 +241,7 @@ export default function DirectMessaging({ isOpen, onClose, userProfile, gpsPosit
     const threadData = {
       participantIds: [currentUser.uid, targetUserId],
       participantNames: [userProfile.username, targetUserName],
-      participantProfilePics: [userProfile.profilePicUrl, generateAvatarUrl(targetUserId, targetUserName)],
+      participantProfilePics: [userProfile.profilePicUrl, generateAvatarUrl(targetUserId, targetUserName, undefined, 60)],
       lastMessage: 'Chat started',
       lastMessageTime: Date.now(),
       unreadCount: 0

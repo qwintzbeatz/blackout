@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import { UserProfile, UserMarker, getMarkerColorByRank } from '@/lib/types/blackout';
-import { calculateDistance } from '@/lib/utils/helpers';
+import { calculateDistance } from '@/lib/utils';
 
 export const useMarkers = (user: User | null, userProfile: UserProfile | null) => {
   const [userMarkers, setUserMarkers] = useState<UserMarker[]>([]);

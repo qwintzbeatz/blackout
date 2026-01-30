@@ -19,8 +19,8 @@ import { useGPSTracker } from '@/hooks/useGPSTracker';
 import { CREWS } from '@/data/crews';
 import { UserProfile } from '@/lib/types/blackout';
 import CharacterSelection from '@/components/CharacterSelection';
-
-type Gender = 'male' | 'female' | 'other' | 'prefer-not-to-say';
+import { Gender } from '@/types';
+import { generateAvatarUrl } from '@/lib/utils';
 
 interface CrewData {
   id: string;
@@ -31,21 +31,6 @@ interface CrewData {
   color: string;
   accentColor: string;
 }
-
-// Avatar generator function
-const generateAvatarUrl = (userId: string, username: string, gender?: Gender): string => {
-  const seed = username || userId;
-  const colors = ['4dabf7', '10b981', '8b5cf6', 'f59e0b', 'ec4899', 'f97316'];
-  const selectedColor = colors[Math.floor(Math.random() * colors.length)];
-  
-  let url = `https://api.dicebear.com/7.x/open-peeps/svg?seed=${seed}&backgroundColor=${selectedColor}`;
-  
-  if (gender === 'male' && Math.random() > 0.5) {
-    url += '&facialHair=beard';
-  }
-  
-  return url;
-};
 
 export default function SelectCrewPage() {
   const router = useRouter();
@@ -80,7 +65,7 @@ export default function SelectCrewPage() {
               email: data.email || currentUser.email || '',
               username: data.username || '',
               gender: data.gender || 'prefer-not-to-say',
-              profilePicUrl: data.profilePicUrl || generateAvatarUrl(currentUser.uid, data.username, data.gender),
+              profilePicUrl: data.profilePicUrl || generateAvatarUrl(currentUser.uid, data.username, data.gender, 60),
               rep: data.rep || 0,
               level: data.level || 1,
               rank: data.rank || 'TOY',
@@ -129,7 +114,7 @@ export default function SelectCrewPage() {
   // Update avatar preview when username or gender changes
   useEffect(() => {
     if (user && username) {
-      setProfilePicUrl(generateAvatarUrl(user.uid, username, gender));
+      setProfilePicUrl(generateAvatarUrl(user.uid, username, gender, 100));
     }
   }, [username, gender, user]);
   
@@ -168,7 +153,7 @@ export default function SelectCrewPage() {
       }
       
       // Generate profile picture if not already set
-      const finalProfilePicUrl = profilePicUrl || generateAvatarUrl(user.uid, username.trim(), gender);
+      const finalProfilePicUrl = profilePicUrl || generateAvatarUrl(user.uid, username.trim(), gender, 100);
       
       // Prepare user profile data
       const userProfileData = {
@@ -280,7 +265,7 @@ export default function SelectCrewPage() {
     setError(null);
     
     try {
-      const finalProfilePicUrl = profilePicUrl || generateAvatarUrl(user.uid, username.trim(), gender);
+      const finalProfilePicUrl = profilePicUrl || generateAvatarUrl(user.uid, username.trim(), gender, 100);
       
       const userProfileData = {
         uid: user.uid,

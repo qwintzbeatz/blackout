@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { generateAvatarUrl } from '@/lib/utils/helpers';
+import { generateAvatarUrl } from '@/lib/utils';
 
 interface ProfileSetupProps {
   onSubmit: (data: {

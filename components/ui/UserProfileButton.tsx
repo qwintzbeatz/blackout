@@ -1,7 +1,7 @@
 'use client';
 
 import { UserProfile } from '@/lib/types/blackout';
-import { getRankInfo } from '@/lib/utils/helpers';
+import { getRankInfo } from '@/lib/utils';
 
 interface UserProfileButtonProps {
   userProfile: UserProfile | null;

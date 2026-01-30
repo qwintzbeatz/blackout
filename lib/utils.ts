@@ -1,4 +1,12 @@
-// Helper function to calculate distance between two coordinates in meters
+// ========== CONSOLIDATED HELPER FUNCTIONS ==========
+// This file consolidates all utility functions from main page and existing helpers
+
+import { MarkerDescription, Gender, UserMarker } from '@/types';
+import { HIPHOP_TRACKS } from '@/lib/constants';
+
+// ========== DISTANCE AND LOCATION FUNCTIONS ==========
+
+// Helper function to calculate distance between two coordinates in meters (Haversine formula)
 export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
   const R = 6371e3; // Earth's radius in meters
   const φ1 = lat1 * Math.PI / 180;
@@ -14,8 +22,68 @@ export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2
   return R * c;
 };
 
-// Enhanced ranking system with 70 unique ranks
+// Helper function to calculate bounds from markers
+export const calculateBoundsFromMarkers = (markers: UserMarker[]): [[number, number], [number, number]] | null => {
+  if (markers.length === 0) return null;
+  
+  const lats = markers.map(m => m.position[0]);
+  const lngs = markers.map(m => m.position[1]);
+  
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  
+  return [[minLat, minLng], [maxLat, maxLng]];
+};
+
+// ========== REPUTATION AND RANKING FUNCTIONS ==========
+
+// REP Calculation Functions
+export const calculateRepForMarker = (distanceFromCenter: number | null, markerDescription: MarkerDescription): number => {
+  let rep = 10; // Base REP for placing any marker
+  
+  if (distanceFromCenter && distanceFromCenter <= 50) {
+    rep += 5;
+  }
+  
+  switch (markerDescription) {
+    case 'Piece/Bombing':
+    case 'Burner/Heater':
+      rep += 15;
+      break;
+    case 'Throw-Up':
+    case 'Roller/Blockbuster':
+      rep += 10;
+      break;
+    case 'Stencil/Brand/Stamp':
+    case 'Paste-Up/Poster':
+      rep += 8;
+      break;
+    case 'Tag/Signature':
+      rep += 5;
+      break;
+    default:
+      rep += 3;
+  }
+  
+  return rep;
+};
+
+// Basic rank calculation (from main page)
 export const calculateRank = (rep: number): string => {
+  if (rep >= 300) return 'WRITER';
+  if (rep >= 100) return 'VANDAL';
+  return 'TOY';
+};
+
+// Basic level calculation (from main page)
+export const calculateLevel = (rep: number): number => {
+  return Math.floor(rep / 100) + 1;
+};
+
+// Enhanced ranking system with 70 unique ranks (from helpers.ts)
+export const calculateEnhancedRank = (rep: number): string => {
   // Apprentice Phase
   if (rep >= 20000) return 'GRAFFITI OMEGA ⭐⭐⭐';
   if (rep >= 15000) return 'URBAN ETERNAL ♾️';
@@ -99,12 +167,12 @@ export const calculateRank = (rep: number): string => {
   return 'TOY';
 };
 
-// Enhanced level calculation for more frequent level ups
-export const calculateLevel = (rep: number): number => {
+// Enhanced level calculation for more frequent level ups (from helpers.ts)
+export const calculateEnhancedLevel = (rep: number): number => {
   return Math.floor(rep / 50) + 1; // More frequent level ups
 };
 
-// Rank tiers for progression tracking
+// Rank progression tracking (from helpers.ts)
 const rankTiers = [
   { name: 'TOY', repRequired: 0 },
   { name: 'SCRIBBLER', repRequired: 10 },
@@ -180,7 +248,7 @@ const rankTiers = [
 
 // Helper function to get rank progression info
 export const getRankInfo = (rep: number) => {
-  const currentRank = calculateRank(rep);
+  const currentRank = calculateEnhancedRank(rep);
   const currentIndex = rankTiers.findIndex(tier => tier.name === currentRank);
   const nextRank = currentIndex < rankTiers.length - 1 ? rankTiers[currentIndex + 1].name : null;
   const repToNext = nextRank ? rankTiers[currentIndex + 1].repRequired - rep : 0;
@@ -202,3 +270,129 @@ export const getRankInfo = (rep: number) => {
   };
 };
 
+// ========== MUSIC AND MEDIA FUNCTIONS ==========
+
+// Helper function to unlock a random track
+export const unlockRandomTrack = (currentUnlocked: string[]): string[] => {
+  // Get tracks that haven't been unlocked yet
+  const availableTracks = HIPHOP_TRACKS.filter(track =>
+    !currentUnlocked.includes(track)
+  );
+
+  if (availableTracks.length === 0) return currentUnlocked;
+
+  // Pick random track
+  const randomTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)];
+
+  return [...currentUnlocked, randomTrack];
+};
+
+// Helper function to get track name from URL
+export const getTrackNameFromUrl = (url: string): string => {
+  if (url === 'blackout-classic.mp3') return 'Blackout (Default)';
+  if (url.includes('soundcloud.com')) {
+    // Extract track name from SoundCloud URL
+    const segments = url.split('/');
+    const trackSegment = segments[segments.length - 1];
+    return trackSegment.split('-').map(word =>
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+  }
+  return 'Unknown Track';
+};
+
+// Function to create SoundCloud iframe URL
+export const createSoundCloudIframeUrl = (trackUrl: string): string => {
+  const params = new URLSearchParams({
+    url: trackUrl,
+    color: 'ff5500',
+    auto_play: 'false',
+    hide_related: 'true',
+    show_comments: 'false',
+    show_user: 'false',
+    show_reposts: 'false',
+    show_teaser: 'false',
+    visual: 'false',
+    sharing: 'false',
+    buying: 'false',
+    download: 'false',
+    show_playcount: 'false',
+    show_artwork: 'false',
+    show_playlist: 'false'
+  });
+  
+  return `https://w.soundcloud.com/player/?${params.toString()}`;
+};
+
+// ========== AVATAR GENERATION ==========
+
+// Updated avatar generator function with gender-specific avatars and size parameter
+export const generateAvatarUrl = (userId: string, username: string, gender?: Gender, size: number = 80): string => {
+  const seed = username || userId;
+  
+  // Define avatar styles based on gender
+  let avatarStyle = 'open-peeps'; // default style
+  
+  if (gender === 'male') {
+    avatarStyle = 'adventurer'; // boyish/ masculine style
+  } else if (gender === 'female') {
+    avatarStyle = 'avataaars'; // girlish/ feminine style
+  } else if (gender === 'other') {
+    avatarStyle = 'bottts'; // alien/robot style for 'other'
+  } else if (gender === 'prefer-not-to-say') {
+    avatarStyle = 'identicon'; // android/geometric style
+  }
+  
+  // Color palette for avatars
+  const colors = [
+    '4dabf7', '10b981', '8b5cf6', 'f59e0b', 'ec4899', 'f97316',
+    '3b82f6', '06b6d4', '8b5cf6', 'ef4444', '84cc16', '14b8a6'
+  ];
+  const selectedColor = colors[Math.floor(Math.random() * colors.length)];
+  
+  // Construct URL based on style
+  let url = '';
+  
+  switch (avatarStyle) {
+    case 'adventurer': // Male (boyish)
+      url = `https://api.dicebear.com/7.x/adventurer/svg?seed=${seed}&backgroundColor=${selectedColor}&size=${size}`;
+      break;
+      
+    case 'avataaars': // Female (girlish)
+      url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}&size=${size}`;
+      break;
+      
+    case 'bottts': // Other (alien/robot)
+      url = `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}&backgroundColor=${selectedColor}&size=${size}`;
+      break;
+      
+    case 'identicon': // Prefer not to say (android/geometric)
+      url = `https://api.dicebear.com/7.x/identicon/svg?seed=${seed}&backgroundColor=${selectedColor}&size=${size}`;
+      break;
+      
+    default: // open-peeps as fallback
+      url = `https://api.dicebear.com/7.x/open-peeps/svg?seed=${seed}&backgroundColor=${selectedColor}&size=${size}`;
+  }
+  
+  return url;
+};
+
+// Simplified avatar generator (from helpers.ts)
+export const generateSimpleAvatarUrl = (userId: string, username: string, gender?: string, size: number = 80): string => {
+  // Use DiceBear API for free avatars
+  const seed = username || userId;
+  const colors = ['4dabf7', '10b981', '8b5cf6', 'f59e0b', 'ec4899', 'f97316'];
+  const selectedColor = colors[Math.floor(Math.random() * colors.length)];
+  
+  // Build DiceBear URL with size parameter
+  let url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}&size=${size}`;
+  
+  // Add optional features based on gender
+  if (gender === 'male' && Math.random() > 0.5) {
+    url += '&facialHair=beard';
+  }
+  
+  return url;
+};
+
+// ========== END OF HELPER FUNCTIONS ==========

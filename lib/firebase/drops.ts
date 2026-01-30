@@ -51,14 +51,14 @@ export const saveDropToFirestore = async (drop: {
 };
 
 /**
- * Load all drops from Firestore
+ * Load drops from Firestore with optimized query limits
  */
-export const loadAllDrops = async (): Promise<Drop[]> => {
+export const loadAllDrops = async (maxDrops: number = 100): Promise<Drop[]> => {
   try {
     const q = query(
       collection(db, 'drops'),
       orderBy('timestamp', 'desc'),
-      limit(500)
+      limit(maxDrops)
     );
 
     const querySnapshot = await getDocs(q);

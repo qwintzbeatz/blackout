@@ -5,7 +5,9 @@ import {
   where, 
   getDocs, 
   deleteDoc,
-  Timestamp 
+  doc,
+  Timestamp,
+  limit
 } from 'firebase/firestore';
 import { db } from './config';
 import { UserMarker } from '@/lib/types/blackout';
@@ -33,11 +35,12 @@ export const saveMarkerToFirestore = async (marker: UserMarker): Promise<string 
   }
 };
 
-export const loadUserMarkersFromFirestore = async (userId: string): Promise<UserMarker[]> => {
+export const loadUserMarkersFromFirestore = async (userId: string, maxMarkers: number = 100): Promise<UserMarker[]> => {
   try {
     const q = query(
       collection(db, 'markers'), 
-      where('userId', '==', userId)
+      where('userId', '==', userId),
+      limit(maxMarkers)
     );
     
     const querySnapshot = await getDocs(q);
@@ -77,11 +80,12 @@ export const deleteMarkerFromFirestore = async (firestoreId: string): Promise<vo
   }
 };
 
-export const deleteAllUserMarkersFromFirestore = async (userId: string): Promise<void> => {
+export const deleteAllUserMarkersFromFirestore = async (userId: string, maxMarkers: number = 100): Promise<void> => {
   try {
     const q = query(
       collection(db, 'markers'), 
-      where('userId', '==', userId)
+      where('userId', '==', userId),
+      limit(maxMarkers)
     );
     
     const querySnapshot = await getDocs(q);

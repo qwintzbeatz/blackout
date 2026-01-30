@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { UserMarker, Comment } from '@/lib/types/blackout';
-import { FirebaseUser } from 'firebase/auth';
+import { UserMarker, Comment, Gender } from '@/types';
+import { User as FirebaseUser } from 'firebase/auth';
 
 interface MarkerPopupCardProps {
   marker: UserMarker;
@@ -212,7 +212,7 @@ export default function MarkerPopupCard({
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
                   <img
-                    src={comment.userProfilePic || generateAvatarUrl(comment.userId, comment.username)}
+                    src={comment.userProfilePic || generateAvatarUrl(comment.userId, comment.username, undefined, 40)}
                     alt={comment.username}
                     style={{
                       width: '20px',

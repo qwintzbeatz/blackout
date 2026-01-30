@@ -1,8 +1,8 @@
 // hooks/useStoryManager.ts
 import { useState, useEffect, useCallback } from 'react';
-import { collection, doc, getDoc, setDoc, updateDoc, query, where, onSnapshot, Timestamp, orderBy } from 'firebase/firestore';
+import { collection, doc, getDoc, setDoc, updateDoc, query, where, onSnapshot, Timestamp, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { UserProfile, UserMarker, Drop, StoryMission, BlackoutEvent } from '@/lib/types/blackout';
+import { UserProfile, UserMarker, Drop, StoryMission, BlackoutEvent } from '@/types';
 
 export const useStoryManager = (userId: string | null, userProfile: UserProfile | null) => {
   const [currentAct, setCurrentAct] = useState(1);
@@ -100,7 +100,8 @@ export const useStoryManager = (userId: string | null, userProfile: UserProfile 
     const q = query(
       collection(db, 'blackout_events'),
       where('affectedDrops', 'array-contains', userId),
-      orderBy('timestamp', 'desc')
+      orderBy('timestamp', 'desc'),
+      limit(50)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {

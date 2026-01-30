@@ -109,56 +109,56 @@ const HIPHOP_TRACKS = [
   "https://soundcloud.com/colourway_records/colourway-put-your-colors-on",
   "https://soundcloud.com/terangihika/01-rec-2024-09-10",
   "https://soundcloud.com/noize_kontrolnz/nk-radio-w-observe-feat-windu-22042025-13",
-  "https://soundcloud.com/smashproof/smashproof-brother",
-  "https://soundcloud.com/savageofficial/savage-swing",
-  "https://soundcloud.com/david-dallas/david-dallas-til-next-time",
-  "https://soundcloud.com/chillibumps/chillibumps-sunshine",
-  "https://soundcloud.com/ladi6/ladi6-like-a-piano",
-  "https://soundcloud.com/avaruusavaruus/avaruus-flowers",
-  "https://soundcloud.com/seth-haunt/seth-haunt",
-  "https://soundcloud.com/teamdynasty/team-dynasty-claire",
-  "https://soundcloud.com/choirboysnz/choir-boys-choir",
-  "https://soundcloud.com/smokomusic/smoko-eats",
-  "https://soundcloud.com/louisknows/louis-baker-addict",
-  "https://soundcloud.com/melodownz/melodownz-waves",
-  "https://soundcloud.com/swidtmyson/swidt-flex",
-  "https://soundcloud.com/sid-diamond/sid-diamonds",
-  "https://soundcloud.com/chinesemanufacturer/cm-001",
-  "https://soundcloud.com/lewismccallum/lewis-mccallum-out-of-time",
-  "https://soundcloud.com/noah-slee/noah-slee-dreamboat",
-  "https://soundcloud.com/laharl/laharl-sleep",
-  "https://soundcloud.com/diggydupe/diggy-dupe-rain",
-  "https://soundcloud.com/chancetherapper/chance-nz-remix",
-  "https://soundcloud.com/jamestm/james-reid-track",
-  "https://soundcloud.com/mzwetwo/mz-we-two-battle",
-  "https://soundcloud.com/raiza-biza/raiza-biza-nairobi",
-  "https://soundcloud.com/tamahaschi/tama-haschi-fresh",
-  "https://soundcloud.com/sir-verb/sir-verb-the-light",
-  "https://soundcloud.com/che-fu/che-fu-chains",
-  "https://soundcloud.com/deach/deach-beats",
-  "https://soundcloud.com/the-knightstalkers/knightstalkers-night",
-  "https://soundcloud.com/opensouls/opensouls-hold-on",
-  "https://soundcloud.com/rika/rika-moa",
-  "https://soundcloud.com/imugi/imugi-dragonfruit",
-  "https://soundcloud.com/bennytony/benny-tony-coastin",
-  "https://soundcloud.com/louisknows/louis-baker-black-crow",
-  "https://soundcloud.com/tamahaschi/tama-haschi-returns",
-  "https://soundcloud.com/teamdynasty/team-dynasty-anthem",
-  "https://soundcloud.com/mikey-nobull/mikey-beats",
-  "https://soundcloud.com/alkalinofficial/alkalin-heat",
-  "https://soundcloud.com/solomoncrook/solomon-crook-track",
-  "https://soundcloud.com/noah-slee/noah-slee-twisted",
-  "https://soundcloud.com/djmanan/manan-mix",
-  "https://soundcloud.com/raiza-biza/raiza-biza-higher",
-  "https://soundcloud.com/ladi6/ladi6-diamonds",
-  "https://soundcloud.com/louisknows/louis-baker-rainbow",
-  "https://soundcloud.com/choirboysnz/choir-boys-holy",
-  "https://soundcloud.com/melodownz/melodownz-ready",
-  "https://soundcloud.com/swidtmyson/swidt-ride",
-  "https://soundcloud.com/avaruusavaruus/avaruus-space",
-  "https://soundcloud.com/homebrew/homebrew-benefit",
-  "https://soundcloud.com/tamahaschi/tama-haschi-last",
-  "https://soundcloud.com/smokomusic/smoko-eats-vol2"
+  "https://soundcloud.com/melodownz/same-as-before",
+  "https://soundcloud.com/melodownz/eastdale-blues",
+  "https://soundcloud.com/melodownz/chocolate",
+  "https://soundcloud.com/homebrewcrew/home-brew-listen-to-us-feat",
+  "https://soundcloud.com/homebrewcrew/home-brew-just-another-prod-by",
+  "https://soundcloud.com/churchap/ready-or-not",
+  "https://soundcloud.com/swidt/kelz-garage-feat-lomez-brown",
+  "https://soundcloud.com/ladi6/4-walk-right-up-1",
+  "https://soundcloud.com/neng42/scribe-not-many-neng-bootleg",
+  "https://soundcloud.com/tipenemusic/tipene-doin-my-thing-ft-scribe",
+  "https://soundcloud.com/steven-ngametua-teritaiti/deceptikonz-p-money-fallen",
+  "https://soundcloud.com/skzr-music/moonlight-ftflocki",
+  "https://soundcloud.com/skzr-music/free-ft-oxoxci",
+  "https://soundcloud.com/skzr-music/life-hacks",
+  "https://soundcloud.com/skzr-music/trip-into-my-mind-master",
+  "https://soundcloud.com/skzr-music/emotions-ft-jlowtbh",
+  "https://soundcloud.com/skzr-music/love-sux",
+  "https://soundcloud.com/skzr-music/vibe-with-me",
+  "https://soundcloud.com/skzr-music/helen-clark-ft-c-brook-tynie-t",
+  "https://soundcloud.com/skzr-music/matters-freestyle",
+  "https://soundcloud.com/jlowtbh/ironic-hope-prod-classixs",
+  "https://soundcloud.com/intreigue/misunderstood-h-dub-c",
+  "https://soundcloud.com/intreigue/back-in-the-day-h-dub-c",
+  "https://soundcloud.com/intreigue/turn-dat-40-up-hdub-c",
+  "https://soundcloud.com/dawnraidmusic/savage-all-in-featuring",
+  "https://soundcloud.com/marekothehorse/07-deceptikonz-back-to-front-freestyle",
+  "https://soundcloud.com/marekothehorse/mareko-this-is-it",
+  "https://soundcloud.com/marekothehorse/rex-martel-free-at-last",
+  "https://soundcloud.com/diggydupe/diggy-dupe-godlike",
+  "https://soundcloud.com/diggydupe/bring-back-badu-prod-tantu",
+  "https://soundcloud.com/user-565273118/nesian-mystik-sun-goes-down",
+  "https://soundcloud.com/anatonga-patricia-uate/nesian-mystik-nesian-style",
+  "https://soundcloud.com/freeloaderactivity/nesian-mystik-unity",
+  "https://soundcloud.com/jacob5-1/nesian-mystik-for-the-people",
+  "https://soundcloud.com/tianna-cole-440312719/nesian-mystik-robbin-hood",
+  "https://soundcloud.com/t1zzle/aquarius-sir-t",
+  "https://soundcloud.com/t1zzle/hands-up-featuring-tha",
+  "https://soundcloud.com/t1zzle/further-than-you-thought",
+  "https://soundcloud.com/t1zzle/ready-for-whatever-feat-sidney",
+  "https://soundcloud.com/t1zzle/celebrate-mugz-x-sir-t-x-resin-one",
+  "https://soundcloud.com/diamonddistrict-1/bottles",
+  "https://soundcloud.com/frasko-1/frasko-outlaw",
+  "https://soundcloud.com/user-27171095/equinimity-nz-hiphop",
+  "https://soundcloud.com/john-donnelly-992133591/kwick-ft-john-dee-with-you",
+  "https://soundcloud.com/phdhiphop/phd-summer-nz",
+  "https://soundcloud.com/madisnzofficial/madis-thats-life-produced-by",
+  "https://soundcloud.com/empirerecordsnz/tipene-west-side-hori-remix",
+  "https://soundcloud.com/markangel-71269802/smashproof-feat-gin-wigmore-brother",
+  "https://soundcloud.com/johnny-sicario/nobody-to-me-dame-teezee",
+  "https://soundcloud.com/johnny-sicario/armed-dangerous-coey-east"
 
 ];
 
@@ -380,7 +380,7 @@ const panelStyle = {
   padding: '16px',
   borderRadius: '12px',
   boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
-  width: 'min(90vw, 400px)',
+  width: 'min(110vw, 400px)',
   maxHeight: '75vh',
   overflowY: 'auto' as const,
   border: '1px solid rgba(255,255,255,0.15)',
@@ -3125,23 +3125,54 @@ const handleMarkerDrop = useCallback(async () => {
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#f0f0f0',
-        backgroundImage: 'radial-gradient(#e5e7eb 1px, transparent 1px)',
-        backgroundSize: '20px 20px'
+        backgroundColor: '#0f172a',
+        backgroundImage: 'radial-gradient(circle at 10% 20%, rgba(255, 107, 107, 0.1) 0%, transparent 20%), radial-gradient(circle at 90% 80%, rgba(78, 205, 196, 0.1) 0%, transparent 20%)'
       }}>
         <div style={{
-          backgroundColor: 'white',
+          backgroundColor: 'rgba(15, 23, 42, 0.9)',
           padding: '40px',
-          borderRadius: '16px',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
+          borderRadius: '20px',
+          boxShadow: '0 25px 50px rgba(0,0,0,0.3)',
           width: '100%',
           maxWidth: '500px',
-          textAlign: 'center'
+          textAlign: 'center',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(20px)'
         }}>
-          <h2 style={{ color: '#1e3a8a', marginBottom: '10px' }}>Create Your Profile</h2>
-          <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '30px' }}>
-            Choose your crew and begin the Blackout NZ story
-          </p>
+          <div style={{
+            marginBottom: '30px',
+            textAlign: 'center'
+          }}>
+            <div style={{
+              fontSize: '28px',
+              fontWeight: 'bold',
+              background: 'linear-gradient(135deg, #ff6b6b, #4ecdc4, #4dabf7)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              marginBottom: '10px'
+            }}>
+              🎨 BLACKOUT NZ
+            </div>
+            <div style={{
+              color: '#cbd5e1',
+              fontSize: '16px',
+              marginBottom: '5px'
+            }}>
+              Create Your Graffiti Profile
+            </div>
+            <div style={{
+              fontSize: '14px',
+              color: '#94a3b8',
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              padding: '10px',
+              borderRadius: '8px',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              marginTop: '15px'
+            }}>
+              <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>Choose your crew</span> and begin the street art journey across Aotearoa
+            </div>
+          </div>
           
           <form onSubmit={handleProfileSetup}>
             <div style={{ marginBottom: '20px' }}>
@@ -3369,19 +3400,7 @@ const handleMarkerDrop = useCallback(async () => {
                       textAlign: 'left',
                       marginTop: '15px'
                     }}>
-                      <div style={{ fontWeight: 'bold', color: '#1e3a8a', marginBottom: '5px' }}>
-                        ⚠️ Important Choice:
-                      </div>
-                      <div style={{ fontSize: '11px' }}>
-                        Your crew choice affects:
-                        <ul style={{ margin: '8px 0 8px 20px' }}>
-                          <li>Story progression and missions</li>
-                          <li>Special abilities and bonuses</li>
-                          <li>Crew-specific plot twists</li>
-                          <li>Multiplayer interactions</li>
-                        </ul>
-                        You can change crews later, but you'll lose crew-specific progress.
-                      </div>
+
                     </div>
                   )}
                 </div>
@@ -4864,7 +4883,7 @@ const handleMarkerDrop = useCallback(async () => {
         style={{
           position: 'absolute',
           top: 25,
-          left: 50,
+          left: 250,
           backgroundColor: isOfflineMode ? '#ef4444' : '#10b981',
           color: 'white',
           padding: '10px 15px',

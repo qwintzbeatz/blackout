@@ -3,7 +3,7 @@ import { User } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { UserProfile } from '@/lib/types/blackout';
-import { generateAvatarUrl } from '@/lib/utils/helpers';
+import { generateAvatarUrl } from '@/lib/utils';
 
 export const useUserProfile = (user: User | null) => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -18,7 +18,7 @@ export const useUserProfile = (user: User | null) => {
         
         let profilePicUrl = data.profilePicUrl;
         if (!profilePicUrl || profilePicUrl === '') {
-          profilePicUrl = generateAvatarUrl(currentUser.uid, data.username, data.gender);
+          profilePicUrl = generateAvatarUrl(currentUser.uid, data.username, data.gender, 60);
         }
         
         setUserProfile({
@@ -53,7 +53,7 @@ export const useUserProfile = (user: User | null) => {
     
     setLoadingProfile(true);
     try {
-      const profilePicUrl = generateAvatarUrl(user.uid, data.username.trim(), data.gender);
+      const profilePicUrl = generateAvatarUrl(user.uid, data.username.trim(), data.gender, 60);
       
       const userProfileData = {
         uid: user.uid,
