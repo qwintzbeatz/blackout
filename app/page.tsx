@@ -603,7 +603,6 @@ const Circle = dynamic(
   () => import('react-leaflet').then((mod) => mod.Circle),
   { ssr: false }
 );
-
   // 🆕 CrewChat Component (FIXED version with DELETE button & Profile Pics)
 function CrewChatPanel({ crewId, onClose, userProfile }: { 
   crewId: string | null, 
@@ -1733,6 +1732,18 @@ const {
       
       setUserProfile(userProfileData);
       
+      // 🎵 START MUSIC DURING PROFILE SETUP
+      // Set up the default track for new users
+      const defaultTrack = 'https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1';
+      setUnlockedTracks([defaultTrack]);
+      setCurrentTrackIndex(0);
+      setIsPlaying(true);
+      
+      // Initialize the SoundCloud player with the default track
+      setTimeout(() => {
+        initializeMainPlayer();
+      }, 100);
+      
       setShowProfileSetup(false);
       setProfileUsername('');
       setProfileCrewName('');
@@ -1741,6 +1752,11 @@ const {
       
       await loadTopPlayers();
       await loadAllMarkers();
+      
+      // 🎵 Show welcome message with music info
+      setTimeout(() => {
+        alert(`🎉 Welcome to Blackout NZ, ${profileUsername}!\n\n🎵 Your music is now playing: Blackout - Classic\n\nThe city awaits your tags. Get out there and make your mark!`);
+      }, 500);
       
     } catch (error: any) {
       console.error('Error creating profile:', error);
@@ -4151,163 +4167,7 @@ const handleMarkerDrop = useCallback(async () => {
                   click: () => setSelectedMarker(marker)
                 }}
               >
-                <Popup>
-                  <div style={{ textAlign: 'center', minWidth: '300px' }}>
-                    <div style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: '8px',
-                      marginBottom: '10px'
-                    }}>
-                      <div style={{
-                        width: '12px',
-                        height: '12px',
-                        borderRadius: '50%',
-                        backgroundColor: marker.color,
-                        border: '2px solid white',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                      }}></div>
-                      <strong style={{ color: marker.color }}>📍 {marker.name}</strong>
-                      {marker.userId === user?.uid && (
-                        <span style={{
-                          fontSize: '10px',
-                          background: '#4dabf7',
-                          color: 'white',
-                          padding: '2px 6px',
-                          borderRadius: '10px',
-                          marginLeft: 'auto'
-                        }}>
-                          YOURS
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-                      <div>By: <strong>{marker.username || 'Anonymous'}</strong></div>
-                      <div>Lat: {marker.position[0].toFixed(6)}</div>
-                      <div>Lng: {marker.position[1].toFixed(6)}</div>
-                      <div style={{ fontWeight: 'bold', marginTop: '5px', color: '#4dabf7' }}>
-                        Type: {marker.description}
-                      </div>
-                      <div style={{ marginTop: '5px', fontSize: '11px', color: marker.color }}>
-                        Marker Color: {marker.color}
-                      </div>
-                      
-                      {marker.repEarned && (
-                        <div style={{ 
-                          color: '#10b981',
-                          marginTop: '5px',
-                          fontWeight: 'bold'
-                        }}>
-                          🎉 +{marker.repEarned} REP Earned
-                        </div>
-                      )}
-                      
-                      {marker.distanceFromCenter && gpsPosition && (
-                        <div style={{ 
-                          color: marker.distanceFromCenter <= expandedRadius ? '#10b981' : '#f59e0b',
-                          marginTop: '5px'
-                        }}>
-                          Distance from you: {Math.round(marker.distanceFromCenter)}m
-                          {marker.distanceFromCenter <= expandedRadius && ` (within ${expandedRadius}m radius ✓)`}
-                        </div>
-                      )}
-                      
-                      {marker.createdAt && (
-                        <div style={{ marginTop: '5px', fontSize: '10px', color: '#999' }}>
-                          Tagged: {marker.createdAt.toLocaleDateString()} {marker.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      )}
-                      
-                      {marker.userId === user?.uid && (
-                        <div style={{ marginTop: '10px', borderTop: '1px solid #e5e7eb', paddingTop: '10px' }}>
-                          <div style={{ fontSize: '11px', marginBottom: '5px', color: '#666' }}>
-                            Select Marker Type:
-                          </div>
-                          <select
-                            value={marker.name}
-                            onChange={(e) => updateMarker(marker.id, { name: e.target.value as MarkerName })}
-                            style={{
-                              width: '100%',
-                              padding: '6px',
-                              marginBottom: '8px',
-                              border: '1px solid #d1d5db',
-                              borderRadius: '4px',
-                              fontSize: '12px',
-                              backgroundColor: 'white'
-                            }}
-                          >
-                            {MARKER_NAMES.map((name) => (
-                              <option key={name} value={name}>
-                                {name}
-                              </option>
-                            ))}
-                          </select>
-                          
-                          <div style={{ fontSize: '11px', marginBottom: '5px', color: '#666' }}>
-                            Select Description:
-                          </div>
-                          <select
-                            value={marker.description}
-                            onChange={(e) => updateMarker(marker.id, { description: e.target.value as MarkerDescription })}
-                            style={{
-                              width: '100%',
-                              padding: '6px',
-                              marginBottom: '10px',
-                              border: '1px solid #d1d5db',
-                              borderRadius: '4px',
-                              fontSize: '12px',
-                              backgroundColor: 'white'
-                            }}
-                          >
-                            {MARKER_DESCRIPTIONS.map((desc) => (
-                              <option key={desc} value={desc}>
-                                {desc}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                      <div style={{ display: 'flex', gap: '5px', marginTop: '5px' }}>
-                        <button
-                          onClick={() => goToMarker(marker)}
-                          style={{
-                            backgroundColor: '#4dabf7',
-                            color: 'white',
-                            border: 'none',
-                            padding: '6px 10px',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '11px',
-                            flex: 1
-                          }}
-                        >
-                          Go Here
-                        </button>
-                        {marker.userId === user?.uid && (
-                          <button
-                            onClick={() => deleteMarker(marker.id)}
-                            style={{
-                              backgroundColor: '#ef4444',
-                              color: 'white',
-                              border: 'none',
-                              padding: '6px 10px',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '11px',
-                              flex: 1
-                            }}
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </div>
-                      <div style={{ fontSize: '10px', color: '#999', marginTop: '8px' }}>
-                        Created: {marker.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </div>
-                  </div>
-                </Popup>
+
               </Marker>
             );
           })
@@ -5072,25 +4932,25 @@ const handleMarkerDrop = useCallback(async () => {
       )}
 
       {/* ========== DUAL CONTROL PANELS ========== */}
-      <div style={{
-        position: 'absolute',
-        top: 80,
-        left: 0,
-        display: 'flex',
-        gap: '15px',
-        zIndex: 1200,
-        maxHeight: '80vh'
-      }}>
+<div style={{
+            position: 'absolute' as const,
+            top: 80,
+            left: 0,
+            display: 'flex',
+            gap: '15px',
+            zIndex: 1200,
+            maxHeight: '80vh'
+          }}>
         {/* Left Panel - Profile & Stats (Blackbook) */}
         {showProfilePanel && (
-            <div style={{
-              ...panelStyle,
-              border: '1px solid #333',
-              display: 'flex',
-              flexDirection: 'column',
-              animation: 'slideInLeft 0.3s ease-out',
-              position: 'relative'
-            }}>
+          <div style={{
+            ...panelStyle,
+            border: '1px solid #333',
+            display: 'flex',
+            flexDirection: 'column',
+            animation: 'slideInLeft 0.3s ease-out',
+            position: 'relative' as const
+          }}>
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -6533,14 +6393,15 @@ const handleMarkerDrop = useCallback(async () => {
 
         {/* Music Panel */}
             {showMusicPanel && (
-              <div style={{
-                ...panelStyle,
-                border: '1px solid #333',
-                display: 'flex',
-                flexDirection: 'column',
-                animation: 'slideInRight 0.3s ease-out',
-                minWidth: '350px'
-              }}>
+<div style={{
+            ...panelStyle,
+            border: '1px solid #333',
+            display: 'flex',
+            flexDirection: 'column',
+            animation: 'slideInRight 0.3s ease-out',
+            minWidth: '350px',
+            position: 'absolute' as const
+          }}>
                 <div style={{
                   display: 'flex',
                   justifyContent: 'space-between',
