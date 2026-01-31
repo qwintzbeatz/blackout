@@ -1,0 +1,492 @@
+'use client';
+
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { uploadImageToImgBB } from '@/lib/services/imgbb';
+
+interface PhotoSelectionModalProps {
+  isVisible: boolean;
+  onClose: () => void;
+  onPhotoSelect: (photoData: { url: string; file: File }) => void;
+  onPhotoCapture?: (position: { lat: number; lng: number }) => void;
+}
+
+const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
+  isVisible,
+  onClose,
+  onPhotoSelect,
+  onPhotoCapture
+}) => {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [cameraMode, setCameraMode] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  // Handle file selection
+  const handleFileSelect = useCallback((file: File) => {
+    if (file && file.type.startsWith('image/')) {
+      setSelectedFile(file);
+      setError(null);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreviewUrl(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setError('Please select a valid image file');
+    }
+  }, []);
+
+  // Handle file input change
+  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileSelect(file);
+    }
+  }, [handleFileSelect]);
+
+  // Handle drag and drop
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      handleFileSelect(file);
+    }
+  }, [handleFileSelect]);
+
+  // Handle upload
+  const handleUpload = useCallback(async () => {
+    if (!selectedFile) return;
+    
+    setIsUploading(true);
+    setError(null);
+    
+    try {
+      // Simulate upload progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => Math.min(prev + 10, 90));
+      }, 100);
+      
+      const result = await uploadImageToImgBB(selectedFile);
+      
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+      
+      setTimeout(() => {
+        onPhotoSelect({
+          url: result.url,
+          file: selectedFile
+        });
+        handleClose();
+      }, 500);
+      
+    } catch (error: any) {
+      setError(error.message || 'Failed to upload image');
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
+  }, [selectedFile, onPhotoSelect]);
+
+  // Handle camera capture
+  const handleCameraCapture = useCallback(async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0);
+      
+      canvas.toBlob(async (blob) => {
+        if (blob) {
+          const file = new File([blob], 'camera-photo.jpg', { type: 'image/jpeg' });
+          handleFileSelect(file);
+          setCameraMode(false);
+          
+          // Stop camera
+          const stream = video.srcObject as MediaStream;
+          if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+          }
+        }
+      }, 'image/jpeg', 0.8);
+    }
+  }, [handleFileSelect]);
+
+  // Start camera
+  const startCamera = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } 
+      });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        setCameraMode(true);
+      }
+    } catch (error) {
+      console.error('Camera access denied:', error);
+      setError('Camera access denied. Please use file upload instead.');
+    }
+  }, []);
+
+  // Stop camera
+  const stopCamera = useCallback(() => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+      setCameraMode(false);
+    }
+  }, []);
+
+  // Handle close
+  const handleClose = useCallback(() => {
+    setSelectedFile(null);
+    setPreviewUrl('');
+    setError(null);
+    setUploadProgress(0);
+    setIsUploading(false);
+    setCameraMode(false);
+    stopCamera();
+    onClose();
+  }, [onClose, stopCamera]);
+
+  // Handle escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isVisible) {
+        handleClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isVisible, handleClose]);
+
+  if (!isVisible) return null;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.9)',
+      backdropFilter: 'blur(12px)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 2000
+    }}>
+      <div style={{
+        backgroundColor: 'rgba(0, 0, 0, 0.95)',
+        border: '1px solid rgba(255,255,255,0.1)',
+        borderRadius: '16px',
+        padding: '24px',
+        width: 'min(90vw, 450px)',
+        maxWidth: '450px',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+        position: 'relative',
+        color: '#ffffff'
+      }}>
+        {/* Header */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '20px'
+        }}>
+          <h2 style={{
+            margin: 0,
+            fontSize: '20px',
+            fontWeight: 'bold',
+            color: '#ffffff'
+          }}>
+            📸 Add Photo
+          </h2>
+          
+          <button
+            onClick={handleClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#ffffff',
+              fontSize: '20px',
+              cursor: 'pointer',
+              padding: '4px',
+              borderRadius: '4px',
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Mode Toggle */}
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          marginBottom: '20px'
+        }}>
+          <button
+            onClick={() => {
+              setCameraMode(false);
+              stopCamera();
+            }}
+            style={{
+              flex: 1,
+              padding: '8px',
+              backgroundColor: !cameraMode ? '#ff6b35' : 'rgba(255,255,255,0.1)',
+              border: 'none',
+              color: '#ffffff',
+              borderRadius: '8px',
+              fontSize: '12px',
+              cursor: 'pointer'
+            }}
+          >
+            📁 Upload
+          </button>
+          
+          <button
+            onClick={() => {
+              if (!cameraMode) {
+                startCamera();
+              } else {
+                handleCameraCapture();
+              }
+            }}
+            style={{
+              flex: 1,
+              padding: '8px',
+              backgroundColor: cameraMode ? '#ff6b35' : 'rgba(255,255,255,0.1)',
+              border: 'none',
+              color: '#ffffff',
+              borderRadius: '8px',
+              fontSize: '12px',
+              cursor: 'pointer'
+            }}
+          >
+            {cameraMode ? '📸 Capture' : '📷 Camera'}
+          </button>
+        </div>
+
+        {/* Content */}
+        {!cameraMode ? (
+          /* File Upload Mode */
+          <div>
+            {/* Drag & Drop Area */}
+            <div
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                border: '2px dashed rgba(255,255,255,0.3)',
+                borderRadius: '12px',
+                padding: '40px 20px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                transition: 'border-color 0.2s',
+                marginBottom: '20px'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#ff6b35';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)';
+              }}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileInputChange}
+                style={{ display: 'none' }}
+              />
+              
+              {previewUrl ? (
+                <img
+                  src={previewUrl}
+                  alt="Preview"
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '200px',
+                    borderRadius: '8px',
+                    marginBottom: '12px'
+                  }}
+                />
+              ) : (
+                <div>
+                  <div style={{ fontSize: '48px', marginBottom: '12px' }}>📁</div>
+                  <div style={{ fontSize: '14px', marginBottom: '4px' }}>
+                    Drag & drop photo here
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#b0b0b0' }}>
+                    or click to browse
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {selectedFile && (
+              <div style={{
+                fontSize: '12px',
+                color: '#b0b0b0',
+                marginBottom: '16px',
+                textAlign: 'center'
+              }}>
+                Selected: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Camera Mode */
+          <div style={{ textAlign: 'center' }}>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              style={{
+                width: '100%',
+                maxWidth: '350px',
+                borderRadius: '8px',
+                backgroundColor: '#000000'
+              }}
+            />
+            <canvas ref={canvasRef} style={{ display: 'none' }} />
+            
+            <div style={{
+              fontSize: '12px',
+              color: '#b0b0b0',
+              marginTop: '12px'
+            }}>
+              Position yourself and tap "Capture"
+            </div>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <div style={{
+            backgroundColor: 'rgba(255, 68, 68, 0.1)',
+            border: '1px solid #ff4444',
+            color: '#ff6b6b',
+            padding: '12px',
+            borderRadius: '8px',
+            fontSize: '12px',
+            textAlign: 'center',
+            marginBottom: '20px'
+          }}>
+            {error}
+          </div>
+        )}
+
+        {/* Upload Progress */}
+        {isUploading && (
+          <div style={{
+            marginBottom: '20px'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: '12px',
+              marginBottom: '4px'
+            }}>
+              <span>Uploading...</span>
+              <span>{uploadProgress}%</span>
+            </div>
+            <div style={{
+              width: '100%',
+              height: '4px',
+              backgroundColor: 'rgba(255,255,255,0.1)',
+              borderRadius: '2px',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                width: `${uploadProgress}%`,
+                height: '100%',
+                backgroundColor: '#ff6b35',
+                transition: 'width 0.3s ease'
+              }} />
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div style={{
+          display: 'flex',
+          gap: '12px',
+          justifyContent: 'flex-end'
+        }}>
+          <button
+            onClick={handleClose}
+            disabled={isUploading}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: 'transparent',
+              border: '1px solid rgba(255,255,255,0.3)',
+              color: '#ffffff',
+              borderRadius: '8px',
+              fontSize: '14px',
+              cursor: isUploading ? 'not-allowed' : 'pointer',
+              opacity: isUploading ? 0.5 : 1
+            }}
+          >
+            Cancel
+          </button>
+          
+          {selectedFile && !cameraMode && (
+            <button
+              onClick={handleUpload}
+              disabled={isUploading}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: isUploading ? 'rgba(255,255,255,0.1)' : '#ff6b35',
+                border: 'none',
+                color: '#ffffff',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                cursor: isUploading ? 'not-allowed' : 'pointer',
+                opacity: isUploading ? 0.5 : 1
+              }}
+            >
+              {isUploading ? 'Uploading...' : 'Upload Photo'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default PhotoSelectionModalOptimized;

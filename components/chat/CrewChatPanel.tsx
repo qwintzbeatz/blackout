@@ -4,13 +4,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { auth, realtimeDb } from '@/lib/firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref, onValue, push, remove } from 'firebase/database';
-import { UserProfile, CrewChatMessage } from '@/types';
+import { UserProfile, CrewChatMessage } from '@/lib/types/blackout';
 import { panelStyle } from '@/lib/constants';
 import { generateAvatarUrl } from '@/lib/utils';
 import { User as FirebaseUser } from 'firebase/auth';
 
+import { CrewId } from '@/lib/types/story';
+
 interface CrewChatPanelProps { 
-  crewId: string | null, 
+  crewId: CrewId | null, 
   onClose: () => void,
   userProfile: UserProfile | null 
 }

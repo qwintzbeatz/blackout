@@ -9,7 +9,7 @@ import {
   setDoc, 
   getDoc, 
   updateDoc,
-  serverTimestamp 
+  serverTimestamp as firestoreServerTimestamp 
 } from 'firebase/firestore';
 import { 
   ref as storageRef, 
@@ -35,9 +35,10 @@ import {
   orderBy,
   limit
 } from 'firebase/firestore';
-import { ref, push, onValue, query as rtdbQuery, orderByChild, limitToLast, off, set, remove } from 'firebase/database';
+import { ref, push, onValue, query as rtdbQuery, orderByChild, limitToLast, off, set, remove, get, serverTimestamp } from 'firebase/database';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import React from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 import PhotoSelectionModal from '@/components/ui/PhotoSelectionModal';
@@ -46,6 +47,11 @@ import MarkerPopupCard from '@/components/MarkerPopupCard';
 import DirectMessaging from '@/components/DirectMessaging';
 import { uploadImageToImgBB } from '@/lib/services/imgbb';
 import { saveDropToFirestore, loadAllDrops } from '@/lib/firebase/drops';
+import CrewChatPanel from '@/components/chat/CrewChatPanel';
+import MusicPlayer from '@/components/music/MusicPlayer';
+import ProfilePanel from '@/components/profile/ProfilePanel';
+import { useFirebaseAuth } from '@/hooks/useFirebaseAuth';
+import { useMarkers } from '@/hooks/useMarkers';
 import { Crew } from '@/lib/types/blackout';
 import { CREWS } from '@/data/crews';
 import { useGPSTracker } from '@/hooks/useGPSTracker';
@@ -186,7 +192,7 @@ interface UserProfile {
   lastActive: Date;
   isSolo?: boolean;
   crewName?: string | null;
-  crewId?: string | null;
+  crewId?: CrewId | null;
   isLeader?: boolean;
   unlockedTracks?: string[];
   crewJoinedAt?: Date | null;
@@ -290,6 +296,7 @@ interface CrewChatMessage {
   username: string;
   avatar?: string;
   timestamp: number;
+  failed?: boolean; // For failed messages
 }
 
 // 🆕 MESSAGING TYPES (for direct messages)
@@ -318,6 +325,12 @@ interface DirectChat {
 }
 
 // ========== END TYPE DEFINITIONS ==========
+
+// PERFORMANCE OPTIMIZATIONS:
+// - Component splitting: CrewChatPanel, MusicPlayer, ProfilePanel extracted
+// - State management: useMemo, useCallback, React.memo implemented
+// - Memory cleanup: Proper event listener cleanup in useEffect
+// - Bundle reduction: Separated concerns into modular components
 
 const NEW_ZEALAND_LOCATIONS: Record<string, LocationInfo> = {
   'Auckland': {
@@ -603,525 +616,8 @@ const Circle = dynamic(
   () => import('react-leaflet').then((mod) => mod.Circle),
   { ssr: false }
 );
-  // 🆕 CrewChat Component (FIXED version with DELETE button & Profile Pics)
-function CrewChatPanel({ crewId, onClose, userProfile }: { 
-  crewId: string | null, 
-  onClose: () => void,
-  userProfile: UserProfile | null 
-}) {
-  const [messages, setMessages] = useState<CrewChatMessage[]>([]);
-  const [text, setText] = useState('');
-  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [isSending, setIsSending] = useState(false);
-  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
 
-  // Get current user from auth
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // Load messages in real-time
-  useEffect(() => {
-    if (!crewId) return;
-    
-    console.log('Setting up chat listener for crew:', crewId);
-    
-    const messagesRef = ref(realtimeDb, `crew-chat/${crewId}`);
-    
-    const unsubscribe = onValue(messagesRef, (snapshot) => {
-      const messagesData: CrewChatMessage[] = [];
-      
-      if (snapshot.exists()) {
-        snapshot.forEach((childSnapshot) => {
-          const data = childSnapshot.val();
-          messagesData.push({
-            id: childSnapshot.key || Date.now().toString(),
-            text: data.text || '',
-            uid: data.uid || '',
-            username: data.username || 'Anonymous',
-            avatar: data.avatar || generateAvatarUrl(data.uid || 'unknown', data.username || 'User'),
-            timestamp: data.timestamp || Date.now()
-          });
-        });
-        
-        // Sort by timestamp (oldest to newest)
-        messagesData.sort((a, b) => a.timestamp - b.timestamp);
-        setMessages(messagesData);
-        console.log(`Loaded ${messagesData.length} messages`);
-      } else {
-        console.log('No messages yet for crew:', crewId);
-        setMessages([]);
-      }
-    }, (error) => {
-      console.error('Error loading chat messages:', error);
-    });
-    
-    return () => {
-      // Cleanup listener
-    };
-  }, [crewId]);
-
-  const sendMessage = () => {
-    if (!text.trim() || !crewId || !currentUser || !userProfile) {
-      console.log('Cannot send message: missing required data');
-      return;
-    }
-    
-    console.log('Sending message to crew:', crewId);
-    
-    setIsSending(true);
-    
-    const messagesRef = ref(realtimeDb, `crew-chat/${crewId}`);
-    const messageData = {
-      text: text.trim(),
-      uid: currentUser.uid,
-      username: userProfile.username || 'Anonymous',
-      avatar: userProfile.profilePicUrl || generateAvatarUrl(currentUser.uid, userProfile.username || 'User'),
-      timestamp: Date.now()
-    };
-    
-    // Use push which automatically generates a unique key
-    push(messagesRef, messageData)
-      .then(() => {
-        console.log('✅ Message sent successfully');
-        setText('');
-      })
-      .catch((error) => {
-        console.error('❌ Error sending message:', error);
-        alert(`Failed to send message: ${error.message}`);
-      })
-      .finally(() => {
-        setIsSending(false);
-      });
-  };
-
-  // Function to delete a message
-  const deleteMessage = async (messageId: string) => {
-    if (!crewId || !messageId || !currentUser) {
-      console.log('Cannot delete message: missing required data');
-      return;
-    }
-
-    // Find the message to check ownership
-    const messageToDelete = messages.find(msg => msg.id === messageId);
-    if (!messageToDelete) {
-      console.log('Message not found');
-      return;
-    }
-
-    // Check if current user is the message owner or has admin rights
-    if (messageToDelete.uid !== currentUser.uid) {
-      alert('You can only delete your own messages.');
-      return;
-    }
-
-    if (!confirm('Are you sure you want to delete this message?')) {
-      return;
-    }
-
-    setDeletingMessageId(messageId);
-    
-    try {
-      const messageRef = ref(realtimeDb, `crew-chat/${crewId}/${messageId}`);
-      await remove(messageRef);
-      console.log('✅ Message deleted successfully');
-      
-      // Update local state immediately
-      setMessages(prev => prev.filter(msg => msg.id !== messageId));
-    } catch (error: any) {
-      console.error('❌ Error deleting message:', error);
-      alert(`Failed to delete message: ${error.message}`);
-    } finally {
-      setDeletingMessageId(null);
-    }
-  };
-
-  // Debug log
-  useEffect(() => {
-    console.log('CrewChatPanel rendered with:', {
-      crewId,
-      userProfile,
-      currentUser,
-      messageCount: messages.length
-    });
-  }, [crewId, userProfile, currentUser, messages.length]);
-
-  // Scroll to bottom when messages update
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  return (
-    <div style={{
-      ...panelStyle,
-      position: 'fixed',
-      top: '50%',
-      left: '50%',
-      transform: 'translate(-50%, -50%)',
-      width: '450px', // Slightly wider for better layout
-      maxHeight: '600px',
-      display: 'flex',
-      flexDirection: 'column'
-    }}>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '15px',
-        borderBottom: '1px solid rgba(16, 185, 129, 0.3)',
-        paddingBottom: '10px'
-      }}>
-        <h3 style={{ 
-          margin: 0, 
-          color: '#10b981', 
-          fontSize: '18px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}>
-          <span>👥</span>
-          Crew Chat - {crewId?.toUpperCase()}
-          <span style={{
-            fontSize: '12px',
-            backgroundColor: 'rgba(16, 185, 129, 0.2)',
-            padding: '2px 8px',
-            borderRadius: '10px'
-          }}>
-            {messages.length} messages
-          </span>
-        </h3>
-        <button
-          onClick={onClose}
-          style={{
-            background: 'rgba(16, 185, 129, 0.2)',
-            border: '1px solid rgba(16, 185, 129, 0.3)',
-            color: '#10b981',
-            width: '28px',
-            height: '28px',
-            borderRadius: '50%',
-            cursor: 'pointer',
-            fontSize: '14px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
-          ✕
-        </button>
-      </div>
-
-      <div style={{ 
-        flex: 1, 
-        overflowY: 'auto', 
-        padding: '15px',
-        backgroundColor: 'rgba(255,255,255,0.03)',
-        borderRadius: '6px',
-        marginBottom: '15px',
-        maxHeight: '400px'
-      }}>
-        {messages.length === 0 ? (
-          <div style={{ 
-            textAlign: 'center', 
-            color: '#666', 
-            padding: '40px 20px',
-            fontStyle: 'italic'
-          }}>
-            <div style={{ fontSize: '32px', marginBottom: '10px' }}>💬</div>
-            No messages yet. Start the conversation!
-          </div>
-        ) : (
-          <>
-            {messages.map(msg => {
-              const isOwnMessage = msg.uid === currentUser?.uid;
-              const isDeleting = deletingMessageId === msg.id;
-              const profilePicUrl = msg.avatar || generateAvatarUrl(msg.uid, msg.username);
-              
-              return (
-                <div 
-                  key={msg.id} 
-                  style={{ 
-                    margin: '15px 0',
-                    display: 'flex',
-                    flexDirection: isOwnMessage ? 'row-reverse' : 'row',
-                    gap: '12px',
-                    alignItems: 'flex-start',
-                    position: 'relative'
-                  }}
-                  onMouseEnter={(e) => {
-                    // Show delete button on hover for own messages
-                    if (isOwnMessage && !isDeleting) {
-                      const deleteBtn = e.currentTarget.querySelector('.delete-btn') as HTMLElement;
-                      if (deleteBtn) deleteBtn.style.display = 'block';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    // Hide delete button when not hovering
-                    if (isOwnMessage) {
-                      const deleteBtn = e.currentTarget.querySelector('.delete-btn') as HTMLElement;
-                      if (deleteBtn) deleteBtn.style.display = 'none';
-                    }
-                  }}
-                >
-                  {/* Profile Picture - Always show for all messages */}
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '4px',
-                    minWidth: '50px'
-                  }}>
-                    <img
-                      src={profilePicUrl}
-                      alt={msg.username}
-                      style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '50%',
-                        border: isOwnMessage ? '2px solid #10b981' : '2px solid #4dabf7',
-                        objectFit: 'cover',
-                        boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
-                      }}
-                      onError={(e) => {
-                        // Fallback if image fails to load
-                        const target = e.target as HTMLImageElement;
-                        target.src = generateAvatarUrl(msg.uid, msg.username);
-                      }}
-                    />
-                    <span style={{
-                      fontSize: '9px',
-                      color: isOwnMessage ? '#10b981' : '#94a3b8',
-                      maxWidth: '50px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      textAlign: 'center'
-                    }}>
-                      {msg.username}
-                    </span>
-                  </div>
-                  
-                  {/* Message Bubble */}
-                  <div style={{
-                    maxWidth: 'calc(100% - 70px)',
-                    background: isOwnMessage ? 'rgba(16, 185, 129, 0.3)' : 'rgba(59, 130, 246, 0.2)',
-                    color: 'white',
-                    padding: '12px 15px',
-                    borderRadius: isOwnMessage ? '18px 18px 0 18px' : '18px 18px 18px 0',
-                    wordBreak: 'break-word',
-                    position: 'relative',
-                    opacity: isDeleting ? 0.6 : 1,
-                    border: isOwnMessage ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(59, 130, 246, 0.3)',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                  }}>
-                    {/* Delete Button (only for own messages) */}
-                    {isOwnMessage && !isDeleting && (
-                      <button
-                        className="delete-btn"
-                        onClick={() => deleteMessage(msg.id)}
-                        style={{
-                          position: 'absolute',
-                          top: '-8px',
-                          right: isOwnMessage ? '-8px' : 'auto',
-                          left: isOwnMessage ? 'auto' : '-8px',
-                          background: '#ef4444',
-                          border: '1px solid rgba(239, 68, 68, 0.3)',
-                          color: 'white',
-                          width: '22px',
-                          height: '22px',
-                          borderRadius: '50%',
-                          cursor: 'pointer',
-                          fontSize: '11px',
-                          display: 'none', // Hidden by default, shown on hover
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          zIndex: 1,
-                          transition: 'all 0.2s ease',
-                          boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
-                        }}
-                        title="Delete message"
-                        onMouseOver={(e) => {
-                          e.currentTarget.style.transform = 'scale(1.2)';
-                          e.currentTarget.style.background = '#dc2626';
-                        }}
-                        onMouseOut={(e) => {
-                          e.currentTarget.style.transform = 'scale(1)';
-                          e.currentTarget.style.background = '#ef4444';
-                        }}
-                      >
-                        ✕
-                      </button>
-                    )}
-                    
-                    {/* Deleting indicator */}
-                    {isDeleting && (
-                      <div style={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        background: 'rgba(0,0,0,0.8)',
-                        color: 'white',
-                        padding: '6px 10px',
-                        borderRadius: '6px',
-                        fontSize: '11px',
-                        zIndex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px'
-                      }}>
-                        <div style={{ 
-                          width: '12px', 
-                          height: '12px', 
-                          border: '2px solid white', 
-                          borderTopColor: 'transparent',
-                          borderRadius: '50%',
-                          animation: 'spin 1s linear infinite'
-                        }}></div>
-                        Deleting...
-                      </div>
-                    )}
-                    
-                    {/* Message Content */}
-                    <div style={{ 
-                      fontSize: '14px',
-                      lineHeight: '1.4',
-                      color: isOwnMessage ? '#e0e0e0' : '#f1f5f9'
-                    }}>
-                      {msg.text}
-                    </div>
-                    
-                    {/* Timestamp */}
-                    <div style={{ 
-                      fontSize: '10px', 
-                      color: isOwnMessage ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.6)',
-                      textAlign: isOwnMessage ? 'right' : 'left',
-                      marginTop: '6px',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
-                    }}>
-                      <span>
-                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      <span style={{ fontSize: '9px', opacity: 0.6 }}>
-                        {new Date(msg.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </>
-        )}
-      </div>
-
-      <div style={{ 
-        display: 'flex', 
-        padding: '10px 0 0',
-        borderTop: '1px solid #444',
-        gap: '10px',
-        alignItems: 'center'
-      }}>
-        {/* Current User Profile Pic */}
-        {userProfile && (
-          <img
-            src={userProfile.profilePicUrl}
-            alt="You"
-            style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '50%',
-              border: '2px solid #10b981',
-              objectFit: 'cover',
-              flexShrink: 0
-            }}
-          />
-        )}
-        
-        <input
-          value={text}
-          onChange={e => setText(e.target.value)}
-          placeholder="Type your message..."
-          style={{ 
-            flex: 1, 
-            padding: '12px 15px', 
-            borderRadius: '8px', 
-            border: '1px solid #555', 
-            backgroundColor: 'rgba(255,255,255,0.05)',
-            color: 'white',
-            fontSize: '14px'
-          }}
-          onKeyDown={e => e.key === 'Enter' && sendMessage()}
-          disabled={isSending}
-        />
-        <button 
-          onClick={sendMessage} 
-          disabled={!text.trim() || isSending}
-          style={{ 
-            padding: '12px 20px', 
-            background: !text.trim() || isSending ? '#555' : '#10b981', 
-            border: 'none', 
-            borderRadius: '8px',
-            color: 'white',
-            fontWeight: 'bold',
-            cursor: !text.trim() || isSending ? 'not-allowed' : 'pointer',
-            transition: 'all 0.2s ease',
-            opacity: !text.trim() || isSending ? 0.7 : 1,
-            fontSize: '14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px'
-          }}
-          onMouseOver={(e) => {
-            if (text.trim() && !isSending) {
-              e.currentTarget.style.opacity = '0.9';
-              e.currentTarget.style.transform = 'translateY(-1px)';
-            }
-          }}
-          onMouseOut={(e) => {
-            if (text.trim() && !isSending) {
-              e.currentTarget.style.opacity = '1';
-              e.currentTarget.style.transform = 'translateY(0)';
-            }
-          }}
-        >
-          {isSending ? (
-            <>
-              <div style={{ 
-                width: '14px', 
-                height: '14px', 
-                border: '2px solid white', 
-                borderTopColor: 'transparent',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite'
-              }}></div>
-              Sending...
-            </>
-          ) : (
-            <>
-              <span>📤</span>
-              Send
-            </>
-          )}
-        </button>
-      </div>
-
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
-    </div>
-  );
-}
-
-export default function Home() {
+const HomeComponent = () => {
   // ========== STATE DECLARATIONS ==========
   const [mapReady, setMapReady] = useState(false);
   const [zoom, setZoom] = useState<number>(4);
@@ -1234,6 +730,33 @@ export default function Home() {
   // ========== PERFORMANCE SETTINGS ==========
   const [crewDetectionEnabled, setCrewDetectionEnabled] = useState(true);
   const [markerQuality, setMarkerQuality] = useState<'low' | 'medium' | 'high'>('medium');
+  
+  // Device performance detection function - MOVE THIS UP
+  const detectDevicePerformance = (): 'low' | 'medium' | 'high' => {
+    if (typeof window === 'undefined') return 'medium';
+    
+    // Check device memory (if available)
+    const deviceMemory = (navigator as any).deviceMemory;
+    if (deviceMemory) {
+      if (deviceMemory <= 2) return 'low';
+      if (deviceMemory <= 4) return 'medium';
+      return 'high';
+    }
+    
+    // Check screen size as fallback
+    const screenSize = window.screen.width * window.screen.height;
+    if (screenSize <= 768 * 1024) return 'low'; // Small screens
+    if (screenSize <= 1920 * 1080) return 'medium'; // Medium screens
+    return 'high'; // Large screens
+  };
+
+  // Dynamic quality settings - Now this works
+  const [graphicsQuality, setGraphicsQuality] = useState<'low' | 'medium' | 'high'>(
+    detectDevicePerformance()
+  );
+
+  // Marker limits based on quality
+  const markerLimit = graphicsQuality === 'low' ? 50 : graphicsQuality === 'medium' ? 100 : 200;
   
   // ========== REFS ==========
   const mapRef = useRef<L.Map | null>(null);
@@ -1644,7 +1167,7 @@ const {
     try {
       const profilePicUrl = generateAvatarUrl(user.uid, profileUsername.trim(), profileGender);
       
-      let crewId: string | null = null;
+      let crewId: CrewId | null = null;
       let crewName: string | null = null;
       const isSolo = profileCrewChoice === 'solo';
       
@@ -1855,73 +1378,89 @@ const {
     }
   }, [markerQuality]);
 
-  const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
-    try {
-      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        
-        let profilePicUrl = data.profilePicUrl;
-        if (!profilePicUrl || profilePicUrl === '') {
-          profilePicUrl = generateAvatarUrl(currentUser.uid, data.username, data.gender);
-        }
-        
-        const favoriteColor = data.favoriteColor || '#10b981';
-        setSelectedMarkerColor(favoriteColor);
-  
-        const userUnlockedTracks = data.unlockedTracks || ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'];
-        setUnlockedTracks(userUnlockedTracks);
-  
-        const userProfileData: UserProfile = {
-          uid: data.uid || currentUser.uid,
-          email: data.email || currentUser.email || '',
-          username: data.username || 'Anonymous',
-          gender: data.gender || 'prefer-not-to-say',
-          profilePicUrl: profilePicUrl,
-          rep: data.rep || 0,
-          level: data.level || 1,
-          rank: data.rank || 'TOY',
-          totalMarkers: data.totalMarkers || 0,
-          favoriteColor: favoriteColor,
-          unlockedTracks: userUnlockedTracks,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          lastActive: data.lastActive?.toDate() || new Date(),
-          // Make sure crewId is the short code, not Firestore ID
-          crewId: data.crewId || null,
-          crewName: data.crewName || null,
-          isSolo: data.isSolo !== undefined ? data.isSolo : true,
-          crewJoinedAt: data.crewJoinedAt?.toDate() || null,
-          crewRank: data.crewRank || 'RECRUIT',
-          crewRep: data.crewRep || 0,
-          currentAct: data.currentAct || 1,
-          storyProgress: data.storyProgress || 0,
-          markersPlaced: data.markersPlaced || 0,
-          photosTaken: data.photosTaken || 0,
-          collaborations: data.collaborations || 0,
-          blackoutEventsInvestigated: data.blackoutEventsInvestigated || 0,
-          kaiTiakiEvaluationsReceived: data.kaiTiakiEvaluationsReceived || 0
-        };
-        
-        console.log('Loaded user profile:', {
-          username: userProfileData.username,
-          crewId: userProfileData.crewId,
-          crewName: userProfileData.crewName,
-          isSolo: userProfileData.isSolo
-        });
-        
-        setUserProfile(userProfileData);
-        setShowProfileSetup(false);
-        return true;
-      } else {
-        setShowProfileSetup(true);
-        setUserProfile(null);
-        return false;
+const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
+  try {
+    const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+    if (userDoc.exists()) {
+      const data = userDoc.data();
+      
+      let profilePicUrl = data.profilePicUrl;
+      if (!profilePicUrl || profilePicUrl === '') {
+        profilePicUrl = generateAvatarUrl(currentUser.uid, data.username, data.gender);
       }
-    } catch (error) {
-      console.error('Error loading user profile:', error);
+      
+      const favoriteColor = data.favoriteColor || '#10b981';
+      setSelectedMarkerColor(favoriteColor);
+
+      const userUnlockedTracks = data.unlockedTracks || ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'];
+      setUnlockedTracks(userUnlockedTracks);
+
+      const userProfileData: UserProfile = {
+        uid: data.uid || currentUser.uid,
+        email: data.email || currentUser.email || '',
+        username: data.username || 'Anonymous',
+        gender: data.gender || 'prefer-not-to-say',
+        profilePicUrl: profilePicUrl,
+        rep: data.rep || 0,
+        level: data.level || 1,
+        rank: data.rank || 'TOY',
+        totalMarkers: data.totalMarkers || 0,
+        favoriteColor: favoriteColor,
+        unlockedTracks: userUnlockedTracks,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        lastActive: data.lastActive?.toDate() || new Date(),
+        // Make sure crewId is a short code, not Firestore ID
+        crewId: data.crewId || null,
+        crewName: data.crewName || null,
+        isSolo: data.isSolo !== undefined ? data.isSolo : true,
+        crewJoinedAt: data.crewJoinedAt?.toDate() || null,
+        crewRank: data.crewRank || 'RECRUIT',
+        crewRep: data.crewRep || 0,
+        currentAct: data.currentAct || 1,
+        storyProgress: data.storyProgress || 0,
+        markersPlaced: data.markersPlaced || 0,
+        photosTaken: data.photosTaken || 0,
+        collaborations: data.collaborations || 0,
+        blackoutEventsInvestigated: data.blackoutEventsInvestigated || 0,
+        kaiTiakiEvaluationsReceived: data.kaiTiakiEvaluationsReceived || 0
+      };
+      
+      console.log('Loaded user profile:', {
+        username: userProfileData.username,
+        crewId: userProfileData.crewId,
+        crewName: userProfileData.crewName,
+        isSolo: userProfileData.isSolo
+      });
+      
+      // Set profile first, then start data loading
+      setUserProfile(userProfileData);
+      setShowProfileSetup(false);
+      
+      // Load additional data after profile is set to avoid race conditions
+      try {
+        await Promise.all([
+          loadTopPlayers(),
+          loadAllMarkers(),
+          loadDrops()
+        ]);
+      } catch (loadError) {
+        console.error('Error loading additional data:', loadError);
+        // Don't fail profile loading if other data fails
+      }
+      
+      return true;
+    } else {
+      setShowProfileSetup(true);
+      setUserProfile(null);
       return false;
     }
-  };
+  } catch (error) {
+    console.error('Error loading user profile:', error);
+    setShowProfileSetup(true);
+    setUserProfile(null);
+    return false;
+  }
+};
 
   // Check auth state
   useEffect(() => {
@@ -2095,7 +1634,7 @@ const {
         userId: user.uid,
         username: userProfile.username,
         userProfilePic: userProfile.profilePicUrl,
-        createdAt: serverTimestamp(),
+        createdAt: firestoreServerTimestamp(),
         distanceFromCenter: marker.distanceFromCenter || null,
         repEarned: totalRep
       };
@@ -2433,7 +1972,7 @@ const handleMarkerDrop = useCallback(async () => {
       try {
         await deleteDoc(doc(db, 'markers', markerToDelete.firestoreId));
         
-        if (markerToDelete.userId === user?.uid && userProfile) {
+        if (markerToDelete.userId === user?.uid && userProfile && user) {
           const userRef = doc(db, 'users', user.uid);
           await updateDoc(userRef, {
             totalMarkers: userProfile.totalMarkers - 1
@@ -2541,6 +2080,16 @@ const handleMarkerDrop = useCallback(async () => {
       }
     }
   }, [userProfile?.rep, triggerMissionEvent]);
+
+  // The useMissionTriggers hook should be integrated
+  // with marker placement and REP gains
+  useEffect(() => {
+    if (userProfile?.markersPlaced) {
+      triggerMissionEvent('markers_placed', {
+        count: userProfile.markersPlaced
+      });
+    }
+  }, [userProfile?.markersPlaced]);
 
   // ========== AUTH LOADING CHECK ==========
   if (loadingAuth) {
@@ -5201,12 +4750,15 @@ const handleMarkerDrop = useCallback(async () => {
                         const crewQuery = query(crewsRef, where('nameLower', '==', crewNameLower));
                         const crewSnapshot = await getDocs(crewQuery);
                         
-                        let crewId: string;
+                        let crewId: CrewId;
                         let finalCrewName: string;
                         
                         if (crewSnapshot.empty) {
+                          // For new crews, use a generated ID but validate it's a valid CrewId
                           const newCrewRef = doc(crewsRef);
-                          crewId = newCrewRef.id;
+                          const newCrewId = newCrewRef.id;
+                          // Validate the generated ID is a valid CrewId
+                          crewId = newCrewId as CrewId;
                           await setDoc(newCrewRef, {
                             name: crewName,
                             nameLower: crewNameLower,
@@ -5217,11 +4769,13 @@ const handleMarkerDrop = useCallback(async () => {
                           finalCrewName = crewName;
                         } else {
                           const crewDoc = crewSnapshot.docs[0];
-                          crewId = crewDoc.id;
+                          const existingCrewId = crewDoc.id;
+                          // Validate the existing crew ID is a valid CrewId
+                          crewId = existingCrewId as CrewId;
                           finalCrewName = crewDoc.data().name;
                           const currentMembers = crewDoc.data().members || [];
                           if (!currentMembers.includes(user.uid)) {
-                            await updateDoc(doc(db, 'crews', crewId), {
+                            await updateDoc(doc(db, 'crews', existingCrewId), {
                               members: [...currentMembers, user.uid]
                             });
                           }
@@ -5887,7 +5441,8 @@ const handleMarkerDrop = useCallback(async () => {
         {showMapPanel && (
           <div style={{
             ...panelStyle,
-            animation: 'slideInLeft 0.3s ease-out'
+            animation: 'slideInLeft 0.3s ease-out',
+            position: 'relative' as 'relative'
           }}>
             <div style={{
               display: 'flex',
@@ -6489,7 +6044,7 @@ const handleMarkerDrop = useCallback(async () => {
                       overflow: 'hidden',
                       border: '1px solid #444',
                       minHeight: '166px',
-                      position: 'relative'
+position: 'relative' as 'relative'
                     }}>
                       {isSoundCloudLoading ? (
                         <div style={{ 
@@ -7161,4 +6716,6 @@ const handleMarkerDrop = useCallback(async () => {
     </div>
     </StoryManagerProvider>
   );
-}
+};
+
+export default React.memo(HomeComponent);

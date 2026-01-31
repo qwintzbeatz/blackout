@@ -1,4 +1,9 @@
 // Add the types content from above
+import { CrewId } from '../types/story';
+
+// Export CrewId for use in other files
+export type { CrewId } from '../types/story';
+
 // Marker name options
 export const MARKER_NAMES = ['Pole', 'Sign', 'E.Box', 'Fence', 'Wall', 'Shutter', 'Sewer', 'Rooftop', 'Ground', 'Train', 'Brigde', 'Traffic Light', 'Truck', 'Van', 'Post Box', 'Speed Camera', 'ATM Machine', 'Bus Stop'] as const;
 export type MarkerName = typeof MARKER_NAMES[number];
@@ -37,7 +42,7 @@ export interface UserProfile {
   createdAt: Date;
   lastActive: Date;
   // Crew fields
-  crewId?: string | null;
+  crewId?: CrewId | null;
   crewName?: string | null;
   isSolo?: boolean; // true if user chose to go solo
 }

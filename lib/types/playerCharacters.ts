@@ -1,5 +1,7 @@
 // lib/types/playerCharacters.ts
 
+import { CrewId } from './story';
+
 export interface PlayerCharacter {
   id: string;
   name: string;
@@ -25,7 +27,7 @@ export interface PlayerCharacter {
   };
   
   // Crew assignment
-  defaultCrew: string; // bqc, sps, lzt, dgc
+  defaultCrew: CrewId; // bqc, sps, lzt, dgc
   crewRoles: string[];
   loyaltyScore: number; // 0-100 for how loyal to their crew
   trustIssues: string[]; // Triggers for betrayal
@@ -49,7 +51,7 @@ export interface PlayerCharacter {
   
   // Relationships with other characters
   relationships: {
-    [crewId: string]: {
+    [crewId in CrewId]: {
       startingOpinion: number; // -10 to 10
       maxOpinion: number;
       minOpinion: number;
@@ -307,7 +309,7 @@ export const ALL_PLAYER_CHARACTERS: PlayerCharacter[] = [
   ...DONTCAPPED_PLAYERS
 ];
 
-export const getPlayerCharactersByCrew = (crewId: string): PlayerCharacter[] => {
+export const getPlayerCharactersByCrew = (crewId: CrewId): PlayerCharacter[] => {
   switch (crewId) {
     case 'bqc': return BLAQWT_PLAYERS;
     case 'sps': return SPONTANEOUS_PLAYERS;

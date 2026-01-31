@@ -3,11 +3,12 @@ import { User } from 'firebase/auth';
 import { UserProfile } from '@/lib/types/blackout';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { CrewId } from '@/lib/types/story';
 
 interface CharacterSelectionProps {
   user: User;
   userProfile: UserProfile;
-  crewId: string;
+  crewId: CrewId;
   onComplete: () => void;
   onBack: () => void;
 }

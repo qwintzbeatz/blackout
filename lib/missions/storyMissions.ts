@@ -1,3 +1,5 @@
+import { CrewId } from '../types/story';
+
 export interface StoryMission {
   id: string;
   act: number;
@@ -9,7 +11,7 @@ export interface StoryMission {
     progress: number;
     required: number;
   }>;
-  requiredCrew?: string;
+  requiredCrew?: CrewId;
   reward: {
     rep: number;
     unlockedTracks?: string[];
@@ -43,7 +45,7 @@ export const STORY_MISSIONS: StoryMission[] = [
 
 export function checkMissionCompletion(
   mission: StoryMission,
-  playerStats: { markersPlaced: number; crewId?: string }
+  playerStats: { markersPlaced: number; crewId?: CrewId }
 ): boolean {
   // Implementation logic
   return mission.objectives.every(obj => {

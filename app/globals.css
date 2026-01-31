@@ -12,6 +12,19 @@ html, body {
   overflow: hidden;
 }
 
+/* Disable zoom */
+* {
+  touch-action: manipulation;
+}
+
+/* App container for fixed positioning */
+#app {
+  position: fixed;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
 /* Leaflet custom styles */
 .leaflet-container {
   font-family: inherit;

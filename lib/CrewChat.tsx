@@ -1,10 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { CrewId } from '@/lib/utils/types';
 import { ref, push, onValue, query, orderByChild, limitToLast } from 'firebase/database';
 import { realtimeDb } from '@/lib/firebase';
 import { auth } from '@/lib/firebase';
 
-export default function CrewChat({ crewId }: { crewId: string | null }) {
+export default function CrewChat({ crewId }: { crewId: CrewId | null }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState('');
 

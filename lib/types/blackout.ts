@@ -1,5 +1,7 @@
 // lib/types/blackout.ts
 
+import { CrewId } from './story';
+
 // Base marker types
 export type MarkerName = 'Pole' | 'Sign' | 'E.Box' | 'Fence' | 'Wall' | 'Shutter' | 'Sewer' | 'Rooftop' | 'Ground' | 'Train' | 'Bridge' | 'Traffic Light' | 'Truck' | 'Van' | 'Post Box' | 'Speed Camera' | 'ATM Machine' | 'Bus Stop';
 export type MarkerDescription = 'Sticker/Slap' | 'Stencil/Brand/Stamp' | 'Tag/Signature' | 'Etch/Scribe/Scratch' | 'Throw-Up' | 'Paste-Up/Poster' | 'Piece/Bombing' | 'Burner/Heater' | 'Roller/Blockbuster' | 'Extinguisher' | 'Mural';
@@ -91,7 +93,7 @@ export interface UserProfile {
   lastActive: Date;
   isSolo?: boolean;
   crewName?: string | null;
-  crewId?: string | null;
+  crewId?: CrewId | null;
   isLeader?: boolean;
   unlockedTracks?: string[];
   crewJoinedAt?: Date | null;
@@ -184,7 +186,7 @@ export interface PlayerCharacter {
     plotImpact: string[];
   };
   relationships: {
-    [crewId: string]: {
+    [crewId in CrewId]: {
       startingOpinion: number;
       maxOpinion: number;
       minOpinion: number;
@@ -202,4 +204,14 @@ export interface CrewData {
   bonus: string;
   color: string;
   accentColor: string;
+}
+
+// Crew Chat Message type
+export interface CrewChatMessage {
+  id: string;
+  text: string;
+  uid: string;
+  username: string;
+  avatar?: string;
+  timestamp: number;
 }
