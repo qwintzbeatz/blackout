@@ -8,6 +8,9 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Blackout",
   description: "GPS music drop game",
+  icons: {
+    icon: "/logo.ico",
+  },
 };
 
 export default function RootLayout({
