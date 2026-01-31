@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useSoundCloud } from '@/lib/soundcloud';
 
 interface Track {
   url: string;
@@ -51,7 +52,7 @@ const MusicPanelOptimized: React.FC<MusicPanelProps> = ({
   onClose
 }) => {
   const [activeTab, setActiveTab] = useState<'player' | 'playlist'>('player');
-  const [soundCloudWidgets, setSoundCloudWidgets] = useState<Map<string, any>>(new Map());
+  const soundCloudManager = useSoundCloud();
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Default tracks that should always be available
@@ -132,21 +133,9 @@ const MusicPanelOptimized: React.FC<MusicPanelProps> = ({
   // Cleanup SoundCloud widgets on unmount
   useEffect(() => {
     return () => {
-      soundCloudWidgets.forEach((widget, key) => {
-        try {
-          if (widget && typeof widget.unbind === 'function' && window.SC) {
-            widget.unbind(window.SC.Widget.Events.READY);
-            widget.unbind(window.SC.Widget.Events.PLAY);
-            widget.unbind(window.SC.Widget.Events.PAUSE);
-            widget.unbind(window.SC.Widget.Events.FINISH);
-          }
-        } catch (error) {
-          console.error('Error cleaning up SoundCloud widget:', error);
-        }
-      });
-      soundCloudWidgets.clear();
+      soundCloudManager.destroyAll();
     };
-  }, [soundCloudWidgets]);
+  }, [soundCloudManager]);
 
   return (
     <div ref={panelRef} style={panelStyle}>

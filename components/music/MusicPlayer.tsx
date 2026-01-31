@@ -5,6 +5,7 @@ import { storage, realtimeDb } from '@/lib/firebase/config';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { ref, get, onValue, set, remove, serverTimestamp } from 'firebase/database';
 import { doc, updateDoc } from 'firebase/firestore';
+import { useSoundCloud } from '@/lib/soundcloud/hooks';
 
 interface SoundCloudTrack {
   url: string;
@@ -36,29 +37,7 @@ interface MusicPlayerProps {
   onUnlockedTracksChange: (tracks: string[]) => void;
 }
 
-// Global declarations for SoundCloud
-declare global {
-  interface Window {
-    SC: {
-      Widget: {
-        (iframe: HTMLIFrameElement): any;
-        Events: {
-          READY: string;
-          PLAY: string;
-          PAUSE: string;
-          FINISH: string;
-          ERROR: string;
-        };
-      };
-    };
-  }
-}
 
-declare global {
-  interface HTMLIFrameElement {
-    _scWidget?: any;
-  }
-}
 
 export const MusicPlayer: React.FC<MusicPlayerProps> = React.memo(({
   userProfile,
@@ -74,7 +53,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = React.memo(({
 }) => {
   const [soundCloudTracks, setSoundCloudTracks] = useState<SoundCloudTrack[]>([]);
   const [isSoundCloudLoading, setIsSoundCloudLoading] = useState(false);
-  const soundCloudWidgetsRef = useRef<Map<string, any>>(new Map());
+  const soundCloudManager = useSoundCloud();
 
   // HIPHOP_TRACKS constant
   const HIPHOP_TRACKS = useMemo(() => [
@@ -128,61 +107,39 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = React.memo(({
 
   // Initialize main player
   const initializeMainPlayer = useCallback(() => {
-    if (typeof window === 'undefined' || !window.SC || unlockedTracks.length === 0) return;
+    if (unlockedTracks.length === 0) return;
 
     const currentTrack = unlockedTracks[currentTrackIndex];
     if (!currentTrack || !currentTrack.includes('soundcloud.com')) return;
 
     const iframeId = 'soundcloud-main-player';
-    let iframe = document.getElementById(iframeId) as HTMLIFrameElement;
     
-    if (!iframe) {
-      iframe = document.createElement('iframe');
-      iframe.id = iframeId;
-      iframe.src = createSoundCloudIframeUrl(currentTrack);
-      iframe.width = '1';
-      iframe.height = '1';
-      iframe.frameBorder = 'no';
-      iframe.scrolling = 'no';
-      iframe.style.position = 'absolute';
-      iframe.style.top = '-9999px';
-      iframe.style.left = '-9999px';
-      document.body.appendChild(iframe);
-    }
+    const iframe = soundCloudManager.createIframe(iframeId, currentTrack, true);
+    if (!iframe) return;
 
-    if (!soundCloudWidgetsRef.current.has(iframeId)) {
-      try {
-        const widget = window.SC.Widget(iframe);
-        soundCloudWidgetsRef.current.set(iframeId, widget);
-        
-        widget.bind(window.SC.Widget.Events.READY, () => {
-          widget.setVolume(Math.round(volume * 100));
-        });
-        
-        widget.bind(window.SC.Widget.Events.PLAY, () => {
-          onPlayStateChange(true);
-        });
-        
-        widget.bind(window.SC.Widget.Events.PAUSE, () => {
-          onPlayStateChange(false);
-        });
-        
-        widget.bind(window.SC.Widget.Events.FINISH, () => {
-          onPlayStateChange(false);
-          // Play next track
-          const nextIndex = (currentTrackIndex + 1) % unlockedTracks.length;
-          onTrackChange(nextIndex);
-        });
-        
-        widget.bind(window.SC.Widget.Events.ERROR, (error: any) => {
-          console.error('Main SoundCloud player error:', error);
-        });
-        
-      } catch (error) {
-        console.error('Failed to initialize main SoundCloud widget:', error);
+    const widget = soundCloudManager.createWidget(iframeId, currentTrack, {
+      volume,
+      onFinish: () => {
+        onPlayStateChange(false);
+        // Play next track
+        const nextIndex = (currentTrackIndex + 1) % unlockedTracks.length;
+        onTrackChange(nextIndex);
+      },
+      onError: (error: any) => {
+        console.error('Main SoundCloud player error:', error);
       }
+    });
+
+    if (widget) {
+      widget.bind(window.SC.Widget.Events.PLAY, () => {
+        onPlayStateChange(true);
+      });
+      
+      widget.bind(window.SC.Widget.Events.PAUSE, () => {
+        onPlayStateChange(false);
+      });
     }
-  }, [unlockedTracks, currentTrackIndex, volume, onPlayStateChange, onTrackChange, createSoundCloudIframeUrl]);
+  }, [unlockedTracks, currentTrackIndex, volume, onPlayStateChange, onTrackChange, soundCloudManager]);
 
   // Play next track
   const playNextTrack = useCallback(() => {
@@ -195,7 +152,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = React.memo(({
     if (unlockedTracks.length === 0) return;
     
     const iframeId = 'soundcloud-main-player';
-    const widget = soundCloudWidgetsRef.current.get(iframeId);
+    const widget = soundCloudManager.getWidget(iframeId);
     
     if (widget && typeof widget.toggle === 'function') {
       try {
@@ -204,107 +161,60 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = React.memo(({
         console.error('Failed to toggle playback:', error);
       }
     }
-  }, [unlockedTracks]);
+  }, [unlockedTracks, soundCloudManager]);
 
-  // Load SoundCloud Widget API
+// Initialize SoundCloud manager and main player
   useEffect(() => {
-    const loadSoundCloudAPI = () => {
-      if (typeof window !== 'undefined') {
-        if (window.SC) {
-          return;
-        }
-
-        const script = document.createElement('script');
-        script.src = 'https://w.soundcloud.com/player/api.js';
-        script.async = true;
-        script.onload = () => {
-          initializeMainPlayer();
-        };
-        script.onerror = (error) => {
-          console.error('Failed to load SoundCloud Widget API:', error);
-        };
-        document.body.appendChild(script);
-      }
-    };
-
-    loadSoundCloudAPI();
-
-    return () => {
-      // Cleanup SoundCloud widgets
-      soundCloudWidgetsRef.current.forEach((widget, key) => {
-        try {
-          if (widget && typeof widget.unbind === 'function') {
-            widget.unbind(window.SC?.Widget?.Events?.READY);
-            widget.unbind(window.SC?.Widget?.Events?.PLAY);
-            widget.unbind(window.SC?.Widget?.Events?.PAUSE);
-            widget.unbind(window.SC?.Widget?.Events?.FINISH);
-            widget.unbind(window.SC?.Widget?.Events?.ERROR);
-          }
-        } catch (error) {
-          console.error('Error cleaning up SoundCloud widget:', error);
-        }
-      });
-      soundCloudWidgetsRef.current.clear();
-    };
-  }, [initializeMainPlayer]);
+    soundCloudManager.initialize().then(() => {
+      initializeMainPlayer();
+    });
+  }, [initializeMainPlayer, soundCloudManager]);
 
   // Update widget when track changes
   useEffect(() => {
     if (unlockedTracks.length === 0) return;
 
+    const currentTrack = unlockedTracks[currentTrackIndex];
+    if (!currentTrack || !currentTrack.includes('soundcloud.com')) return;
+
     const iframeId = 'soundcloud-main-player';
-    const widget = soundCloudWidgetsRef.current.get(iframeId);
+    soundCloudManager.destroyWidget(iframeId);
     
-    if (widget && window.SC) {
-      const currentTrack = unlockedTracks[currentTrackIndex];
-      if (currentTrack && currentTrack.includes('soundcloud.com')) {
-        const iframe = document.getElementById(iframeId) as HTMLIFrameElement;
-        if (iframe) {
-          iframe.src = createSoundCloudIframeUrl(currentTrack);
-        }
-        
-        setTimeout(() => {
-          try {
-            const newWidget = window.SC.Widget(iframe);
-            soundCloudWidgetsRef.current.set(iframeId, newWidget);
-            
-            newWidget.bind(window.SC.Widget.Events.READY, () => {
-              newWidget.setVolume(Math.round(volume * 100));
-              if (isPlaying) {
-                newWidget.play();
-              }
-            });
-            
-            newWidget.bind(window.SC.Widget.Events.PLAY, () => {
-              onPlayStateChange(true);
-            });
-            
-            newWidget.bind(window.SC.Widget.Events.PAUSE, () => {
-              onPlayStateChange(false);
-            });
-            
-            newWidget.bind(window.SC.Widget.Events.FINISH, () => {
-              onPlayStateChange(false);
-              playNextTrack();
-            });
-            
-          } catch (error) {
-            console.error('Failed to update SoundCloud widget:', error);
-          }
-        }, 100);
+    const iframe = soundCloudManager.createIframe(iframeId, currentTrack, true);
+    if (!iframe) return;
+
+    const widget = soundCloudManager.createWidget(iframeId, currentTrack, {
+      volume,
+      autoplay: isPlaying,
+      onFinish: () => {
+        onPlayStateChange(false);
+        playNextTrack();
+      },
+      onError: (error: any) => {
+        console.error('Track change SoundCloud error:', error);
       }
+    });
+
+    if (widget) {
+      widget.bind(window.SC.Widget.Events.PLAY, () => {
+        onPlayStateChange(true);
+      });
+      
+      widget.bind(window.SC.Widget.Events.PAUSE, () => {
+        onPlayStateChange(false);
+      });
     }
-  }, [currentTrackIndex, unlockedTracks, isPlaying, volume, createSoundCloudIframeUrl, playNextTrack, onPlayStateChange]);
+  }, [currentTrackIndex, unlockedTracks, isPlaying, volume, playNextTrack, onPlayStateChange, soundCloudManager]);
 
   // Update volume
   useEffect(() => {
     const iframeId = 'soundcloud-main-player';
-    const widget = soundCloudWidgetsRef.current.get(iframeId);
+    const widget = soundCloudManager.getWidget(iframeId);
     
     if (widget && typeof widget.setVolume === 'function') {
       widget.setVolume(Math.round(volume * 100));
     }
-  }, [volume]);
+  }, [volume, soundCloudManager]);
 
   // Initialize SoundCloud tracks
   useEffect(() => {

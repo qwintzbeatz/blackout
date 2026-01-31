@@ -1,13 +1,41 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { User } from 'firebase/auth';
-import { UserProfile, UserMarker, getMarkerColorByRank } from '@/lib/types/blackout';
+import { UserProfile, UserMarker } from '@/lib/types/blackout';
 import { calculateDistance } from '@/lib/utils';
+import { useOptimizedFirestore } from '@/src/hooks/useOptimizedFirestore';
+import { doc, deleteDoc, addDoc, collection } from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
+import { PerformanceManager } from '@/src/lib/performance/PerformanceManager';
 
 export const useMarkers = (user: User | null, userProfile: UserProfile | null) => {
   const [userMarkers, setUserMarkers] = useState<UserMarker[]>([]);
   const [loadingMarkers, setLoadingMarkers] = useState(false);
+
+  // Get performance settings
+  const performanceManager = PerformanceManager.getInstance();
+  const performanceSettings = performanceManager.getSettings();
+
+  // Use optimized Firestore hook for loading user's markers
+  const {
+    data: firestoreMarkers,
+    loading: firestoreLoading,
+    error: firestoreError,
+    loadMore,
+    refresh,
+    clearCache
+  } = useOptimizedFirestore<UserMarker>('markers', {
+    pageSize: performanceSettings.markerLimit,
+    filters: user ? [{ field: 'userId', op: '==', value: user.uid }] : [],
+    orderByField: 'timestamp',
+    orderDirection: 'desc'
+  });
+
+  // Sync Firestore markers to local state
+  useEffect(() => {
+    setUserMarkers(firestoreMarkers);
+  }, [firestoreMarkers]);
 
   const addMarker = useCallback(async (data: {
     position: [number, number];
@@ -32,6 +60,7 @@ export const useMarkers = (user: User | null, userProfile: UserProfile | null) =
       position: data.position,
       name: 'Pole',
       description: 'Sticker/Slap',
+      color: '#' + Math.floor(Math.random()*16777215).toString(16), // Random color
       timestamp: new Date(),
       distanceFromCenter: distanceFromCenter || undefined,
       userId: user.uid,
@@ -41,42 +70,79 @@ export const useMarkers = (user: User | null, userProfile: UserProfile | null) =
 
     console.log('Marker created:', newMarker);
     
-    // Save to local state immediately
-    setUserMarkers(prev => [...prev, newMarker]);
-    
-    // TODO: Save to Firestore
-    console.log('Marker added (Firestore integration pending):', newMarker);
+    // Save to Firestore
+    try {
+      const docRef = await addDoc(collection(db, 'markers'), newMarker);
+      const savedMarker = { ...newMarker, firestoreId: docRef.id };
+      
+      // Update local state with the saved marker
+      setUserMarkers(prev => [...prev, savedMarker]);
+      
+      console.log('Marker saved to Firestore:', savedMarker);
+    } catch (error) {
+      console.error('Error saving marker to Firestore:', error);
+      // Still add to local state even if Firestore fails
+      setUserMarkers(prev => [...prev, newMarker]);
+    }
     
     return newMarker;
   }, [user, userProfile]);
 
   const deleteMarker = useCallback(async (id: string) => {
-    // TODO: Delete from Firestore
-    setUserMarkers(prev => prev.filter(marker => marker.id !== id));
-  }, []);
+    const markerToDelete = userMarkers.find(marker => marker.id === id);
+    
+    try {
+      if (markerToDelete?.firestoreId) {
+        // Delete from Firestore using the document ID
+        await deleteDoc(doc(db, 'markers', markerToDelete.firestoreId));
+        console.log('Marker deleted from Firestore:', id);
+      }
+      
+      // Remove from local state
+      setUserMarkers(prev => prev.filter(marker => marker.id !== id));
+    } catch (error) {
+      console.error('Error deleting marker from Firestore:', error);
+      // Still remove from local state even if Firestore fails
+      setUserMarkers(prev => prev.filter(marker => marker.id !== id));
+    }
+  }, [userMarkers]);
 
   const deleteAllMarkers = useCallback(async () => {
     if (userMarkers.length > 0 && window.confirm(`Are you sure you want to delete all ${userMarkers.length} markers?`)) {
-      // TODO: Delete from Firestore
-      setUserMarkers([]);
+      try {
+        // Delete all markers from Firestore that have firestoreId
+        const deletePromises = userMarkers
+          .filter(marker => marker.firestoreId)
+          .map(marker => deleteDoc(doc(db, 'markers', marker.firestoreId!)));
+        
+        await Promise.all(deletePromises);
+        console.log('All markers deleted from Firestore');
+        
+        // Clear local state
+        setUserMarkers([]);
+        clearCache();
+      } catch (error) {
+        console.error('Error deleting all markers from Firestore:', error);
+        // Still clear local state even if Firestore fails
+        setUserMarkers([]);
+      }
     }
-  }, [userMarkers]);
+  }, [userMarkers, clearCache]);
 
   const loadUserMarkers = useCallback(async () => {
     if (!user) return;
     
     setLoadingMarkers(true);
     try {
-      // TODO: Load from Firestore
-      console.log('Loading markers (Firestore integration pending)');
-      // For now, just set loading to false
-      setUserMarkers([]);
+      // Load markers using the optimized hook
+      await refresh();
+      setUserMarkers(firestoreMarkers);
     } catch (error) {
       console.error('Error loading markers:', error);
     } finally {
       setLoadingMarkers(false);
     }
-  }, [user]);
+  }, [user, refresh, firestoreMarkers]);
 
   return {
     userMarkers,
