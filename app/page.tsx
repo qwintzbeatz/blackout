@@ -43,6 +43,7 @@ import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 import PhotoSelectionModal from '@/components/ui/PhotoSelectionModal';
 import DropPopup from '@/components/map/DropPopup';
+import SoundCloudCard from '@/src/components/map/SoundCloudCard';
 import MarkerPopupCard from '@/components/MarkerPopupCard';
 import DirectMessaging from '@/components/DirectMessaging';
 import { uploadImageToImgBB } from '@/lib/services/imgbb';
@@ -3778,37 +3779,10 @@ const handleMarkerDrop = useCallback(async () => {
                   display: flex;
                   align-items: center;
                   justify-content: center;
-                  color: white;
-                  font-weight: bold;
-                  font-size: 14px;
-                  position: relative;
                 ">
-                  ♫
-                  ${drop.likes && drop.likes.length > 0 ? `
-                    <div style="
-                      position: absolute;
-                      top: -5px;
-                      right: -5px;
-                      background-color: #8a2be2;
-                      color: white;
-                      border-radius: 50%;
-                      width: 16px;
-                      height: 16px;
-                      display: flex;
-                      align-items: center;
-                      justify-content: center;
-                      font-size: 9px;
-                      font-weight: bold;
-                      border: 2px solid white;
-                    ">
-                      ${drop.likes.length}
-                    </div>
-                  ` : ''}
-                </div>
-              `,
-              iconSize: [28, 28],
-              iconAnchor: [14, 14],
-              popupAnchor: [0, -14]
+                  🎵
+                </div>`,
+              className: 'music-marker-icon'
             }) : undefined;
 
           return (
@@ -3817,12 +3791,15 @@ const handleMarkerDrop = useCallback(async () => {
               position={[drop.lat, drop.lng]}
               icon={musicIcon}
             >
-              <DropPopup
+              <SoundCloudCard
                 drop={drop}
                 user={user}
-                onLikeUpdate={(dropId, newLikes) => {
+                isVisible={false}
+                position={{ lat: drop.lat, lng: drop.lng }}
+                onClose={() => {}}
+                onLikeUpdate={(dropId: string, newLikes: string[]) => {
                   setDrops(prev =>
-                    prev.map(d =>
+                    prev.map((d: any) =>
                       d.firestoreId === dropId ? { ...d, likes: newLikes } : d
                     )
                   );

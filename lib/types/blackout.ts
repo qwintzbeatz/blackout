@@ -72,6 +72,7 @@ export interface Drop {
   createdBy: string;
   timestamp: Date;
   likes: string[];
+  comments?: Comment[];
   username: string;
   userProfilePic: string;
 }
