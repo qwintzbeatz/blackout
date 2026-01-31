@@ -55,6 +55,8 @@ import { useMarkers } from '@/hooks/useMarkers';
 import { Crew } from '@/lib/types/blackout';
 import { CREWS } from '@/data/crews';
 import { useGPSTracker } from '@/hooks/useGPSTracker';
+import ErrorBoundary from '@/components/ui/ErrorBoundary';
+import ErrorTest from '@/components/ui/ErrorTest';
 
 const HIPHOP_TRACKS = [
   "https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1",
@@ -647,6 +649,7 @@ const HomeComponent = () => {
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [loadingMarkers, setLoadingMarkers] = useState(false);
+  const [isLoadingMarkers, setIsLoadingMarkers] = useState(false);
   
   // User profile states
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -724,7 +727,7 @@ const HomeComponent = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Crew selection state
-  const [selectedCrew, setSelectedCrew] = useState<string>('');
+  const [selectedCrew, setSelectedCrew] = useState<CrewId | ''>('');
   const [crewChoice, setCrewChoice] = useState<'crew' | 'solo'>('crew');
   
   // ========== PERFORMANCE SETTINGS ==========
@@ -756,7 +759,18 @@ const HomeComponent = () => {
   );
 
   // Marker limits based on quality
-  const markerLimit = graphicsQuality === 'low' ? 50 : graphicsQuality === 'medium' ? 100 : 200;
+  const markerLimit = graphicsQuality === 'low' ? 12 : graphicsQuality === 'medium' ? 25 : 50;
+  
+  // ========== PERFORMANCE MEMOIZATION ==========
+  // Memoize filtered markers
+  const filteredMarkers = useMemo(() => {
+    return userMarkers.filter(marker => !showOnlyMyDrops || marker.userId === user?.uid);
+  }, [userMarkers, showOnlyMyDrops, user?.uid]);
+
+  // Memoize marker bounds
+  const markerBounds = useMemo(() => {
+    return calculateBoundsFromMarkers(userMarkers);
+  }, [userMarkers]);
   
   // ========== REFS ==========
   const mapRef = useRef<L.Map | null>(null);
@@ -824,17 +838,14 @@ const {
 
     return () => {
       if (!ENABLE_SOUNDCLOUD) return;
+      
       soundCloudWidgetsRef.current.forEach((widget, key) => {
         try {
-          if (widget && typeof widget.unbind === 'function') {
-            widget.unbind(window.SC?.Widget?.Events?.READY);
-            widget.unbind(window.SC?.Widget?.Events?.PLAY);
-            widget.unbind(window.SC?.Widget?.Events?.PAUSE);
-            widget.unbind(window.SC?.Widget?.Events?.FINISH);
-            widget.unbind(window.SC?.Widget?.Events?.ERROR);
+          if (widget && typeof widget.destroy === 'function') {
+            widget.destroy();
           }
         } catch (error) {
-          console.error('Error cleaning up SoundCloud widget:', error);
+          console.error('Error destroying SoundCloud widget:', error);
         }
       });
       soundCloudWidgetsRef.current.clear();
@@ -1574,13 +1585,15 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       }
     };
 
+    // Run immediately
     detectNearbyCrewMembers();
     
-    // 🔧 PERFORMANCE: Increased to 20s+ to minimize CPU impact - only when enabled
-    const detectionInterval = crewDetectionEnabled ? 20000 : 60000;
+    // 🔧 PERFORMANCE: Increase interval to 30 seconds (was 20s)
+    const detectionInterval = crewDetectionEnabled ? 30000 : 60000;
     const interval = setInterval(detectNearbyCrewMembers, detectionInterval);
+    
     return () => clearInterval(interval);
-  }, [gpsPosition, userProfile, user, topPlayers]);
+  }, [gpsPosition, userProfile, user, topPlayers, crewDetectionEnabled]); // ADD crewDetectionEnabled to deps
   
   useEffect(() => {
     if (gpsPosition && !mapCenter) {
@@ -1756,7 +1769,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     } finally {
       setIsUploadingPhoto(false);
     }
-  }, [user, userProfile, pendingDropPosition]);
+  }, [user, userProfile, pendingDropPosition, loadDrops]);
 
 const handleMarkerDrop = useCallback(async () => {
   if (!user || !userProfile || !pendingDropPosition) {
@@ -1837,7 +1850,7 @@ const handleMarkerDrop = useCallback(async () => {
     console.error('Error creating marker drop:', error);
     alert(`Failed to create marker drop: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-}, [user, userProfile, pendingDropPosition, selectedMarkerType, selectedMarkerColor, loadDrops]); // ADD selectedMarkerColor TO DEPENDENCIES
+}, [user, userProfile, pendingDropPosition, selectedMarkerType, selectedMarkerColor, loadDrops, loadAllMarkers]);
 
   const handlePhotoDrop = useCallback(() => {
     setShowDropTypeModal(false);
@@ -1938,6 +1951,9 @@ const handleMarkerDrop = useCallback(async () => {
     setPendingDropPosition({ lat, lng });
     setShowDropTypeModal(true);
   }, [user, userProfile, loadingUserProfile, showProfileSetup, isOfflineMode, gpsPosition, expandedRadius]);
+
+  // Memoized map click handler for performance
+  const memoizedHandleMapClick = useMemo(() => handleMapClick, [handleMapClick]);
 
   const toggleTracking = () => {
     if (isTracking) {
@@ -2898,7 +2914,7 @@ const handleMarkerDrop = useCallback(async () => {
                       <div
                         key={crew.id}
                         onClick={() => {
-                          setSelectedCrew(crew.id || '');
+                          setSelectedCrew(crew.id as CrewId | '');
                           setProfileCrewName(crew.name);
                         }}
                         style={{
@@ -3326,11 +3342,14 @@ const handleMarkerDrop = useCallback(async () => {
             mapRef.current = mapInstance;
             mapInstance.setMaxBounds(NZ_BOUNDS);
             
-            // Use proper Leaflet click event instead of overlay div
-            if (!isOfflineMode) {
-              mapInstance.on('click', (e: L.LeafletMouseEvent) => {
-                handleMapClick(e);
-              });
+            // Clean up previous listener
+            if (mapRef.current) {
+              mapRef.current.off('click');
+            }
+            
+            // Use memoized click handler
+            if (!isOfflineMode && mapRef.current) {
+              mapRef.current.on('click', memoizedHandleMapClick);
             }
           }
         }}
@@ -4755,10 +4774,10 @@ const handleMarkerDrop = useCallback(async () => {
                         
                         if (crewSnapshot.empty) {
                           // For new crews, use a generated ID but validate it's a valid CrewId
-                          const newCrewRef = doc(crewsRef);
-                          const newCrewId = newCrewRef.id;
-                          // Validate the generated ID is a valid CrewId
-                          crewId = newCrewId as CrewId;
+                        const newCrewRef = doc(crewsRef);
+                        const newCrewId = newCrewRef.id;
+                        // Validate the generated ID is a valid CrewId
+                        crewId = newCrewId as CrewId;
                           await setDoc(newCrewRef, {
                             name: crewName,
                             nameLower: crewNameLower,
@@ -6696,8 +6715,18 @@ position: 'relative' as 'relative'
         }
         
         @keyframes pulse {
-          0% { opacity: 1; }
-          50% { opacity: 0.5; }
+          0% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.7; transform: scale(1.05); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        
+        @keyframes slideIn {
+          0% { transform: translateY(-10px); opacity: 0; }
+          100% { transform: translateY(0); opacity: 1; }
+        }
+        
+        @keyframes fadeIn {
+          0% { opacity: 0; }
           100% { opacity: 1; }
         }
         

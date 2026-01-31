@@ -1,7 +1,7 @@
 // lib/types/story.ts
 import { Timestamp } from 'firebase/firestore';
 
-export type CrewId = 'bqc' | 'sps' | 'lzt' | 'dgc';
+export type CrewId = 'bqc' | 'sps' | 'lzt' | 'dgc' | string;
 export type MissionType = 'investigation' | 'placement' | 'collaboration' | 'exploration' | 'story' | 'crew';
 export type MissionStatus = 'locked' | 'available' | 'active' | 'completed' | 'failed';
 export type TriggerType = 'marker_placed' | 'rep_reached' | 'location_visited' | 'crew_trust' | 'mission_completed' | 'time_elapsed';
