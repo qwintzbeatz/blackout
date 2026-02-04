@@ -9,6 +9,15 @@ import {
   setDoc, 
   getDoc, 
   updateDoc,
+  collection, 
+  addDoc, 
+  query, 
+  where, 
+  getDocs, 
+  deleteDoc,
+  Timestamp,
+  orderBy,
+  limit,
   serverTimestamp as firestoreServerTimestamp 
 } from 'firebase/firestore';
 import { 
@@ -24,17 +33,6 @@ import {
   onAuthStateChanged,
   User as FirebaseUser
 } from 'firebase/auth';
-import { 
-  collection, 
-  addDoc, 
-  query, 
-  where, 
-  getDocs, 
-  deleteDoc,
-  Timestamp,
-  orderBy,
-  limit
-} from 'firebase/firestore';
 import { ref, push, onValue, query as rtdbQuery, orderByChild, limitToLast, off, set, remove, get, serverTimestamp } from 'firebase/database';
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
@@ -43,295 +41,50 @@ import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 import PhotoSelectionModal from '@/components/ui/PhotoSelectionModal';
 import DropPopup from '@/components/map/DropPopup';
-import SoundCloudCard from '@/src/components/map/SoundCloudCard';
 import MarkerPopupCard from '@/components/MarkerPopupCard';
+import MusicDropPopup from '@/components/music/MusicDropPopup';
+import PhotoDropPopup from '@/components/photo/PhotoDropPopup';
+import MarkerDropPopup from '@/components/marker/MarkerDropPopup';
 import DirectMessaging from '@/components/DirectMessaging';
 import { uploadImageToImgBB } from '@/lib/services/imgbb';
 import { saveDropToFirestore, loadAllDrops } from '@/lib/firebase/drops';
 import CrewChatPanel from '@/components/chat/CrewChatPanel';
-import { MusicPlayer } from '@/components/music/MusicPlayer';
+
 import { ProfilePanel } from '@/components/profile/ProfilePanel';
 import { useFirebaseAuth } from '@/hooks/useFirebaseAuth';
 import { useMarkers } from '@/hooks/useMarkers';
-import { useSoundCloud } from '@/lib/soundcloud';
 import { PerformanceSettingsPanel } from '@/src/components/ui/PerformanceSettingsPanel';
-import { Crew } from '@/lib/types/blackout';
+import { CrewId } from '@/constants/markers';
 import { CREWS } from '@/data/crews';
 import { useGPSTracker } from '@/hooks/useGPSTracker';
 import { EnhancedErrorBoundary } from '@/src/components/ui/EnhancedErrorBoundary';
 import { ErrorRecoveryPanel } from '@/src/components/ui/ErrorRecoveryPanel';
 import { useErrorHandler } from '@/src/hooks/useErrorHandler';
 import ErrorTest from '@/components/ui/ErrorTest';
+import { HIPHOP_TRACKS } from '@/constants/tracks';
+import { MarkerName, MarkerDescription, Gender, MARKER_COLORS, MARKER_NAMES, MARKER_DESCRIPTIONS } from '@/constants/markers';
+import { NEW_ZEALAND_LOCATIONS, NZ_BOUNDS, NZ_CENTER, NZ_DEFAULT_ZOOM, GPS_DEFAULT_ZOOM } from '@/constants/locations';
+import { detectDevicePerformance, panelStyle } from '@/utils';
+import {
+  UserProfile,
+  TopPlayer,
+  SoundCloudTrack,
+  CrewData,
+  Comment,
+  UserMarker,
+  Drop,
+  NearbyCrewMember,
+  CrewChatMessage,
+  DirectMessage,
+  DirectChat
+} from '@/types';
 
-const HIPHOP_TRACKS = [
-  "https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1",
-  "https://soundcloud.com/e-u-g-hdub-connected/hdub-party-ft-koers",
-  "https://soundcloud.com/e-u-g-hdub-connected/fight-music",
-  "https://soundcloud.com/e-u-g-hdub-connected/rockin-in-the-club",
-  "https://soundcloud.com/e-u-g-hdub-connected/we-dont-owe-u-shit-ft-koers",
-  "https://soundcloud.com/davidkdallas/runnin",
-  "https://soundcloud.com/eke_87/eke-hangn-about",
-  "https://soundcloud.com/hustle-kangs/so-good",
-  "https://soundcloud.com/e-u-g-hdub-connected/b-o-p-freestyle-at-western",
-  "https://soundcloud.com/nzhiphop/ermehn-bank-job-feat-tuface-mr-sicc",
-  "https://soundcloud.com/nzhiphop/smashproof-liquor-anthem",
-  "https://soundcloud.com/nzhiphop/home-brew-monday",
-  "https://soundcloud.com/nzhiphop/deceptikonz-go-home-stay-home",
-  "https://soundcloud.com/nzhiphop/tuface-otara-state-of-mind",
-  "https://soundcloud.com/nzhiphop/mareko-city-line",
-  "https://soundcloud.com/nzhiphop/tyna-iv-corners-djsmv-welcome-to-hamilton-city",
-  "https://soundcloud.com/truenelly/true-nelly-no-way-feat-dray-ryda",
-  "https://soundcloud.com/colourway_records/colourway-put-your-colors-on",
-  "https://soundcloud.com/nzhiphop/usual-suspects-wreck-tee-feat-j1-tyson-tyler",
-  "https://soundcloud.com/enolasoldier/dont-give-a-fck-about-you",
-  "https://soundcloud.com/nzhiphop/dj-ali-the-summit-anthem-feat-mareko-flowz-scribe",
-  "https://soundcloud.com/strikaone/westcoast-ridin",
-  "https://soundcloud.com/user-223219940/crazy-samples",
-  "https://soundcloud.com/user-270967129/chch-hiphop",
-  "https://soundcloud.com/user-270967129/flow-wit-us-a1-blazeske-ekebeat-by-p1ne",
-  "https://soundcloud.com/seasidah/ocean-view",
-  "https://soundcloud.com/loopcrew/12-waka",
-  "https://soundcloud.com/nzhiphop/nesian-mystik-brothaz",
-  "https://soundcloud.com/fame-petuha/pulling-me-back",
-  "https://soundcloud.com/tui-graham/baddest-bitch-mixdown",
-  "https://soundcloud.com/ghostdirtysteath274/ghost-self-side-glow",
-  "https://soundcloud.com/ghostdirtysteath274/hustle-intently",
-  "https://soundcloud.com/oh6-offishalz/more-than-anything-remix-oh6-offishal",
-  "https://soundcloud.com/dennis-jnr-makalio/nizz-feat-teezee-hustlaz",
-  "https://soundcloud.com/user-596628786-171564320/oh6-offishal-this-is-where-the-heart-iz",
-  "https://soundcloud.com/southgate-entertainment/12-journeys-feat-random-klik",
-  "https://soundcloud.com/base-herbert/hammer-time-dtox-west-outlawz",
-  "https://soundcloud.com/davidkdallas/dont-rate-that",
-  "https://soundcloud.com/davidkdallas/southside",
-  "https://soundcloud.com/davidkdallas/david-dallas-caught-in-a-daze",
-  "https://soundcloud.com/davidkdallas/til-tomorrow",
-  "https://soundcloud.com/stallyano/auckland-connect-feat-k-kila",
-  "https://soundcloud.com/pswish/west-auckland-pswish",
-  "https://soundcloud.com/dopekrew/ace-ft-imageprod-aebeats",
-  "https://soundcloud.com/dopekrew/family-binis-ft-mikey-mayz",
-  "https://soundcloud.com/pnc-1/ambitionz-of-a-writer-pac-beats-freestyle",
-  "https://soundcloud.com/pnc-1/12-1-2kast",
-  "https://soundcloud.com/pnc-1/02-bazookas-theme",
-  "https://soundcloud.com/btdubsta187/roll-call-187-gravity-young-sid-fizek",
-  "https://soundcloud.com/tysontyler/tyson-tyler-pull-the-trigger",
-  "https://soundcloud.com/cbrook300/conquerors-haki-1",
-  "https://soundcloud.com/cbrook300/broken-wing-1",
-  "https://soundcloud.com/cbrook300/cbrook-yngskzr-crossfade",
-  "https://soundcloud.com/schemeofficial/belly-of-the-beast-ft-tommy-graffiti",
-  "https://soundcloud.com/terangihika/sync-hmewrk",
-  "https://soundcloud.com/colourway_records/colourway-put-your-colors-on",
-  "https://soundcloud.com/terangihika/01-rec-2024-09-10",
-  "https://soundcloud.com/noize_kontrolnz/nk-radio-w-observe-feat-windu-22042025-13",
-  "https://soundcloud.com/melodownz/same-as-before",
-  "https://soundcloud.com/melodownz/eastdale-blues",
-  "https://soundcloud.com/melodownz/chocolate",
-  "https://soundcloud.com/homebrewcrew/home-brew-listen-to-us-feat",
-  "https://soundcloud.com/homebrewcrew/home-brew-just-another-prod-by",
-  "https://soundcloud.com/churchap/ready-or-not",
-  "https://soundcloud.com/swidt/kelz-garage-feat-lomez-brown",
-  "https://soundcloud.com/ladi6/4-walk-right-up-1",
-  "https://soundcloud.com/neng42/scribe-not-many-neng-bootleg",
-  "https://soundcloud.com/tipenemusic/tipene-doin-my-thing-ft-scribe",
-  "https://soundcloud.com/steven-ngametua-teritaiti/deceptikonz-p-money-fallen",
-  "https://soundcloud.com/skzr-music/moonlight-ftflocki",
-  "https://soundcloud.com/skzr-music/free-ft-oxoxci",
-  "https://soundcloud.com/skzr-music/life-hacks",
-  "https://soundcloud.com/skzr-music/trip-into-my-mind-master",
-  "https://soundcloud.com/skzr-music/emotions-ft-jlowtbh",
-  "https://soundcloud.com/skzr-music/love-sux",
-  "https://soundcloud.com/skzr-music/vibe-with-me",
-  "https://soundcloud.com/skzr-music/helen-clark-ft-c-brook-tynie-t",
-  "https://soundcloud.com/skzr-music/matters-freestyle",
-  "https://soundcloud.com/jlowtbh/ironic-hope-prod-classixs",
-  "https://soundcloud.com/intreigue/misunderstood-h-dub-c",
-  "https://soundcloud.com/intreigue/back-in-the-day-h-dub-c",
-  "https://soundcloud.com/intreigue/turn-dat-40-up-hdub-c",
-  "https://soundcloud.com/dawnraidmusic/savage-all-in-featuring",
-  "https://soundcloud.com/marekothehorse/07-deceptikonz-back-to-front-freestyle",
-  "https://soundcloud.com/marekothehorse/mareko-this-is-it",
-  "https://soundcloud.com/marekothehorse/rex-martel-free-at-last",
-  "https://soundcloud.com/diggydupe/diggy-dupe-godlike",
-  "https://soundcloud.com/diggydupe/bring-back-badu-prod-tantu",
-  "https://soundcloud.com/user-565273118/nesian-mystik-sun-goes-down",
-  "https://soundcloud.com/anatonga-patricia-uate/nesian-mystik-nesian-style",
-  "https://soundcloud.com/freeloaderactivity/nesian-mystik-unity",
-  "https://soundcloud.com/jacob5-1/nesian-mystik-for-the-people",
-  "https://soundcloud.com/tianna-cole-440312719/nesian-mystik-robbin-hood",
-  "https://soundcloud.com/t1zzle/aquarius-sir-t",
-  "https://soundcloud.com/t1zzle/hands-up-featuring-tha",
-  "https://soundcloud.com/t1zzle/further-than-you-thought",
-  "https://soundcloud.com/t1zzle/ready-for-whatever-feat-sidney",
-  "https://soundcloud.com/t1zzle/celebrate-mugz-x-sir-t-x-resin-one",
-  "https://soundcloud.com/diamonddistrict-1/bottles",
-  "https://soundcloud.com/frasko-1/frasko-outlaw",
-  "https://soundcloud.com/user-27171095/equinimity-nz-hiphop",
-  "https://soundcloud.com/john-donnelly-992133591/kwick-ft-john-dee-with-you",
-  "https://soundcloud.com/phdhiphop/phd-summer-nz",
-  "https://soundcloud.com/madisnzofficial/madis-thats-life-produced-by",
-  "https://soundcloud.com/empirerecordsnz/tipene-west-side-hori-remix",
-  "https://soundcloud.com/markangel-71269802/smashproof-feat-gin-wigmore-brother",
-  "https://soundcloud.com/johnny-sicario/nobody-to-me-dame-teezee",
-  "https://soundcloud.com/johnny-sicario/armed-dangerous-coey-east"
 
-];
 
 // 🔧 PERFORMANCE: Enable SoundCloud for music playback functionality
 const ENABLE_SOUNDCLOUD = true;
 
-// ========== TYPE DEFINITIONS ==========
-type MarkerName = 'Pole' | 'Sign' | 'E.Box' | 'Fence' | 'Wall' | 'Shutter' | 'Sewer' | 'Rooftop' | 'Ground' | 'Train' | 'Bridge' | 'Traffic Light' | 'Truck' | 'Van' | 'Post Box' | 'Speed Camera' | 'ATM Machine' | 'Bus Stop';
-type MarkerDescription = 'Sticker/Slap' | 'Stencil/Brand/Stamp' | 'Tag/Signature' | 'Etch/Scribe/Scratch' | 'Throw-Up' | 'Paste-Up/Poster' | 'Piece/Bombing' | 'Burner/Heater' | 'Roller/Blockbuster' | 'Extinguisher' | 'Mural';
-type CrewId = 'bqc' | 'sps' | 'lzt' | 'dgc' | null;
-type Gender = 'male' | 'female' | 'other' | 'prefer-not-to-say';
 
-interface UserProfile {
-  uid: string;
-  email: string;
-  username: string;
-  gender: Gender;
-  profilePicUrl: string;
-  rep: number;
-  level: number;
-  rank: string;
-  totalMarkers: number;
-  favoriteColor?: string;
-  createdAt: Date;
-  lastActive: Date;
-  isSolo?: boolean;
-  crewName?: string | null;
-  crewId?: CrewId | null;
-  isLeader?: boolean;
-  unlockedTracks?: string[];
-  crewJoinedAt?: Date | null;
-  crewRank?: string;
-  crewRep?: number;
-  currentAct?: number;
-  storyProgress?: number;
-  markersPlaced?: number;
-  photosTaken?: number;
-  collaborations?: number;
-  blackoutEventsInvestigated?: number;
-  kaiTiakiEvaluationsReceived?: number;
-}
-
-interface TopPlayer {
-  uid: string;
-  username: string;
-  profilePicUrl: string;
-  rank: string;
-  rep: number;
-  level: number;
-  totalMarkers: number;
-  position?: [number, number];
-  lastActive: Date;
-}
-
-interface SoundCloudTrack {
-  url: string;
-  title: string;
-  isLoaded: boolean;
-  iframeId?: string;
-}
-
-interface CrewData {
-  id: string;
-  name: string;
-  leader: string;
-  description: string;
-  bonus: string;
-  color: string;
-  accentColor: string;
-}
-
-interface LocationInfo {
-  coords: [number, number];
-  description: string;
-}
-
-interface Comment {
-  id: string;
-  userId: string;
-  username: string;
-  text: string;
-  timestamp: Date;
-  userProfilePic?: string;
-}
-
-interface UserMarker {
-  id: string;
-  position: [number, number];
-  name: MarkerName;
-  description: MarkerDescription;
-  color: string;
-  timestamp: Date;
-  distanceFromCenter?: number;
-  userId?: string;
-  firestoreId?: string;
-  username?: string;
-  userProfilePic?: string;
-  repEarned?: number;
-  createdAt?: Date;
-  likes?: string[];
-  comments?: Comment[];
-}
-
-interface Drop {
-  id?: string;
-  firestoreId?: string;
-  lat: number;
-  lng: number;
-  photoUrl?: string;
-  trackUrl?: string;
-  createdBy: string;
-  timestamp: Date;
-  likes: string[];
-  username: string;
-  userProfilePic: string;
-}
-
-interface NearbyCrewMember {
-  uid: string;
-  username: string;
-  distance: number;
-}
-
-// 🆕 CREW CHAT MESSAGE TYPE
-interface CrewChatMessage {
-  id: string;
-  text: string;
-  uid: string;
-  username: string;
-  avatar?: string;
-  timestamp: number;
-  failed?: boolean; // For failed messages
-}
-
-// 🆕 MESSAGING TYPES (for direct messages)
-interface DirectMessage {
-  id: string;
-  senderId: string;
-  senderName: string;
-  senderProfilePic: string;
-  receiverId: string;
-  content: string;
-  timestamp: Date;
-  isRead: boolean;
-  type: 'text' | 'location' | 'photo' | 'crew_invite';
-  location?: [number, number];
-  photoUrl?: string;
-}
-
-interface DirectChat {
-  chatId: string;
-  participantIds: string[];
-  participantNames: string[];
-  participantProfilePics: string[];
-  lastMessage: string;
-  lastMessageTime: Date;
-  unreadCount: number;
-}
-
-// ========== END TYPE DEFINITIONS ==========
 
 // PERFORMANCE OPTIMIZATIONS:
 // - Component splitting: CrewChatPanel, MusicPlayer, ProfilePanel extracted
@@ -339,54 +92,15 @@ interface DirectChat {
 // - Memory cleanup: Proper event listener cleanup in useEffect
 // - Bundle reduction: Separated concerns into modular components
 
-const NEW_ZEALAND_LOCATIONS: Record<string, LocationInfo> = {
-  'Auckland': {
-    coords: [-36.8485, 174.7633],
-    description: 'City of Sails'
-  },
-  'Wellington': {
-    coords: [-41.2865, 174.7762],
-    description: 'Windy City'
-  },
-  'Christchurch': {
-    coords: [-43.5320, 172.6306],
-    description: 'Garden City'
-  },
-  'Queenstown': {
-    coords: [-45.0312, 168.6626],
-    description: 'Adventure Capital'
-  },
-  'Dunedin': {
-    coords: [-45.8788, 170.5028],
-    description: 'Edinburgh of the South'
-  }
-};
 
 
 
 
 
-// Marker name options
-const MARKER_NAMES: MarkerName[] = ['Pole', 'Sign', 'E.Box', 'Fence', 'Wall', 'Shutter', 'Sewer', 'Rooftop', 'Ground', 'Train', 'Bridge', 'Traffic Light', 'Truck', 'Van', 'Post Box', 'Speed Camera', 'ATM Machine', 'Bus Stop'];
 
-// Marker description options
-const MARKER_DESCRIPTIONS: MarkerDescription[] = ['Sticker/Slap', 'Stencil/Brand/Stamp', 'Tag/Signature', 'Etch/Scribe/Scratch', 'Throw-Up', 'Paste-Up/Poster', 'Piece/Bombing', 'Burner/Heater', 'Roller/Blockbuster', 'Extinguisher', 'Mural'];
 
-// Modern panel styling constant for consistency across all UI panels
-const panelStyle = {
-  backgroundColor: 'rgba(0, 0, 0, 0.85)',
-  color: '#e0e0e0',
-  padding: '16px',
-  borderRadius: '12px',
-  boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
-  width: 'min(110vw, 400px)',
-  maxHeight: '75vh',
-  overflowY: 'auto' as const,
-  border: '1px solid rgba(255,255,255,0.15)',
-  backdropFilter: 'blur(8px)',
-  zIndex: 1200,
-  position: 'relative'
-};
+
+
 
 // Helper function to calculate distance between two coordinates in meters
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -474,19 +188,7 @@ const getTrackNameFromUrl = (url: string): string => {
   return 'Unknown Track';
 };
 
-// Marker colors
-const MARKER_COLORS = [
-  { name: 'Green', value: '#10b981' },
-  { name: 'Red', value: '#ef4444' },
-  { name: 'Blue', value: '#4dabf7' },
-  { name: 'Purple', value: '#8b5cf6' },
-  { name: 'Orange', value: '#f97316' },
-  { name: 'Pink', value: '#ec4899' },
-  { name: 'Black', value: '#000000' },
-  { name: 'Yellow', value: '#fbbf24' },
-  { name: 'Cyan', value: '#22d3ee' },
-  { name: 'Gray', value: '#6b7280' }
-] as const;
+
 
 // Helper function to calculate bounds from markers
 const calculateBoundsFromMarkers = (markers: UserMarker[]): [[number, number], [number, number]] | null => {
@@ -608,13 +310,7 @@ const HomeComponent = () => {
   // ========== STATE DECLARATIONS ==========
   const [mapReady, setMapReady] = useState(false);
   const [zoom, setZoom] = useState<number>(4);
-  const NZ_BOUNDS: [[number, number], [number, number]] = [
-    [-47.5, 165.0],
-    [-34.0, 179.0]
-  ];
-  const NZ_CENTER: [number, number] = [-40.9006, 174.8860];
-  const NZ_DEFAULT_ZOOM = 4;
-  const GPS_DEFAULT_ZOOM = 80;
+  
   const [showStoryPanel, setShowStoryPanel] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [isClient, setIsClient] = useState(false);
@@ -643,6 +339,7 @@ const HomeComponent = () => {
   const [profileUsername, setProfileUsername] = useState('');
   const [profileGender, setProfileGender] = useState<Gender>('prefer-not-to-say');
   const [profileLoading, setProfileLoading] = useState(false);
+  const [showCrewChat, setShowCrewChat] = useState(false);
   const [profileCrewChoice, setProfileCrewChoice] = useState<'crew' | 'solo'>('crew');
   const [profileCrewName, setProfileCrewName] = useState('');
   
@@ -701,7 +398,7 @@ const HomeComponent = () => {
   const [showMessagesPanel, setShowMessagesPanel] = useState(false);
   const [showMapPanel, setShowMapPanel] = useState(false);
   const [showMusicPanel, setShowMusicPanel] = useState(false);
-  const [showCrewChat, setShowCrewChat] = useState(false);
+
   
   // 🆕 Mission notification state
   const [missionNotification, setMissionNotification] = useState<{
@@ -762,7 +459,6 @@ const HomeComponent = () => {
   
   // ========== REFS ==========
   const mapRef = useRef<L.Map | null>(null);
-  const soundCloudManager = useSoundCloud();
   
   // 🆕 Story Manager Context
   const [storyManagerInitialized, setStoryManagerInitialized] = useState(false);
@@ -799,97 +495,7 @@ const {
 
   // ========== EXISTING FUNCTIONS ==========
   
-  const initializeMainPlayer = useCallback(() => {
-    if (!ENABLE_SOUNDCLOUD || unlockedTracks.length === 0) return;
 
-    const currentTrack = unlockedTracks[currentTrackIndex];
-    if (!currentTrack || !currentTrack.includes('soundcloud.com')) return;
-
-    const iframeId = 'soundcloud-main-player';
-    
-    const iframe = soundCloudManager.createIframe(iframeId, currentTrack, true);
-    if (!iframe) return;
-
-    const widget = soundCloudManager.createWidget(iframeId, currentTrack, {
-      volume,
-      onFinish: () => {
-        setIsPlaying(false);
-        playNextTrack();
-      },
-      onError: (error: any) => {
-        console.error('Main SoundCloud player error:', error);
-      }
-    });
-
-    if (widget) {
-      widget.bind(window.SC.Widget.Events.PLAY, () => {
-        setIsPlaying(true);
-      });
-      
-      widget.bind(window.SC.Widget.Events.PAUSE, () => {
-        setIsPlaying(false);
-      });
-    }
-  }, [unlockedTracks, currentTrackIndex, volume, soundCloudManager]);
-
-  // Initialize SoundCloud manager
-  useEffect(() => {
-    if (!ENABLE_SOUNDCLOUD) return;
-
-    soundCloudManager.initialize().then(() => {
-      initializeMainPlayer();
-    });
-
-    return () => {
-      soundCloudManager.destroyAll();
-    };
-  }, [initializeMainPlayer, soundCloudManager]);
-
-  useEffect(() => {
-    if (unlockedTracks.length === 0) return;
-
-    if (!ENABLE_SOUNDCLOUD) return;
-
-    const currentTrack = unlockedTracks[currentTrackIndex];
-    if (!currentTrack || !currentTrack.includes('soundcloud.com')) return;
-
-    const iframeId = 'soundcloud-main-player';
-    soundCloudManager.destroyWidget(iframeId);
-    
-    const iframe = soundCloudManager.createIframe(iframeId, currentTrack, true);
-    if (!iframe) return;
-
-    const widget = soundCloudManager.createWidget(iframeId, currentTrack, {
-      volume,
-      autoplay: isPlaying,
-      onFinish: () => {
-        setIsPlaying(false);
-        playNextTrack();
-      },
-      onError: (error: any) => {
-        console.error('Track change SoundCloud error:', error);
-      }
-    });
-
-    if (widget) {
-      widget.bind(window.SC.Widget.Events.PLAY, () => {
-        setIsPlaying(true);
-      });
-      
-      widget.bind(window.SC.Widget.Events.PAUSE, () => {
-        setIsPlaying(false);
-      });
-    }
-  }, [currentTrackIndex, unlockedTracks, isPlaying, volume, soundCloudManager]);
-
-  useEffect(() => {
-    const iframeId = 'soundcloud-main-player';
-    const widget = soundCloudManager.getWidget(iframeId);
-    
-    if (widget && typeof widget.setVolume === 'function') {
-      widget.setVolume(Math.round(volume * 100));
-    }
-  }, [volume, soundCloudManager]);
 
   useEffect(() => {
     const initializeSoundCloudTracks = async () => {
@@ -925,24 +531,7 @@ const {
   const togglePlay = () => {
     if (unlockedTracks.length === 0) return;
     
-    const iframeId = 'soundcloud-main-player';
-    const widget = soundCloudManager.getWidget(iframeId);
-    
-    if (widget && typeof widget.toggle === 'function') {
-      try {
-        widget.toggle();
-        widget.isPaused((paused: boolean) => {
-          setIsPlaying(!paused);
-        });
-      } catch (error) {
-        console.error('Error toggling play:', error);
-        setIsPlaying(!isPlaying);
-      }
-    } else {
-      // Fallback: try to initialize or just toggle state
-      setIsPlaying(!isPlaying);
-      initializeMainPlayer();
-    }
+    setIsPlaying(!isPlaying);
   };
 
   const playNextTrack = () => {
@@ -1111,25 +700,25 @@ const {
       if (!isSolo && selectedCrew) {
         // selectedCrew should be 'bqc', 'sps', 'lzt', or 'dgc'
         crewId = selectedCrew; // ✅ This should be the crew code
-        const selectedCrewData = CREWS.find(c => c.id === selectedCrew);
-        crewName = selectedCrewData?.name || null;
-        
-        const crewsRef = collection(db, 'crews');
-        const crewQuery = query(crewsRef, where('id', '==', crewId));
-        const crewSnapshot = await getDocs(crewQuery);
-        
-        if (crewSnapshot.empty) {
-          const newCrewRef = doc(crewsRef);
-          await setDoc(newCrewRef, {
-            id: crewId,
-            name: crewName,
-            members: [user.uid],
-            createdAt: Timestamp.now(),
-            createdBy: user.uid,
-            rep: 0,
-            color: selectedCrewData?.color || '#4dabf7',
-            description: selectedCrewData?.description || ''
-          });
+                        const selectedCrewData = CREWS.find(c => c.id === selectedCrew);
+                        crewName = selectedCrewData?.name || null;
+                        
+                        const crewsRef = collection(db, 'crews');
+                        const crewQuery = query(crewsRef, where('id', '==', crewId));
+                        const crewSnapshot = await getDocs(crewQuery);
+                        
+                        if (crewSnapshot.empty) {
+                          const newCrewRef = doc(crewsRef);
+                          await setDoc(newCrewRef, {
+                            id: crewId,
+                            name: crewName,
+                            members: [user.uid],
+                            createdAt: Timestamp.now(),
+                            createdBy: user.uid,
+                            rep: 0,
+                            color: selectedCrewData?.colors?.primary || '#4dabf7',
+                            description: selectedCrewData?.description || ''
+                          });
         } else {
           const crewDoc = crewSnapshot.docs[0];
           const currentMembers = crewDoc.data().members || [];
@@ -1199,11 +788,6 @@ const {
       setCurrentTrackIndex(0);
       setIsPlaying(true);
       
-      // Initialize the SoundCloud player with the default track
-      setTimeout(() => {
-        initializeMainPlayer();
-      }, 100);
-      
       setShowProfileSetup(false);
       setProfileUsername('');
       setProfileCrewName('');
@@ -1254,11 +838,6 @@ const {
 
   const handleLogout = async (): Promise<void> => {
     try {
-      const iframeId = 'soundcloud-main-player';
-      const widget = soundCloudManager.getWidget(iframeId);
-      if (widget && typeof widget.pause === 'function') {
-        widget.pause();
-      }
       setIsPlaying(false);
       
       await signOut(auth);
@@ -1431,7 +1010,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         setNextMarkerNumber(1);
         setLoadingUserProfile(false);
         setIsPlaying(false);
-        setShowCrewChat(false);
+
       }
     });
     
@@ -2836,7 +2415,7 @@ const handleMarkerDrop = useCallback(async () => {
                   </div>
                   
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '15px' }}>
-                    {CREWS.map((crew: CrewData) => (
+                    {CREWS.map((crew) => (
                       <div
                         key={crew.id}
                         onClick={() => {
@@ -2845,8 +2424,8 @@ const handleMarkerDrop = useCallback(async () => {
                         }}
                         style={{
                           padding: '12px',
-                          backgroundColor: selectedCrew === crew.id ? `${crew.color}20` : '#f9fafb',
-                          border: `2px solid ${selectedCrew === crew.id ? crew.color : '#e5e7eb'}`,
+                          backgroundColor: selectedCrew === crew.id ? `${crew.colors.primary}20` : '#f9fafb',
+                          border: `2px solid ${selectedCrew === crew.id ? crew.colors.primary : '#e5e7eb'}`,
                           borderRadius: '8px',
                           cursor: 'pointer',
                           transition: 'all 0.2s'
@@ -2857,18 +2436,18 @@ const handleMarkerDrop = useCallback(async () => {
                             width: '40px',
                             height: '40px',
                             borderRadius: '50%',
-                            backgroundColor: crew.color,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: crew.accentColor,
-                            fontWeight: 'bold',
-                            fontSize: '16px'
-                          }}>
+                            backgroundColor: crew.colors.primary,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#ffffff',
+                          fontWeight: 'bold',
+                          fontSize: '16px'
+                        }}>
                             {crew.name.charAt(0)}
                           </div>
                           <div style={{ textAlign: 'left', flex: 1 }}>
-                            <div style={{ fontWeight: 'bold', color: crew.color, fontSize: '13px' }}>
+                            <div style={{ fontWeight: 'bold', color: crew.colors.primary, fontSize: '13px' }}>
                               {crew.name}
                             </div>
                             <div style={{ fontSize: '11px', color: '#6b7280' }}>
@@ -2881,9 +2460,9 @@ const handleMarkerDrop = useCallback(async () => {
                           <div style={{ 
                             marginTop: '10px', 
                             padding: '8px',
-                            backgroundColor: `${crew.color}10`,
+                            backgroundColor: `${crew.colors.primary}10`,
                             borderRadius: '6px',
-                            borderLeft: `3px solid ${crew.color}`
+                            borderLeft: `3px solid ${crew.colors.primary}`
                           }}>
                             <div style={{ fontSize: '11px', color: '#374151', fontWeight: '500' }}>
                               {crew.description}
@@ -3084,188 +2663,7 @@ const handleMarkerDrop = useCallback(async () => {
           </div>
         )}
 
-    {showCrewChat && userProfile?.crewId && user && (
-      <CrewChatPanel 
-        crewId={userProfile.crewId} 
-        onClose={() => setShowCrewChat(false)}
-        userProfile={userProfile}
-      />
-    )}
 
-        {/* Floating Mini Music Player */}
-        <div style={{
-          position: 'fixed',
-          bottom: 90,
-          right: 20,
-          background: 'rgba(15, 23, 42, 0.95)',
-          padding: '15px 20px',
-          borderRadius: '15px',
-          boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
-          zIndex: 0,
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          minWidth: '280px',
-          maxWidth: '400px',
-          color: 'white',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px'
-        }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          marginBottom: '8px'
-        }}>
-          <button
-            onClick={togglePlay}
-            style={{
-              width: '45px',
-              height: '45px',
-              borderRadius: '50%',
-              backgroundColor: isPlaying ? '#ef4444' : '#10b981',
-              border: 'none',
-              color: 'white',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '20px',
-              boxShadow: '0 6px 15px rgba(0,0,0,0.3)',
-              transition: 'all 0.3s ease'
-            }}
-            onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-            onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
-          >
-            {isPlaying ? '⏸️' : '▶️'}
-          </button>
-          
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ 
-              fontSize: '14px', 
-              fontWeight: 'bold', 
-              color: 'white',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis'
-            }}>
-              🎵 {getCurrentTrackName()}
-            </div>
-            <div style={{ 
-              fontSize: '12px', 
-              color: '#cbd5e1', 
-              marginTop: '4px',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis'
-            }}>
-              Track {currentTrackIndex + 1} of {unlockedTracks.length}
-            </div>
-          </div>
-          
-          <button
-            onClick={playNextTrack}
-            style={{
-              width: '35px',
-              height: '35px',
-              borderRadius: '50%',
-              backgroundColor: 'rgba(59, 130, 246, 0.2)',
-              border: '1px solid rgba(59, 130, 246, 0.3)',
-              color: '#4dabf7',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '16px',
-              boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.transform = 'scale(1.1)';
-              e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.3)';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.2)';
-            }}
-            title="Next Track"
-          >
-            ⏭️
-          </button>
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '14px', color: '#cbd5e1', minWidth: '20px' }}>
-            {volume === 0 ? '🔇' : volume < 0.5 ? '🔈' : '🔊'}
-          </span>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            onChange={handleVolumeChange}
-            style={{
-              flex: 1,
-              height: '6px',
-              borderRadius: '3px',
-              background: 'linear-gradient(to right, #ef4444, #f59e0b, #10b981)',
-              outline: 'none',
-              WebkitAppearance: 'none',
-              cursor: 'pointer'
-            }}
-          />
-          <span style={{ fontSize: '12px', color: 'white', minWidth: '40px', textAlign: 'right' }}>
-            {Math.round(volume * 100)}%
-          </span>
-        </div>
-
-        <div style={{ 
-          height: '4px', 
-          width: '100%', 
-          backgroundColor: 'rgba(255,255,255,0.1)', 
-          borderRadius: '2px',
-          overflow: 'hidden'
-        }}>
-          <div style={{
-            height: '100%',
-            width: '30%',
-            background: 'linear-gradient(90deg, #4dabf7, #8a2be2)',
-            borderRadius: '2px',
-            animation: 'progressPulse 2s infinite'
-          }}></div>
-        </div>
-        
-        <button
-          onClick={() => {
-            setShowMusicPanel(true);
-            setShowProfilePanel(false);
-            setShowPhotosPanel(false);
-            setShowMessagesPanel(false);
-            setShowMapPanel(false);
-          }}
-          style={{
-            marginTop: '8px',
-            background: 'rgba(138, 43, 226, 0.2)',
-            border: '1px solid rgba(138, 43, 226, 0.3)',
-            color: '#8a2be2',
-            padding: '8px 12px',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontSize: '12px',
-            textAlign: 'center',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(138, 43, 226, 0.3)';
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(138, 43, 226, 0.2)';
-          }}
-        >
-          🎵 Open Music Panel ({unlockedTracks.length} tracks)
-        </button>
-      </div>
           
       <MapContainer
         center={
@@ -3749,17 +3147,19 @@ const handleMarkerDrop = useCallback(async () => {
               position={[drop.lat, drop.lng]}
               icon={dropIcon}
             >
-              <DropPopup
-                drop={drop}
-                user={user}
-                onLikeUpdate={(dropId, newLikes) => {
-                  setDrops(prev =>
-                    prev.map(d =>
-                      d.firestoreId === dropId ? { ...d, likes: newLikes } : d
-                    )
-                  );
-                }}
-              />
+              <Popup>
+                <PhotoDropPopup
+                  drop={drop}
+                  user={user}
+                  onLikeUpdate={(dropId, newLikes) => {
+                    setDrops(prev =>
+                      prev.map(d =>
+                        d.firestoreId === dropId ? { ...d, likes: newLikes } : d
+                      )
+                    );
+                  }}
+                />
+              </Popup>
             </Marker>
           );
         })}
@@ -3782,7 +3182,10 @@ const handleMarkerDrop = useCallback(async () => {
                 ">
                   🎵
                 </div>`,
-              className: 'music-marker-icon'
+              className: 'music-marker-icon',
+              iconSize: [28, 28],
+              iconAnchor: [14, 14],
+              popupAnchor: [0, -14]
             }) : undefined;
 
           return (
@@ -3791,20 +3194,19 @@ const handleMarkerDrop = useCallback(async () => {
               position={[drop.lat, drop.lng]}
               icon={musicIcon}
             >
-              <SoundCloudCard
-                drop={drop}
-                user={user}
-                isVisible={false}
-                position={{ lat: drop.lat, lng: drop.lng }}
-                onClose={() => {}}
-                onLikeUpdate={(dropId: string, newLikes: string[]) => {
-                  setDrops(prev =>
-                    prev.map((d: any) =>
-                      d.firestoreId === dropId ? { ...d, likes: newLikes } : d
-                    )
-                  );
-                }}
-              />
+              <Popup>
+                <MusicDropPopup
+                  drop={drop}
+                  user={user}
+                  onLikeUpdate={(dropId: string, newLikes: string[]) => {
+                    setDrops(prev =>
+                      prev.map((d: any) =>
+                        d.firestoreId === dropId ? { ...d, likes: newLikes } : d
+                      )
+                    );
+                  }}
+                />
+              </Popup>
             </Marker>
           );
         })}
@@ -3863,17 +3265,19 @@ const handleMarkerDrop = useCallback(async () => {
               position={[drop.lat, drop.lng]}
               icon={markerIcon}
             >
-              <DropPopup
-                drop={drop}
-                user={user}
-                onLikeUpdate={(dropId, newLikes) => {
-                  setDrops(prev =>
-                    prev.map(d =>
-                      d.firestoreId === dropId ? { ...d, likes: newLikes } : d
-                    )
-                  );
-                }}
-              />
+              <Popup>
+                <MarkerDropPopup
+                  drop={drop}
+                  user={user}
+                  onLikeUpdate={(dropId, newLikes) => {
+                    setDrops(prev =>
+                      prev.map(d =>
+                        d.firestoreId === dropId ? { ...d, likes: newLikes } : d
+                      )
+                    );
+                  }}
+                />
+              </Popup>
             </Marker>
           );
         })}
@@ -4344,7 +3748,7 @@ const handleMarkerDrop = useCallback(async () => {
               height: '6px',
               borderRadius: '50%',
               backgroundColor: userProfile.isSolo ? '#f59e0b' :
-                    userProfile.crewId === 'bqc' ? '#ef4444' : 
+                    userProfile.crewId === 'bqc' ? '#ffffff' : 
                     userProfile.crewId === 'sps' ? '#4dabf7' : 
                     userProfile.crewId === 'lzt' ? '#10b981' : 
                     userProfile.crewId === 'dgc' ? '#8b5cf6' : '#9ca3af',
@@ -4617,46 +4021,7 @@ const handleMarkerDrop = useCallback(async () => {
                 </div>
               )}
 
-              {/* 🆕 Crew Chat Button */}
-              {userProfile?.crewId && !userProfile.isSolo && (
-                <button
-                  onClick={() => {
-                    setShowCrewChat(true);
-                    setShowProfilePanel(false);
-                    setShowPhotosPanel(false);
-                    setShowMessagesPanel(false);
-                    setShowMapPanel(false);
-                    setShowMusicPanel(false);
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    background: '#10b981',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: 'bold',
-                    marginTop: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    transition: 'all 0.2s ease'
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                >
-                  💬 Open Crew Chat
-                </button>
-              )}
+
 
               {userProfile?.isSolo && (
                 <div style={{ marginTop: '8px' }}>
@@ -4755,6 +4120,48 @@ const handleMarkerDrop = useCallback(async () => {
                 </div>
               )}
 
+              {/* 🆕 Crew Chat Button */}
+              {userProfile?.crewId && !userProfile.isSolo && (
+                <button
+                  onClick={() => {
+                    setShowCrewChat(true);
+                    setShowProfilePanel(false);
+                    setShowPhotosPanel(false);
+                    setShowMessagesPanel(false);
+                    setShowMapPanel(false);
+                    setShowMusicPanel(false);
+                    setShowStoryPanel(false);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    background: '#10b981',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    marginTop: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  💬 Open Crew Chat
+                </button>
+              )}
+
               {userProfile?.crewName && !userProfile?.isSolo && (
                 <button
                   onClick={async () => {
@@ -4791,15 +4198,13 @@ const handleMarkerDrop = useCallback(async () => {
                     }
                   }}
                   style={{
-                    width: '100%',
-                    padding: '8px',
                     background: '#ef4444',
                     color: 'white',
                     border: 'none',
+                    padding: '8px',
                     borderRadius: '4px',
                     cursor: 'pointer',
                     fontSize: '12px',
-                    fontWeight: 'bold',
                     marginTop: '8px'
                   }}
                 >
@@ -5023,12 +4428,7 @@ const handleMarkerDrop = useCallback(async () => {
                     setUnlockedTracks(['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1']);
                     setCurrentTrackIndex(0);
                     
-                    // Pause music if playing
-                    const iframeId = 'soundcloud-main-player';
-                    const widget = soundCloudManager.getWidget(iframeId);
-                    if (widget && typeof widget.pause === 'function') {
-                      widget.pause();
-                    }
+                    // Stop music
                     setIsPlaying(false);
                     
                     await loadAllMarkers();
@@ -5495,154 +4895,154 @@ const handleMarkerDrop = useCallback(async () => {
 
               {/* Color Picker */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-  <div style={{ fontSize: '15px', color: '#ff6b6b', marginBottom: '8px', fontWeight: 'bold' }}>
-    🎨 MARKER COLOR
-  </div>
-  <div style={{ 
-    display: 'grid', 
-    gridTemplateColumns: 'repeat(5, 1fr)', 
-    gap: '10px',
-    padding: '12px',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: '10px',
-    border: '1px solid rgba(255, 107, 107, 0.2)',
-    width: '100%'
-  }}>
-    {MARKER_COLORS.map((color) => (
-      <div 
-        key={color.value}
-        onClick={() => {
-          setSelectedMarkerColor(color.value);
-          saveFavoriteColor(color.value);
-        }}
-        style={{
-          position: 'relative',
-          width: '36px',  // Larger size
-          height: '36px', // Larger size
-          backgroundColor: color.value,
-          border: selectedMarkerColor === color.value ? 
-            '3px solid #ff6b6b' : '2px solid rgba(255,255,255,0.3)',
-          borderRadius: '8px',
-          cursor: 'pointer',
-          transition: 'all 0.2s ease',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: selectedMarkerColor === color.value ? 
-            '0 0 12px rgba(255, 107, 107, 0.5)' : '0 2px 6px rgba(0,0,0,0.3)',
-          transform: selectedMarkerColor === color.value ? 'scale(1.1)' : 'scale(1)'
-        }}
-        onMouseEnter={(e) => {
-          if (selectedMarkerColor !== color.value) {
-            e.currentTarget.style.transform = 'scale(1.05)';
-            e.currentTarget.style.boxShadow = '0 0 8px rgba(255,255,255,0.2)';
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (selectedMarkerColor !== color.value) {
-            e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
-          }
-        }}
-      >
-        {/* Selected indicator */}
-        {selectedMarkerColor === color.value && (
-          <div style={{
-            position: 'absolute',
-            top: '-6px',
-            right: '-6px',
-            width: '16px',
-            height: '16px',
-            backgroundColor: '#ff6b6b',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '10px',
-            color: 'white',
-            fontWeight: 'bold',
-            border: '2px solid rgba(0,0,0,0.5)',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
-          }}>
-            ✓
-          </div>
-        )}
-        
-        {/* Color name tooltip on hover */}
-        <div style={{
-          position: 'absolute',
-          bottom: '100%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          backgroundColor: 'rgba(0,0,0,0.9)',
-          color: 'white',
-          padding: '6px 10px',
-          borderRadius: '6px',
-          fontSize: '11px',
-          fontWeight: 'bold',
-          whiteSpace: 'nowrap',
-          opacity: 0,
-          pointerEvents: 'none',
-          transition: 'opacity 0.2s',
-          marginBottom: '8px',
-          border: '1px solid rgba(255,255,255,0.2)',
-          zIndex: 1
-        }} className="color-tooltip">
-          {color.name}
-        </div>
-      </div>
-    ))}
-  </div>
-  
-  {/* Current color display */}
-  <div style={{
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '10px',
-    marginTop: '8px',
-    padding: '10px',
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderRadius: '8px',
-    border: '1px solid rgba(255,255,255,0.1)',
-    width: '100%'
-  }}>
-    <div style={{
-      width: '24px',
-      height: '24px',
-      borderRadius: '50%',
-      backgroundColor: selectedMarkerColor,
-      border: '2px solid white',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-    }} />
-    <div style={{
-      fontSize: '12px',
-      color: '#e0e0e0',
-      fontWeight: 'bold'
-    }}>
-      {MARKER_COLORS.find(c => c.value === selectedMarkerColor)?.name || 'Custom'}
-    </div>
-    <div style={{
-      fontSize: '10px',
-      color: '#94a3b8',
-      backgroundColor: 'rgba(255,255,255,0.05)',
-      padding: '2px 6px',
-      borderRadius: '4px',
-      fontFamily: 'monospace'
-    }}>
-      {selectedMarkerColor}
-    </div>
-  </div>
-  
-  <span style={{ 
-    fontSize: '11px', 
-    color: '#94a3b8', 
-    textAlign: 'center',
-    marginTop: '4px'
-  }}>
-    Click to choose marker color
-  </span>
-</div>
+              <div style={{ fontSize: '15px', color: '#ff6b6b', marginBottom: '8px', fontWeight: 'bold' }}>
+                🎨 MARKER COLOR
+              </div>
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(5, 1fr)', 
+                  gap: '10px',
+                  padding: '12px',
+                  backgroundColor: 'rgba(255,255,255,0.05)',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(255, 107, 107, 0.2)',
+                  width: '100%'
+                }}>
+                {MARKER_COLORS.map((color) => (
+                  <div 
+                    key={color.value}
+                    onClick={() => {
+                      setSelectedMarkerColor(color.value);
+                      saveFavoriteColor(color.value);
+                    }}
+                    style={{
+                      position: 'relative',
+                      width: '36px',  // Larger size
+                      height: '36px', // Larger size
+                      backgroundColor: color.value,
+                      border: selectedMarkerColor === color.value ? 
+                        '3px solid #ff6b6b' : '2px solid rgba(255,255,255,0.3)',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: selectedMarkerColor === color.value ? 
+                        '0 0 12px rgba(255, 107, 107, 0.5)' : '0 2px 6px rgba(0,0,0,0.3)',
+                      transform: selectedMarkerColor === color.value ? 'scale(1.1)' : 'scale(1)'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (selectedMarkerColor !== color.value) {
+                        e.currentTarget.style.transform = 'scale(1.05)';
+                        e.currentTarget.style.boxShadow = '0 0 8px rgba(255,255,255,0.2)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (selectedMarkerColor !== color.value) {
+                        e.currentTarget.style.transform = 'scale(1)';
+                        e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
+                      }
+                    }}
+                  >
+                      {/* Selected indicator */}
+                      {selectedMarkerColor === color.value && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '-6px',
+                          right: '-6px',
+                          width: '16px',
+                          height: '16px',
+                          backgroundColor: '#ff6b6b',
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '10px',
+                          color: 'white',
+                          fontWeight: 'bold',
+                          border: '2px solid rgba(0,0,0,0.5)',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                        }}>
+                          ✓
+                        </div>
+                      )}
+                      
+                      {/* Color name tooltip on hover */}
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '100%',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        backgroundColor: 'rgba(0,0,0,0.9)',
+                        color: 'white',
+                        padding: '6px 10px',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        whiteSpace: 'nowrap',
+                        opacity: 0,
+                        pointerEvents: 'none',
+                        transition: 'opacity 0.2s',
+                        marginBottom: '8px',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        zIndex: 1
+                      }} className="color-tooltip">
+                        {color.name}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Current color display */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  marginTop: '8px',
+                  padding: '10px',
+                  backgroundColor: 'rgba(255,255,255,0.03)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  width: '100%'
+                }}>
+                  <div style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    backgroundColor: selectedMarkerColor,
+                    border: '2px solid white',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+                  }} />
+                  <div style={{
+                    fontSize: '12px',
+                    color: '#e0e0e0',
+                    fontWeight: 'bold'
+                  }}>
+                    {MARKER_COLORS.find(c => c.value === selectedMarkerColor)?.name || 'Custom'}
+                  </div>
+                  <div style={{
+                    fontSize: '10px',
+                    color: '#94a3b8',
+                    backgroundColor: 'rgba(255,255,255,0.05)',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    fontFamily: 'monospace'
+                  }}>
+                    {selectedMarkerColor}
+                  </div>
+                </div>
+                
+                <span style={{ 
+                  fontSize: '11px', 
+                  color: '#94a3b8', 
+                  textAlign: 'center',
+                  marginTop: '4px'
+                }}>
+                  Click to choose marker color
+                </span>
+              </div>
 
               {/* Refresh Drops */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
@@ -6242,14 +5642,7 @@ position: 'relative' as 'relative'
 
       {/* ========== END DUAL CONTROL PANELS ========== */}
 
-        {/* Crew Chat Panel */}
-        {showCrewChat && userProfile?.crewId && user && (
-          <CrewChatPanel 
-            crewId={userProfile.crewId} 
-            onClose={() => setShowCrewChat(false)}
-            userProfile={userProfile}
-          />
-        )}
+
 
         {/* Direct Messaging Panel */}
         {showMessagesPanel && userProfile && (
@@ -6258,6 +5651,15 @@ position: 'relative' as 'relative'
             onClose={() => setShowMessagesPanel(false)}
             userProfile={userProfile}
             gpsPosition={gpsPosition}
+          />
+        )}
+
+        {/* Crew Chat Panel */}
+        {showCrewChat && userProfile?.crewId && user && (
+          <CrewChatPanel 
+            crewId={userProfile.crewId} 
+            onClose={() => setShowCrewChat(false)}
+            userProfile={userProfile}
           />
         )}
 
@@ -6318,125 +5720,205 @@ position: 'relative' as 'relative'
           </div>
         )}
 
-      {/* Bottom Navigation */}
+        {/* Blur Effect Layer Behind SVG */}
+        <div style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '68px',
+          zIndex: 1099, // Behind the navigation
+          backdropFilter: 'blur(12px)',
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
+          boxShadow: `
+            0 0 40px rgba(255, 255, 255, 0.5),
+            0 0 80px rgba(255, 255, 255, 0.3)
+          `,
+          animation: 'glowPulse 4s ease-in-out infinite'
+        }} />
+
+        {/* Bottom Navigation - Custom SVG with positioned buttons */}
+        <div style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '68px',
+          zIndex: 1100, // On top of blur layer
+          // Crew-colored glow effect
+          boxShadow: `
+            0 0 30px rgba(255, 255, 255, 0.6),
+            0 0 60px rgba(255, 255, 255, 0.3),
+            inset 0 0 40px rgba(255, 255, 255, 0.4)
+          `,
+          filter: `drop-shadow(0 0 15px rgba(255, 255, 255, 0.8))`,
+          animation: 'glowPulse 4s ease-in-out infinite'
+        }}>
+          
+          {/* SVG Background */}
+          <img 
+            src="bobottomnav1.svg" 
+            alt="Bottom Navigation"
+            style={{
+              position: 'absolute',
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              pointerEvents: 'none',
+              filter: 'drop-shadow(0 -2px 10px rgba(0,0,0,0.3))'
+            }}
+          />
+        
+        {/* Position buttons based on your SVG design */}
+        <div style={{
+          position: 'relative',
+          height: '100%',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          alignItems: 'center',
+        }}>
+          
+          {/* Map Each button positioned in the SVG cutouts */}
+          <button
+            onClick={() => {
+              setShowMapPanel(!showMapPanel);
+              setShowProfilePanel(false);
+              setShowPhotosPanel(false);
+              setShowCrewChat(false);
+              setShowMusicPanel(false);
+              setShowStoryPanel(false);
+            }}
+            style={{
+              background: showMapPanel ? 'rgba(77, 171, 247, 0.6)' : 'transparent',
+              border: 'none',
+              color: 'white',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '11px',
+              gap: '2px',
+              padding: '12px 0',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              height: '100%',
+              borderRadius: '0',
+              backdropFilter: showMapPanel ? 'blur(0px)' : 'none',
+            }}
+          >
+            <div style={{ fontSize: '20px' }}></div>
+            <div></div>
+          </button>
+
+          {/* Blackbook Button */}
+          <button
+            onClick={() => {
+              setShowProfilePanel(!showProfilePanel);
+              setShowPhotosPanel(false);
+              setShowCrewChat(false);
+              setShowMapPanel(false);
+              setShowMusicPanel(false);
+              setShowStoryPanel(false);
+            }}
+            style={{
+              background: showProfilePanel ? 'rgba(77, 171, 247, 0.6)' : 'transparent',
+              border: 'none',
+              color: 'white',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '11px',
+              gap: '2px',
+              padding: '12px 0',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              height: '100%',
+              borderRadius: '0',
+              backdropFilter: showProfilePanel ? 'blur(0px)' : 'none',
+            }}
+          >
+            <div style={{ fontSize: '20px' }}></div>
+            
+          </button>
+
+          {/* Camera Button */}
+          <button
+            onClick={() => {
+              setShowPhotosPanel(!showPhotosPanel);
+              setShowProfilePanel(false);
+              setShowCrewChat(false);
+              setShowMapPanel(false);
+              setShowMusicPanel(false);
+              setShowStoryPanel(false);
+            }}
+            style={{
+              background: showPhotosPanel ? 'rgba(77, 171, 247, 0.6)' : 'transparent',
+              border: 'none',
+              color: 'white',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '11px',
+              gap: '2px',
+              padding: '12px 0',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              height: '100%',
+              borderRadius: '0',
+              backdropFilter: showPhotosPanel ? 'blur(0px)' : 'none',
+            }}
+          >
+            <div style={{ fontSize: '20px' }}></div>
+            
+          </button>
+
+          {/* Crew Chat Each button positioned in the SVG cutouts */}
+            <button
+              onClick={() => {
+                setShowCrewChat(!showCrewChat);
+                setShowProfilePanel(false);
+                setShowPhotosPanel(false);
+                setShowMapPanel(false);
+                setShowMusicPanel(false);
+                setShowStoryPanel(false);
+              }}
+              style={{
+                background: showCrewChat ? 'rgba(77, 171, 247, 0.6)' : 'transparent',
+                border: 'none',
+                color: 'white',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '11px',
+                gap: '2px',
+                padding: '12px 0',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                height: '100%',
+                borderRadius: '0',
+                backdropFilter: showCrewChat ? 'blur(0px)' : 'none',
+              }}
+            >
+              <div style={{ fontSize: '20px' }}></div>
+              <div></div>
+            </button>
+
+        </div>
+      </div>
+
+      {/* Secondary Controls - Under Online Button */}
       <div style={{
         position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: '68px',
-        background: 'rgba(15, 23, 42, 0.94)',
-        borderTop: '1px solid rgba(255,255,255,0.08)',
-        backdropFilter: 'blur(10px)',
+        bottom: '68px', // Positioned above the main nav bar
+        left: '250px', // Aligned with the Online button
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        zIndex: 1100,
-        boxShadow: '0 -4px 20px rgba(0,0,0,0.4)'
+        flexDirection: 'column',
+        gap: '8px',
+        zIndex: 1100
       }}>
-
-        {/* Map - Toggle Map Control Panel */}
-        <button
-          onClick={() => {
-            setShowMapPanel(!showMapPanel);
-            setShowProfilePanel(false);
-            setShowPhotosPanel(false);
-            setShowMessagesPanel(false);
-            setShowMusicPanel(false);
-            setShowStoryPanel(false);
-          }}
-          style={{
-            background: showMapPanel ? 'rgba(77, 171, 247, 0.2)' : 'none',
-            border: showMapPanel ? '1px solid rgba(77, 171, 247, 0.3)' : 'none',
-            color: showMapPanel ? '#4dabf7' : '#cbd5e1',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            fontSize: '11px',
-            gap: '3px',
-            padding: '6px 12px',
-            cursor: 'pointer',
-            borderRadius: '8px',
-            transition: 'all 0.3s ease'
-          }}
-        >
-          <div style={{
-            fontSize: '24px',
-            transform: showMapPanel ? 'scale(1.1)' : 'scale(1)'
-          }}>
-            🗺️
-          </div>
-          Map
-        </button>
-
-        {/* Blackbook - Toggles Profile Panel */}
-        <button
-          onClick={() => {
-            setShowProfilePanel(!showProfilePanel);
-            setShowPhotosPanel(false);
-            setShowMessagesPanel(false);
-            setShowMapPanel(false);
-            setShowMusicPanel(false);
-            setShowStoryPanel(false);
-          }}
-          style={{
-            background: showProfilePanel ? 'rgba(255, 107, 107, 0.2)' : 'none',
-            border: showProfilePanel ? '1px solid rgba(255, 107, 107, 0.3)' : 'none',
-            color: showProfilePanel ? '#ff6b6b' : '#cbd5e1',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            fontSize: '11px',
-            gap: '3px',
-            padding: '6px 12px',
-            cursor: 'pointer',
-            borderRadius: '8px',
-            transition: 'all 0.3s ease'
-          }}
-        >
-          <div style={{
-            fontSize: '24px',
-            transform: showProfilePanel ? 'scale(1.1)' : 'scale(1)'
-          }}>
-            📓
-          </div>
-          Blackbook
-        </button>
-
-        {/* Camera - Toggles Photos Panel */}
-        <button
-          onClick={() => {
-            setShowPhotosPanel(!showPhotosPanel);
-            setShowProfilePanel(false);
-            setShowMessagesPanel(false);
-            setShowMapPanel(false);
-            setShowMusicPanel(false);
-            setShowStoryPanel(false);
-          }}
-          style={{
-            background: showPhotosPanel ? 'rgba(77, 171, 247, 0.2)' : 'none',
-            border: showPhotosPanel ? '1px solid rgba(77, 171, 247, 0.3)' : 'none',
-            color: showPhotosPanel ? '#4dabf7' : '#cbd5e1',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            fontSize: '11px',
-            gap: '3px',
-            padding: '6px 12px',
-            cursor: 'pointer',
-            borderRadius: '8px',
-            transition: 'all 0.3s ease'
-          }}
-        >
-          <div style={{
-            fontSize: '24px',
-            transform: showPhotosPanel ? 'scale(1.1)' : 'scale(1)'
-          }}>
-            📸
-          </div>
-          Camera
-        </button>
-
         {/* Story Button */}
         <button
           onClick={() => {
@@ -6448,22 +5930,24 @@ position: 'relative' as 'relative'
             setShowMusicPanel(false);
           }}
           style={{
-            background: showStoryPanel ? 'rgba(139, 92, 246, 0.2)' : 'none',
-            border: showStoryPanel ? '1px solid rgba(139, 92, 246, 0.3)' : 'none',
+            background: showStoryPanel ? 'rgba(139, 92, 246, 0.2)' : 'rgba(15, 23, 42, 0.9)',
+            border: showStoryPanel ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid rgba(255,255,255,0.1)',
             color: showStoryPanel ? '#8b5cf6' : '#cbd5e1',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             fontSize: '11px',
             gap: '3px',
-            padding: '6px 12px',
+            padding: '8px 12px',
             cursor: 'pointer',
             borderRadius: '8px',
-            transition: 'all 0.3s ease'
+            transition: 'all 0.3s ease',
+            minWidth: '60px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
           }}
         >
           <div style={{
-            fontSize: '24px',
+            fontSize: '20px',
             transform: showStoryPanel ? 'scale(1.1)' : 'scale(1)'
           }}>
             📖
@@ -6482,63 +5966,30 @@ position: 'relative' as 'relative'
             setShowStoryPanel(false);
           }}
           style={{
-            background: showMusicPanel ? 'rgba(138, 43, 226, 0.2)' : 'none',
-            border: showMusicPanel ? '1px solid rgba(138, 43, 226, 0.3)' : 'none',
+            background: showMusicPanel ? 'rgba(138, 43, 226, 0.2)' : 'rgba(15, 23, 42, 0.9)',
+            border: showMusicPanel ? '1px solid rgba(138, 43, 226, 0.3)' : '1px solid rgba(255,255,255,0.1)',
             color: showMusicPanel ? '#8a2be2' : '#cbd5e1',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             fontSize: '11px',
             gap: '3px',
-            padding: '6px 12px',
+            padding: '8px 12px',
             cursor: 'pointer',
             borderRadius: '8px',
-            transition: 'all 0.3s ease'
+            transition: 'all 0.3s ease',
+            minWidth: '60px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
           }}
         >
           <div style={{
-            fontSize: '24px',
+            fontSize: '20px',
             transform: showMusicPanel ? 'scale(1.1)' : 'scale(1)'
           }}>
             🎵
           </div>
           Music
         </button>
-
-        {/* Messages - Toggles Messages Panel */}
-          <button
-            onClick={() => {
-              setShowCrewChat(!showCrewChat);
-              setShowProfilePanel(false);
-              setShowPhotosPanel(false);
-              setShowMessagesPanel(false);
-              setShowMusicPanel(false);
-              setShowMapPanel(false);
-              setShowStoryPanel(false);
-            }}
-            style={{
-              background: showCrewChat ? 'rgba(16, 185, 129, 0.2)' : 'none',
-              border: showCrewChat ? '1px solid rgba(16, 185, 129, 0.3)' : 'none',
-              color: showCrewChat ? '#10b981' : '#cbd5e1',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              fontSize: '11px',
-              gap: '3px',
-              padding: '6px 12px',
-              cursor: 'pointer',
-              borderRadius: '8px',
-              transition: 'all 0.3s ease'
-            }}
-          >
-            <div style={{
-              fontSize: '24px',
-              transform: showCrewChat ? 'scale(1.1)' : 'scale(1)'
-            }}>
-              👥
-            </div>
-            Crew Chat
-          </button>
       </div>
 
       {/* Legend */}
@@ -6615,21 +6066,7 @@ position: 'relative' as 'relative'
         </div>
       )}
 
-      {/* Hidden SoundCloud Player for Background Music */}
-      <div style={{ position: 'absolute', top: '-9999px', left: '-9999px' }}>
-        <iframe
-          id="soundcloud-main-player"
-          src={unlockedTracks.length > 0 ? 
-            createSoundCloudIframeUrl(unlockedTracks[currentTrackIndex]) : 
-            ''
-          }
-          width="1"
-          height="1"
-          frameBorder="no"
-          scrolling="no"
-          allow="autoplay"
-        />
-      </div>
+      
 
       <style>{`
         @keyframes popIn {

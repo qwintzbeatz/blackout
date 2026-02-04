@@ -2,30 +2,84 @@
 
 import React, { useState, useEffect } from 'react';
 import { Drop, Comment } from '@/lib/types/blackout';
-import { User } from 'firebase/auth';
+import { User as FirebaseUser } from 'firebase/auth';
 
-interface SoundCloudCardProps {
+interface MusicDropPopupProps {
   drop: Drop;
-  user: User | null;
-  isVisible: boolean;
-  position: { lat: number; lng: number };
-  onClose: () => void;
+  user: FirebaseUser | null;
   onLikeUpdate: (dropId: string, newLikes: string[]) => void;
 }
 
-const SoundCloudCard: React.FC<SoundCloudCardProps> = ({
+interface SoundCloudWaveformProps {
+  isActive: boolean;
+}
+
+const SoundCloudWaveform: React.FC<SoundCloudWaveformProps> = ({ isActive }) => {
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '2px',
+      height: '60px',
+      padding: '0 8px'
+    }}>
+      {[...Array(20)].map((_, i) => (
+        <div
+          key={i}
+          style={{
+            width: '3px',
+            height: Math.random() * (isActive ? 40 : 20) + 10,
+            backgroundColor: isActive ? '#ff5500' : '#e0e0e0',
+            borderRadius: '2px',
+            transition: 'all 0.3s ease',
+            opacity: isActive ? 0.8 : 0.3,
+            transform: `scaleY(${isActive ? 1 : 0.5})`,
+            transformOrigin: 'bottom'
+          }}
+        />
+      ))}
+    </div>
+  );
+};
+
+// Function to get track name from URL
+const getTrackNameFromUrl = (url: string): string => {
+  if (url === 'blackout-classic.mp3') return 'Blackout (Default)';
+  if (url.includes('soundcloud.com')) {
+    const segments = url.split('/');
+    const trackSegment = segments[segments.length - 1];
+    return trackSegment.split('-').map(word =>
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+  }
+  return 'Unknown Track';
+};
+
+// Function to get track platform
+const getTrackPlatform = (url: string): string => {
+  if (url.includes('soundcloud.com')) return 'SoundCloud';
+  if (url.includes('bandcamp.com')) return 'Bandcamp';
+  if (url.includes('youtube.com')) return 'YouTube';
+  return 'External';
+};
+
+// Simple avatar generator for fallback
+const generateAvatarUrl = (userId: string, username: string) => {
+  const seed = username || userId;
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=4dabf7`;
+};
+
+const MusicDropPopup: React.FC<MusicDropPopupProps> = ({
   drop,
   user,
-  isVisible,
-  position,
-  onClose,
   onLikeUpdate
 }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(drop.likes?.length || 0);
   const [showComments, setShowComments] = useState(false);
   const [comment, setComment] = useState('');
-  
+
   useEffect(() => {
     if (drop.likes && user) {
       setIsLiked(drop.likes.includes(user.uid));
@@ -73,23 +127,20 @@ const SoundCloudCard: React.FC<SoundCloudCardProps> = ({
     return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
   };
 
-  if (!isVisible) return null;
-
   return (
     <div
       style={{
-        position: 'absolute',
-        left: '50%',
-        top: '50%',
-        transform: 'translate(-50%, -100%)',
+        position: 'relative',
         zIndex: 10000,
-        pointerEvents: 'auto'
+        pointerEvents: 'auto',
+        minWidth: '280px',
+        maxWidth: '280px'
       }}
     >
       {/* Main Card */}
       <div
         style={{
-          width: '320px',
+          width: '280px',
           background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)',
           borderRadius: '12px',
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
@@ -114,22 +165,35 @@ const SoundCloudCard: React.FC<SoundCloudCardProps> = ({
             }}
           >
             {/* Creator Avatar */}
-            <div
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                backgroundColor: '#ff5500',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '16px',
-                fontWeight: 'bold',
-                color: 'white'
-              }}
-            >
-              {(drop.username || 'anonymous')[0]?.toUpperCase()}
-            </div>
+            {drop.userProfilePic ? (
+              <img
+                src={drop.userProfilePic}
+                alt={drop.username}
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  border: '2px solid #ff5500'
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  backgroundColor: '#ff5500',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  color: 'white'
+                }}
+              >
+                {(drop.username || 'anonymous')[0]?.toUpperCase()}
+              </div>
+            )}
 
             {/* Track Info */}
             <div style={{ flex: 1 }}>
@@ -152,26 +216,18 @@ const SoundCloudCard: React.FC<SoundCloudCardProps> = ({
                   lineHeight: '1.2'
                 }}
               >
-                {drop.username}'s Track
+                {getTrackNameFromUrl(drop.trackUrl || '')}
+              </div>
+              <div
+                style={{
+                  fontSize: '12px',
+                  color: '#999',
+                  marginTop: '2px'
+                }}
+              >
+                by {drop.username}
               </div>
             </div>
-
-            {/* Close Button */}
-            <button
-              onClick={onClose}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#999',
-                fontSize: '20px',
-                cursor: 'pointer',
-                padding: '4px',
-                borderRadius: '4px',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              ✕
-            </button>
           </div>
         </div>
 
@@ -218,7 +274,7 @@ const SoundCloudCard: React.FC<SoundCloudCardProps> = ({
                   marginBottom: '8px'
                 }}
               >
-                🎵 External Track
+                🎵 {getTrackPlatform(drop.trackUrl || '')} Track
               </div>
               <div
                 style={{
@@ -229,6 +285,11 @@ const SoundCloudCard: React.FC<SoundCloudCardProps> = ({
               >
                 {drop.trackUrl || ''}
               </div>
+            </div>
+
+            {/* SoundCloud Waveform */}
+            <div style={{ marginBottom: '12px' }}>
+              <SoundCloudWaveform isActive={isPlaying} />
             </div>
           </div>
         )}
@@ -243,14 +304,19 @@ const SoundCloudCard: React.FC<SoundCloudCardProps> = ({
             borderTop: '1px solid rgba(255, 255, 255, 0.1)'
           }}
         >
-          {/* Like Button */}
+          {/* Play Button */}
           <button
-            onClick={handleLike}
+            onClick={() => {
+              setIsPlaying(!isPlaying);
+              if (drop.trackUrl) {
+                window.open(drop.trackUrl, '_blank');
+              }
+            }}
             style={{
               flex: 1,
               padding: '12px',
-              backgroundColor: isLiked ? '#ff5500' : '#fff',
-              color: isLiked ? '#fff' : '#000',
+              backgroundColor: isPlaying ? '#ff5500' : '#fff',
+              color: isPlaying ? '#fff' : '#000',
               border: 'none',
               borderRadius: '8px',
               fontSize: '14px',
@@ -261,33 +327,33 @@ const SoundCloudCard: React.FC<SoundCloudCardProps> = ({
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px'
+            }}
+          >
+            {isPlaying ? '⏸' : '▶'}
+            {isPlaying ? 'Pause' : 'Play'}
+          </button>
+
+          {/* Like Button */}
+          <button
+            onClick={handleLike}
+            disabled={!user}
+            style={{
+              padding: '12px 16px',
+              backgroundColor: isLiked ? '#ff5500' : 'transparent',
+              color: isLiked ? '#fff' : '#999',
+              border: isLiked ? 'none' : '1px solid #333',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: user ? 'pointer' : 'not-allowed',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
             }}
           >
             {isLiked ? '❤️' : '🤍'}
             {likeCount}
-          </button>
-          
-          {/* Comment Button */}
-          <button
-            onClick={() => setShowComments(!showComments)}
-            style={{
-              padding: '12px',
-              backgroundColor: '#333',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px'
-            }}
-          >
-            💬
-            {drop.comments?.length || 0}
           </button>
         </div>
 
@@ -431,4 +497,4 @@ const SoundCloudCard: React.FC<SoundCloudCardProps> = ({
   );
 };
 
-export default SoundCloudCard;
+export default MusicDropPopup;

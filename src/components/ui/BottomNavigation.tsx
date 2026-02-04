@@ -111,90 +111,120 @@ const BottomNavigationOptimized: React.FC<BottomNavigationProps> = ({
       bottom: '0',
       left: '0',
       right: '0',
-      backgroundColor: 'rgba(0, 0, 0, 0.95)',
-      backdropFilter: 'blur(20px)',
-      borderTop: '1px solid rgba(255,255,255,0.1)',
       zIndex: 1600,
       transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       transform: isExpanded ? 'translateY(0)' : 'translateY(0)'
     }}>
-      {/* Main Navigation */}
+      {/* SVG Navigation */}
       <div style={{
-        display: 'flex',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        padding: '8px 0',
-        maxHeight: isExpanded ? '200px' : '60px',
-        overflow: 'hidden',
-        transition: 'max-height 0.3s ease'
+        width: '100%',
+        height: '60px',
+        position: 'relative'
       }}>
-        {navItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => handlePanelToggle(item.id)}
-            style={{
-              position: 'relative',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '2px',
-              padding: '8px 12px',
-              backgroundColor: item.isActive ? item.color : 'transparent',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              minWidth: '60px'
-            }}
-            onMouseEnter={(e) => {
-              if (!item.isActive) {
-                e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!item.isActive) {
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }
-            }}
-          >
-            {/* Badge for notifications */}
-            {item.badge && item.badge > 0 && (
+        <svg
+          width="100%"
+          height="60"
+          viewBox="0 0 210 297"
+          preserveAspectRatio="none"
+          style={{
+            position: 'absolute',
+            bottom: '0',
+            left: '0',
+            width: '100%',
+            height: '60px',
+            zIndex: 1
+          }}
+        >
+          <image
+            href="/bobottomnav1.svg"
+            width="100%"
+            height="100%"
+            preserveAspectRatio="none"
+          />
+        </svg>
+
+        {/* Interactive Navigation Layer */}
+        <div style={{
+          position: 'absolute',
+          bottom: '0',
+          left: '0',
+          right: '0',
+          height: '60px',
+          display: 'flex',
+          justifyContent: 'space-around',
+          alignItems: 'center',
+          zIndex: 2,
+          pointerEvents: 'auto'
+        }}>
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => handlePanelToggle(item.id)}
+              style={{
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '2px',
+                padding: '8px 12px',
+                backgroundColor: item.isActive ? item.color : 'transparent',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                minWidth: '60px',
+                pointerEvents: 'auto'
+              }}
+              onMouseEnter={(e) => {
+                if (!item.isActive) {
+                  e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!item.isActive) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }}
+            >
+              {/* Badge for notifications */}
+              {item.badge && item.badge > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: '4px',
+                  right: '8px',
+                  backgroundColor: '#ff4444',
+                  color: '#ffffff',
+                  fontSize: '10px',
+                  fontWeight: 'bold',
+                  borderRadius: '10px',
+                  padding: '2px 6px',
+                  minWidth: '16px',
+                  textAlign: 'center',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                }}>
+                  {item.badge > 99 ? '99+' : item.badge}
+                </div>
+              )}
+              
               <div style={{
-                position: 'absolute',
-                top: '4px',
-                right: '8px',
-                backgroundColor: '#ff4444',
-                color: '#ffffff',
-                fontSize: '10px',
-                fontWeight: 'bold',
-                borderRadius: '10px',
-                padding: '2px 6px',
-                minWidth: '16px',
-                textAlign: 'center',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                fontSize: '20px',
+                filter: item.isActive ? 'none' : 'grayscale(1)',
+                opacity: item.isActive ? 1 : 0.7,
+                transition: 'all 0.2s ease'
               }}>
-                {item.badge > 99 ? '99+' : item.badge}
+                {item.icon}
               </div>
-            )}
-            
-            <div style={{
-              fontSize: '20px',
-              filter: item.isActive ? 'none' : 'grayscale(1)',
-              opacity: item.isActive ? 1 : 0.7,
-              transition: 'all 0.2s ease'
-            }}>
-              {item.icon}
-            </div>
-            
-            <div style={{
-              fontSize: '10px',
-              color: item.isActive ? '#ffffff' : '#b0b0b0',
-              fontWeight: item.isActive ? 'bold' : 'normal'
-            }}>
-              {item.label}
-            </div>
-          </button>
-        ))}
+              
+              <div style={{
+                fontSize: '10px',
+                color: item.isActive ? '#ffffff' : '#b0b0b0',
+                fontWeight: item.isActive ? 'bold' : 'normal'
+              }}>
+                {item.label}
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Expand/Collapse Toggle */}
@@ -206,7 +236,9 @@ const BottomNavigationOptimized: React.FC<BottomNavigationProps> = ({
           justifyContent: 'space-between',
           alignItems: 'center',
           fontSize: '11px',
-          color: '#b0b0b0'
+          color: '#b0b0b0',
+          zIndex: 3,
+          position: 'relative'
         }}>
           <div style={{
             display: 'flex',

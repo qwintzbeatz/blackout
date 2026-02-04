@@ -1,499 +1,436 @@
 'use client';
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
-
-interface Drop {
-  id: string;
-  firestoreId?: string;
-  lat: number;
-  lng: number;
-  photoUrl?: string;
-  trackUrl?: string;
-  createdBy: string;
-  timestamp: Date;
-  likes: string[];
-  username: string;
-  userProfilePic: string;
-}
+import React, { useState, useCallback, useMemo } from 'react';
+import { useFirebaseAuth } from '@/hooks/useFirebaseAuth';
 
 interface PhotosPanelProps {
-  drops: Drop[];
-  userId?: string;
-  showOnlyMyDrops: boolean;
-  onDropClick: (drop: Drop) => void;
+  isOpen?: boolean;
   onClose: () => void;
+  userProfile?: {
+    username?: string;
+    profilePicUrl?: string;
+    favoriteColor?: string;
+    level?: number;
+    rep?: number;
+  } | null;
 }
 
-// Optimized panel styling
-const panelStyle = {
-  backgroundColor: 'rgba(0, 0, 0, 0.9)',
-  color: '#e0e0e0',
-  padding: '20px',
-  borderRadius: '16px',
-  boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-  width: 'min(95vw, 500px)',
-  maxHeight: '85vh',
-  overflowY: 'auto' as const,
-  border: '1px solid rgba(255,255,255,0.1)',
-  backdropFilter: 'blur(12px)',
-  zIndex: 1400,
-  position: 'relative' as const
-};
-
-const PhotosPanelOptimized: React.FC<PhotosPanelProps> = ({
-  drops,
-  userId,
-  showOnlyMyDrops,
-  onDropClick,
-  onClose
+const PhotosPanel: React.FC<PhotosPanelProps> = ({
+  isOpen = false,
+  onClose,
+  userProfile
 }) => {
-  const [activeTab, setActiveTab] = useState<'gallery' | 'grid'>('gallery');
-  const [selectedPhoto, setSelectedPhoto] = useState<Drop | null>(null);
-  const [likedDrops, setLikedDrops] = useState<Set<string>>(new Set());
+  const [selectedPhoto, setSelectedPhoto] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  // Filter drops with photos
-  const photoDrops = useMemo(() => {
-    let filtered = drops.filter(drop => drop.photoUrl);
+  // Mock photos data (in real app, this would come from camera or storage)
+  const mockPhotos = useMemo(() => [
+    { id: 1, url: 'https://picsum.photos/seed/graffiti1/200/200.jpg', caption: 'Street Art', date: new Date('2024-01-15'), location: 'Auckland CBD' },
+    { id: 2, url: 'https://picsum.photos/seed/graffiti2/200/200.jpg', caption: 'Wall Piece', date: new Date('2024-01-14'), location: 'Wellington' },
+    { id: 3, url: 'https://picsum.photos/seed/graffiti3/200/200.jpg', caption: 'Tag Design', date: new Date('2024-01-13'), location: 'Christchurch' },
+    { id: 4, url: 'https://picsum.photos/seed/graffiti4/200/200.jpg', caption: 'Stencil Work', date: new Date('2024-01-12'), location: 'Queenstown' },
+    { id: 5, url: 'https://picsum.photos/seed/graffiti5/200/200.jpg', caption: 'Mural Project', date: new Date('2024-01-11'), location: 'Dunedin' }
+  ], []);
+
+  const handlePhotoSelect = useCallback((photoId: number) => {
+    setSelectedPhoto(photoId);
+  }, []);
+
+  const handlePhotoDelete = useCallback((photoId: number) => {
+    // In real app, this would delete from storage
+    console.log('Delete photo:', photoId);
+    if (selectedPhoto === photoId) {
+      setSelectedPhoto(null);
+    }
+  }, []);
+
+  const handlePhotoUpload = useCallback(() => {
+    // In real app, this would trigger camera or file picker
+    const newPhotoCount = Math.floor(Math.random() * 3) + 1;
+    console.log('Simulating photo upload:', newPhotoCount);
     
-    if (showOnlyMyDrops && userId) {
-      filtered = filtered.filter(drop => drop.createdBy === userId);
+    // Update notification count
+    if (userProfile && selectedPhoto === null) {
+      setSelectedPhoto(null);
+      return;
     }
     
-    // Sort by most recent
-    return filtered.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-  }, [drops, showOnlyMyDrops, userId]);
+    setSelectedPhoto(Math.floor(Math.random() * 5) + 1);
+  }, [userProfile, selectedPhoto]);
 
-  // Statistics
-  const stats = useMemo(() => {
-    const totalPhotos = drops.filter(drop => drop.photoUrl).length;
-    const myPhotos = userId ? drops.filter(drop => drop.photoUrl && drop.createdBy === userId).length : 0;
-    const totalLikes = drops.filter(drop => drop.photoUrl).reduce((sum, drop) => sum + drop.likes.length, 0);
-    
-    return { totalPhotos, myPhotos, totalLikes };
-  }, [drops, userId]);
-
-  // Format time ago
-  const formatTimeAgo = useCallback((date: Date): string => {
-    const now = new Date();
-    const diffInMs = now.getTime() - date.getTime();
-    const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
-    const diffInDays = Math.floor(diffInHours / 24);
-
-    if (diffInHours < 1) return 'Just now';
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-    if (diffInDays < 7) return `${diffInDays}d ago`;
+  const formatDate = (date: Date) => {
     return date.toLocaleDateString();
-  }, []);
+  };
 
-  // Handle photo click
-  const handlePhotoClick = useCallback((drop: Drop) => {
-    setSelectedPhoto(drop);
-    onDropClick(drop);
-  }, [onDropClick]);
+  if (!isOpen) return null;
 
-  // Handle like toggle
-  const handleLikeToggle = useCallback((drop: Drop, event: React.MouseEvent) => {
-    event.stopPropagation();
-    
-    const newLikedDrops = new Set(likedDrops);
-    if (likedDrops.has(drop.id)) {
-      newLikedDrops.delete(drop.id);
-    } else {
-      newLikedDrops.add(drop.id);
-    }
-    setLikedDrops(newLikedDrops);
-  }, [likedDrops]);
-
-  // Close selected photo
-  const handleCloseSelectedPhoto = useCallback(() => {
-    setSelectedPhoto(null);
-  }, []);
-
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (selectedPhoto) {
-          handleCloseSelectedPhoto();
-        } else {
-          onClose();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [selectedPhoto, onClose, handleCloseSelectedPhoto]);
+  const panelStyle = {
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    color: '#e0e0e0',
+    padding: '20px',
+    borderRadius: '12px',
+    boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+    width: 'min(110vw, 500px)',
+    maxHeight: '85vh',
+    overflowY: 'auto' as const,
+    border: '1px solid rgba(255,255,255,0.15)',
+    backdropFilter: 'blur(8px)',
+    zIndex: 1500,
+    position: 'relative' as const
+  };
 
   return (
-    <div style={panelStyle}>
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '20px',
-        paddingBottom: '12px',
-        borderBottom: '1px solid rgba(255,255,255,0.1)'
-      }}>
-        <h2 style={{
-          margin: 0,
-          fontSize: '18px',
-          fontWeight: 'bold',
-          color: '#ffffff'
-        }}>
-          📸 Photos
-        </h2>
-        <button
-          onClick={onClose}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#ffffff',
-            fontSize: '20px',
-            cursor: 'pointer',
-            padding: '4px 8px',
-            borderRadius: '4px',
-            transition: 'background 0.2s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-        >
-          ✕
-        </button>
-      </div>
-
-      {/* Stats */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '12px',
-        marginBottom: '16px'
-      }}>
+    <div style={{
+      position: 'fixed',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      zIndex: 1500
+    }}>
+      <div style={panelStyle}>
+        {/* Header */}
         <div style={{
-          backgroundColor: 'rgba(255,255,255,0.05)',
-          padding: '12px',
-          borderRadius: '8px',
-          textAlign: 'center'
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '20px',
+          borderBottom: '2px solid rgba(255,255,255,0.1)',
+          paddingBottom: '15px'
         }}>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#ffffff' }}>
-            {stats.totalPhotos}
+          <div>
+            <h2 style={{ color: '#9c27b0', margin: 0, fontSize: '24px' }}>📸 Photos</h2>
+            <p style={{ color: '#b0b0b0', margin: '5px 0 0', fontSize: '14px' }}>
+              Your photo collection and camera interface
+            </p>
           </div>
-          <div style={{ fontSize: '11px', color: '#b0b0b0' }}>Total Photos</div>
-        </div>
-        
-        <div style={{
-          backgroundColor: 'rgba(255,255,255,0.05)',
-          padding: '12px',
-          borderRadius: '8px',
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#ffffff' }}>
-            {stats.myPhotos}
-          </div>
-          <div style={{ fontSize: '11px', color: '#b0b0b0' }}>My Photos</div>
-        </div>
-        
-        <div style={{
-          backgroundColor: 'rgba(255,255,255,0.05)',
-          padding: '12px',
-          borderRadius: '8px',
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#ffffff' }}>
-            {stats.totalLikes}
-          </div>
-          <div style={{ fontSize: '11px', color: '#b0b0b0' }}>Total Likes</div>
-        </div>
-      </div>
-
-      {/* View Toggle */}
-      <div style={{
-        display: 'flex',
-        gap: '4px',
-        marginBottom: '16px',
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        padding: '4px',
-        borderRadius: '8px'
-      }}>
-        {(['gallery', 'grid'] as const).map(view => (
           <button
-            key={view}
-            onClick={() => setActiveTab(view)}
+            onClick={onClose}
             style={{
-              flex: 1,
-              padding: '8px 12px',
-              background: activeTab === view ? '#ff6b35' : 'transparent',
+              background: 'none',
               border: 'none',
-              color: '#ffffff',
-              borderRadius: '6px',
-              fontSize: '12px',
+              color: '#e0e0e0',
+              fontSize: '24px',
               cursor: 'pointer',
-              transition: 'all 0.2s',
-              fontWeight: activeTab === view ? 'bold' : 'normal'
+              padding: '5px',
+              borderRadius: '5px',
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* View Mode Toggle */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          gap: '10px',
+          marginBottom: '20px'
+        }}>
+          <button
+            onClick={() => setViewMode('grid')}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: viewMode === 'grid' ? '#9c27b0' : 'rgba(255,255,255,0.1)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer'
             }}
           >
-            {view === 'gallery' ? '🖼️ Gallery' : '⚏️ Grid'}
+            Grid View
           </button>
-        ))}
-      </div>
-
-      {/* Content */}
-      {photoDrops.length === 0 ? (
-        <div style={{
-          textAlign: 'center',
-          padding: '40px 20px',
-          color: '#b0b0b0'
-        }}>
-          <div style={{ fontSize: '48px', marginBottom: '12px' }}>📷</div>
-          <div style={{ fontSize: '16px', marginBottom: '4px' }}>
-            No photos yet
-          </div>
-          <div style={{ fontSize: '12px' }}>
-            {showOnlyMyDrops ? 'You haven\'t posted any photos yet' : 'No photo drops found'}
-          </div>
+          <button
+            onClick={() => setViewMode('list')}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: viewMode === 'list' ? '#9c27b0' : 'rgba(255,255,255,0.1)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}
+          >
+            List View
+          </button>
         </div>
-      ) : (
-        <>
-          {/* Gallery View */}
-          {activeTab === 'gallery' && (
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '16px'
-            }}>
-              {photoDrops.map((drop) => (
-                <div
-                  key={drop.id}
-                  style={{
-                    backgroundColor: 'rgba(255,255,255,0.05)',
-                    borderRadius: '8px',
-                    overflow: 'hidden',
-                    cursor: 'pointer',
-                    transition: 'transform 0.2s, box-shadow 0.2s'
-                  }}
-                  onClick={() => handlePhotoClick(drop)}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'scale(1.02)';
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'scale(1)';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                >
-                  <img
-                    src={drop.photoUrl}
-                    alt="Drop photo"
-                    style={{
-                      width: '100%',
-                      height: '200px',
-                      objectFit: 'cover',
-                      display: 'block'
-                    }}
-                  />
-                  
-                  <div style={{ padding: '12px' }}>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      marginBottom: '8px'
-                    }}>
-                      <img
-                        src={drop.userProfilePic}
-                        alt={drop.username}
-                        style={{
-                          width: '24px',
-                          height: '24px',
-                          borderRadius: '50%',
-                          border: '1px solid rgba(255,255,255,0.2)'
-                        }}
-                      />
-                      <div style={{ flex: 1 }}>
-                        <div style={{
-                          fontSize: '12px',
-                          fontWeight: 'bold',
-                          color: '#ffffff'
-                        }}>
-                          {drop.username}
-                        </div>
-                        <div style={{
-                          fontSize: '10px',
-                          color: '#b0b0b0'
-                        }}>
-                          {formatTimeAgo(drop.timestamp)}
-                        </div>
-                      </div>
-                      
-                      <button
-                        onClick={(e) => handleLikeToggle(drop, e)}
-                        style={{
-                          padding: '4px 8px',
-                          backgroundColor: likedDrops.has(drop.id) ? '#ff6b35' : 'rgba(255,255,255,0.1)',
-                          border: 'none',
-                          color: '#ffffff',
-                          borderRadius: '4px',
-                          fontSize: '10px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}
-                      >
-                        {likedDrops.has(drop.id) ? '❤️' : '🤍'} {drop.likes.length}
-                      </button>
-                    </div>
-                    
-                    {drop.trackUrl && (
-                      <div style={{
-                        backgroundColor: 'rgba(103, 126, 234, 0.2)',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        fontSize: '10px',
-                        color: '#677eea',
-                        display: 'inline-block'
-                      }}>
-                        🎵 Music track included
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
 
-          {/* Grid View */}
-          {activeTab === 'grid' && (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
-              gap: '8px'
-            }}>
-              {photoDrops.map((drop) => (
-                <div
-                  key={drop.id}
-                  style={{
-                    position: 'relative',
-                    aspectRatio: '1',
-                    borderRadius: '8px',
-                    overflow: 'hidden',
-                    cursor: 'pointer',
-                    transition: 'transform 0.2s'
-                  }}
-                  onClick={() => handlePhotoClick(drop)}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'scale(1.05)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'scale(1)';
-                  }}
-                >
-                  <img
-                    src={drop.photoUrl}
-                    alt="Drop photo"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover'
-                    }}
-                  />
-                  
-                  {/* Overlay with username */}
-                  <div style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)',
-                    padding: '4px',
-                    fontSize: '9px',
-                    color: '#ffffff',
-                    textAlign: 'center'
-                  }}>
-                    {drop.username}
-                  </div>
-                  
-                  {/* Like indicator */}
-                  {drop.likes.length > 0 && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '4px',
-                      right: '4px',
-                      backgroundColor: 'rgba(0,0,0,0.7)',
-                      color: '#ffffff',
-                      padding: '2px 4px',
-                      borderRadius: '4px',
-                      fontSize: '9px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '2px'
-                    }}>
-                      ❤️ {drop.likes.length}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Selected Photo Modal */}
-      {selectedPhoto && (
+        {/* Action Buttons */}
         <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.9)',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 2000,
-          padding: '20px'
+          gap: '10px',
+          marginBottom: '20px'
         }}>
+          <button
+            onClick={handlePhotoUpload}
+            style={{
+              flex: 1,
+              padding: '10px',
+              backgroundColor: '#4dabf7',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 'bold'
+            }}
+          >
+            📷 Take Photo
+          </button>
+          <button
+            onClick={() => {
+              // Simulate selecting from gallery
+              const availablePhotos = mockPhotos.filter(p => selectedPhoto === null || p.id === selectedPhoto);
+              if (availablePhotos.length > 0) {
+                const randomPhoto = availablePhotos[Math.floor(Math.random() * availablePhotos.length)];
+                setSelectedPhoto(randomPhoto.id);
+              }
+            }}
+            style={{
+              flex: 1,
+              padding: '10px',
+              backgroundColor: '#ff6b35',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 'bold'
+            }}
+          >
+            🖼️ Select from Gallery
+          </button>
+          <button
+            onClick={() => {
+              if (selectedPhoto !== null) {
+                // In real app, this would delete from storage
+                console.log('Delete photo:', selectedPhoto);
+                setSelectedPhoto(null);
+              }
+            }}
+            disabled={selectedPhoto === null}
+            style={{
+              flex: 1,
+              padding: '10px',
+              backgroundColor: '#ef4444',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: selectedPhoto !== null ? 'pointer' : 'not-allowed',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              opacity: selectedPhoto !== null ? 1 : 0.5
+            }}
+          >
+            🗑️ Delete Selected
+          </button>
+        </div>
+
+        {/* Photo Gallery/List */}
+        {viewMode === 'grid' ? (
           <div style={{
-            maxWidth: '90vw',
-            maxHeight: '90vh',
-            position: 'relative',
-            borderRadius: '8px',
-            overflow: 'hidden'
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+            gap: '15px',
+            maxHeight: '400px',
+            overflowY: 'auto',
+            padding: '10px',
+            backgroundColor: 'rgba(255,255,255,0.05)',
+            borderRadius: '10px'
           }}>
-            <img
-              src={selectedPhoto.photoUrl}
-              alt="Selected photo"
-              style={{
-                maxWidth: '100%',
-                maxHeight: '100%',
-                objectFit: 'contain'
-              }}
-            />
-            
+            {mockPhotos.map((photo) => (
+              <div
+                key={photo.id}
+                style={{
+                  position: 'relative',
+                  cursor: 'pointer',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  backgroundColor: selectedPhoto === photo.id ? 'rgba(156, 39, 176, 0.2)' : 'transparent',
+                  transition: 'all 0.2s ease'
+                }}
+                onClick={() => handlePhotoSelect(photo.id)}
+              >
+                <img
+                  src={photo.url}
+                  alt={photo.caption}
+                  style={{
+                    width: '100%',
+                    height: '150px',
+                    objectFit: 'cover',
+                    borderRadius: '6px'
+                  }}
+                />
+                <div style={{
+                  position: 'absolute',
+                  bottom: '0',
+                  left: '0',
+                  right: '0',
+                  background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)',
+                  color: 'white',
+                  padding: '5px',
+                  fontSize: '10px'
+                }}>
+                  {photo.caption}
+                </div>
+                {/* Delete Button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePhotoDelete(photo.id);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: '5px',
+                    right: '5px',
+                    background: 'rgba(239, 68, 68, 0.9)',
+                    border: 'none',
+                    color: 'white',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    borderRadius: '50%',
+                    width: '24px',
+                    height: '24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: 0,
+                    transition: 'opacity 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                  onMouseLeave={(e) => e.currentTarget.style.opacity = '0'}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+            {mockPhotos.map((photo) => (
+              <div
+                key={photo.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '15px',
+                  padding: '15px',
+                  backgroundColor: selectedPhoto === photo.id ? 'rgba(156, 39, 176, 0.2)' : 'rgba(255,255,255,0.05)',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onClick={() => handlePhotoSelect(photo.id)}
+              >
+                <img
+                  src={photo.url}
+                  alt={photo.caption}
+                  style={{
+                    width: '80px',
+                    height: '80px',
+                    borderRadius: '6px',
+                    objectFit: 'cover'
+                  }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    color: '#ffffff',
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    marginBottom: '5px'
+                  }}>
+                    {photo.caption}
+                  </div>
+                  <div style={{
+                    color: '#b0b0b0',
+                    fontSize: '12px',
+                    marginBottom: '2px'
+                  }}>
+                    {formatDate(photo.date)} • {photo.location}
+                  </div>
+                  <div style={{
+                    display: 'flex',
+                    gap: '10px',
+                    marginTop: '10px'
+                  }}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePhotoDelete(photo.id);
+                      }}
+                      style={{
+                        padding: '4px 8px',
+                        backgroundColor: '#ef4444',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      🗑️ Delete
+                    </button>
+                    <button
+                      style={{
+                        padding: '4px 8px',
+                        backgroundColor: '#4dabf7',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      ✏️ Edit
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Selected Photo Detail Modal */}
+        {selectedPhoto && (
+          <div style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            padding: '20px',
+            borderRadius: '12px',
+            zIndex: 1600,
+            minWidth: '300px'
+          }}>
+            <h3 style={{ color: '#9c27b0', margin: '0 0 15px' }}>Photo Details</h3>
+            <div style={{ fontSize: '16px', lineHeight: '1.5' }}>
+              <div><strong>Caption:</strong> {mockPhotos.find(p => p.id === selectedPhoto)!.caption}</div>
+              <div><strong>Date:</strong> {formatDate(mockPhotos.find(p => p.id === selectedPhoto)!.date)}</div>
+              <div><strong>Location:</strong> {mockPhotos.find(p => p.id === selectedPhoto)!.location}</div>
+            </div>
             <button
-              onClick={handleCloseSelectedPhoto}
+              onClick={() => setSelectedPhoto(null)}
               style={{
-                position: 'absolute',
-                top: '10px',
-                right: '10px',
-                backgroundColor: 'rgba(0,0,0,0.7)',
-                color: '#ffffff',
+                marginTop: '15px',
+                padding: '8px 16px',
+                backgroundColor: '#666',
+                color: 'white',
                 border: 'none',
-                borderRadius: '50%',
-                width: '32px',
-                height: '32px',
-                fontSize: '16px',
-                cursor: 'pointer'
+                borderRadius: '8px',
+                cursor: 'pointer',
+                width: '100%'
               }}
             >
-              ✕
+              Close
             </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
 
-export default PhotosPanelOptimized;
+export default PhotosPanel;

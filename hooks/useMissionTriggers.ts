@@ -1,5 +1,5 @@
 // hooks/useMissionTriggers.ts
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useStoryManager } from '@/components/story/StoryManager';
 import { UserMarker } from '@/lib/types/blackout';
 
@@ -35,6 +35,9 @@ export const useMissionTriggers = ({
 
   const [activeMissions, setActiveMissions] = useState<string[]>([]);
   const [completedMissions, setCompletedMissions] = useState<string[]>([]);
+  
+  // 🔧 PERFORMANCE: Mission cooldown tracking to prevent infinite loops
+  const triggeredMissionsRef = useRef<Map<string, number>>(new Map());
 
   // Check and trigger missions when conditions are met
   const checkMissionCompletion = useCallback((missionId: string, condition: boolean) => {
@@ -45,6 +48,19 @@ export const useMissionTriggers = ({
 
   const triggerMissionEvent = useCallback(async (missionId: string, payload: any) => {
     console.log(`🎯 Mission triggered: ${missionId}`, payload);
+    
+    // 🔧 PERFORMANCE: Check cooldown before processing
+    const now = Date.now();
+    const lastTriggered = triggeredMissionsRef.current.get(missionId);
+    
+    // 5 second cooldown between triggers for the same mission
+    if (lastTriggered && now - lastTriggered < 5000) {
+      console.log(`Cooldown active for mission ${missionId}, skipping trigger`);
+      return;
+    }
+    
+    // Update last triggered time
+    triggeredMissionsRef.current.set(missionId, now);
     
     // Mark mission as active if not already active
     if (!activeMissions.includes(missionId)) {

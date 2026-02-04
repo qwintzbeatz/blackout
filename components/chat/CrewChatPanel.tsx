@@ -169,8 +169,8 @@ export default function CrewChatPanel({ crewId, onClose, userProfile }: CrewChat
       ...panelStyle,
       position: 'absolute',
       top: '80px',
-      right: '0px',
-      width: 'min(300px, 85vw)', // More responsive
+      left: '0px',
+      width: 'min(400px, 110vw)', // More responsive
       maxHeight: 'calc(100vh - 180px)', // Account for bottom nav
       zIndex: 1400,
       display: 'flex',
