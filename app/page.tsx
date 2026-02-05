@@ -345,6 +345,34 @@ const HomeComponent = () => {
   
   // Marker color states
   const [selectedMarkerColor, setSelectedMarkerColor] = useState('#10b981');
+
+  // Initialize selected marker color from user profile on mount
+  useEffect(() => {
+    if (userProfile?.favoriteColor) {
+      setSelectedMarkerColor(userProfile.favoriteColor);
+    }
+  }, [userProfile?.favoriteColor]);
+
+  // Fix marker colors on page refresh - ensure all markers use correct colors
+  useEffect(() => {
+    if (userProfile?.favoriteColor && userMarkers.length > 0) {
+      // Update any markers that might have wrong colors
+      const updatedMarkers = userMarkers.map(marker => {
+        // Only update markers that belong to the current user and have wrong color
+        if (marker.userId === user?.uid && marker.color !== userProfile.favoriteColor) {
+          return {
+            ...marker,
+            color: userProfile.favoriteColor || '#10b981' // Ensure color is never undefined
+          };
+        }
+        return marker;
+      });
+      
+      if (updatedMarkers.some((marker, index) => marker.color !== userMarkers[index].color)) {
+        setUserMarkers(updatedMarkers);
+      }
+    }
+  }, [userProfile?.favoriteColor, userMarkers, user?.uid]);
   
   // Audio player states
   const [isPlaying, setIsPlaying] = useState(false);
@@ -419,25 +447,6 @@ const HomeComponent = () => {
   const [crewDetectionEnabled, setCrewDetectionEnabled] = useState(true);
   const [markerQuality, setMarkerQuality] = useState<'low' | 'medium' | 'high'>('medium');
   
-  // Device performance detection function - MOVE THIS UP
-  const detectDevicePerformance = (): 'low' | 'medium' | 'high' => {
-    if (typeof window === 'undefined') return 'medium';
-    
-    // Check device memory (if available)
-    const deviceMemory = (navigator as any).deviceMemory;
-    if (deviceMemory) {
-      if (deviceMemory <= 2) return 'low';
-      if (deviceMemory <= 4) return 'medium';
-      return 'high';
-    }
-    
-    // Check screen size as fallback
-    const screenSize = window.screen.width * window.screen.height;
-    if (screenSize <= 768 * 1024) return 'low'; // Small screens
-    if (screenSize <= 1920 * 1080) return 'medium'; // Medium screens
-    return 'high'; // Large screens
-  };
-
   // Dynamic quality settings - Now this works
   const [graphicsQuality, setGraphicsQuality] = useState<'low' | 'medium' | 'high'>(
     detectDevicePerformance()
@@ -710,25 +719,25 @@ const {
       if (!isSolo && selectedCrew) {
         // selectedCrew should be 'bqc', 'sps', 'lzt', or 'dgc'
         crewId = selectedCrew; // ✅ This should be the crew code
-                        const selectedCrewData = CREWS.find(c => c.id === selectedCrew);
-                        crewName = selectedCrewData?.name || null;
-                        
-                        const crewsRef = collection(db, 'crews');
-                        const crewQuery = query(crewsRef, where('id', '==', crewId));
-                        const crewSnapshot = await getDocs(crewQuery);
-                        
-                        if (crewSnapshot.empty) {
-                          const newCrewRef = doc(crewsRef);
-                          await setDoc(newCrewRef, {
-                            id: crewId,
-                            name: crewName,
-                            members: [user.uid],
-                            createdAt: Timestamp.now(),
-                            createdBy: user.uid,
-                            rep: 0,
-                            color: selectedCrewData?.colors?.primary || '#4dabf7',
-                            description: selectedCrewData?.description || ''
-                          });
+        const selectedCrewData = CREWS.find(c => c.id === selectedCrew);
+        crewName = selectedCrewData?.name || null;
+        
+        const crewsRef = collection(db, 'crews');
+        const crewQuery = query(crewsRef, where('id', '==', crewId));
+        const crewSnapshot = await getDocs(crewQuery);
+        
+        if (crewSnapshot.empty) {
+          const newCrewRef = doc(crewsRef);
+          await setDoc(newCrewRef, {
+            id: crewId,
+            name: crewName,
+            members: [user.uid],
+            createdAt: Timestamp.now(),
+            createdBy: user.uid,
+            rep: 0,
+            color: selectedCrewData?.colors?.primary || '#4dabf7',
+            description: selectedCrewData?.description || ''
+          });
         } else {
           const crewDoc = crewSnapshot.docs[0];
           const currentMembers = crewDoc.data().members || [];
