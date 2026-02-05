@@ -495,7 +495,17 @@ const {
 
   // ========== EXISTING FUNCTIONS ==========
   
-
+    useEffect(() => {
+    if (mapRef.current) {
+      // Wait for map to initialize
+      setTimeout(() => {
+        const zoomControl = document.querySelector('.leaflet-control-zoom');
+        if (zoomControl) {
+          zoomControl.remove();
+        }
+      }, 500);
+    }
+  }, [mapRef.current]);
 
   useEffect(() => {
     const initializeSoundCloudTracks = async () => {
@@ -2663,7 +2673,25 @@ const handleMarkerDrop = useCallback(async () => {
           </div>
         )}
 
-
+      {/* Top-Left Logo */}
+      <div style={{
+        position: 'fixed',
+        top: '15px',
+        left: '15px',
+        zIndex: 1100,
+        pointerEvents: 'none'
+      }}>
+        <img 
+          src="/botoplogo1.svg" 
+          alt="Blackout NZ Logo"
+          style={{
+            width: '120px',
+            height: 'auto',
+            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))',
+            opacity: 0.9
+          }}
+        />
+      </div>
           
       <MapContainer
         center={
@@ -3654,7 +3682,7 @@ const handleMarkerDrop = useCallback(async () => {
         <div style={{
           position: 'absolute',
           top: 20,
-          left: 20,
+          right: 20,
           background: 'rgba(0,0,0,0.85)',
           color: '#e0e0e0',
           padding: '12px',
@@ -5720,65 +5748,135 @@ position: 'relative' as 'relative'
           </div>
         )}
 
-        {/* Blur Effect Layer Behind SVG */}
-        <div style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: '68px',
-          zIndex: 1099, // Behind the navigation
-          backdropFilter: 'blur(12px)',
-          backgroundColor: 'rgba(0, 0, 0, 0.4)',
-          boxShadow: `
-            0 0 40px rgba(255, 255, 255, 0.5),
-            0 0 80px rgba(255, 255, 255, 0.3)
-          `,
-          animation: 'glowPulse 4s ease-in-out infinite'
-        }} />
+                      {/* Blur Effect Layer Behind SVG */}
+      <div style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: '68px',
+        zIndex: 1099, // Behind the navigation
+        backdropFilter: 'blur(12px)',
+        backgroundColor: 'rgba(0, 0, 0, 0.4)',
+      }} />
 
-        {/* Bottom Navigation - Custom SVG with positioned buttons */}
-        <div style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: '68px',
-          zIndex: 1100, // On top of blur layer
-          // Crew-colored glow effect
-          boxShadow: `
-            0 0 30px rgba(255, 255, 255, 0.6),
-            0 0 60px rgba(255, 255, 255, 0.3),
-            inset 0 0 40px rgba(255, 255, 255, 0.4)
-          `,
-          filter: `drop-shadow(0 0 15px rgba(255, 255, 255, 0.8))`,
-          animation: 'glowPulse 4s ease-in-out infinite'
-        }}>
-          
-          {/* SVG Background */}
-          <img 
-            src="bobottomnav1.svg" 
-            alt="Bottom Navigation"
-            style={{
-              position: 'absolute',
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              pointerEvents: 'none',
-              filter: 'drop-shadow(0 -2px 10px rgba(0,0,0,0.3))'
-            }}
-          />
+      {/* Bottom Navigation Container */}
+      <div style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: '68px',
+        zIndex: 1100, // On top of blur layer
+        overflow: 'hidden',
+      }}>
         
-        {/* Position buttons based on your SVG design */}
+        {/* White Glow Layer - Behind SVG only */}
+        <div style={{
+          position: 'absolute',
+          width: '100%',
+          height: '100%',
+          // White glow effect
+          boxShadow: `
+            0 0 40px rgba(255, 255, 255, 0.8),
+            0 0 80px rgba(255, 255, 255, 0.6),
+            0 0 120px rgba(255, 255, 255, 0.4),
+            inset 0 0 60px rgba(255, 255, 255, 0.7)
+          `,
+          filter: `drop-shadow(0 0 25px rgba(255, 255, 255, 1))`,
+          animation: 'whiteGlowPulse 3s ease-in-out infinite',
+          pointerEvents: 'none',
+          zIndex: 0,
+        }} />
+        
+        {/* Crew Color Glow Layer - For selected button */}
+        <div style={{
+          position: 'absolute',
+          width: '100%',
+          height: '100%',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          pointerEvents: 'none',
+          zIndex: 1,
+        }}>
+          {/* Map Button Glow Section */}
+          <div style={{
+            opacity: showMapPanel ? 1 : 0,
+            transition: 'opacity 0.3s ease',
+            background: 'radial-gradient(circle at center, rgba(77, 171, 247, 1) 0%, rgba(77, 171, 247, 0.7) 50%, transparent 85%)',
+            boxShadow: `
+              inset 0 0 80px rgba(77, 171, 247, 0.9),
+              0 0 120px rgba(77, 171, 247, 0.8),
+              0 0 180px rgba(77, 171, 247, 0.6)
+            `,
+            filter: 'blur(1px)',
+          }} />
+          
+          {/* Blackbook Button Glow Section */}
+          <div style={{
+            opacity: showProfilePanel ? 1 : 0,
+            transition: 'opacity 0.3s ease',
+            background: 'radial-gradient(circle at center, rgba(77, 171, 247, 1) 0%, rgba(77, 171, 247, 0.7) 50%, transparent 85%)',
+            boxShadow: `
+              inset 0 0 80px rgba(77, 171, 247, 0.9),
+              0 0 120px rgba(77, 171, 247, 0.8),
+              0 0 180px rgba(77, 171, 247, 0.6)
+            `,
+            filter: 'blur(1px)',
+          }} />
+          
+          {/* Camera Button Glow Section */}
+          <div style={{
+            opacity: showPhotosPanel ? 1 : 0,
+            transition: 'opacity 0.3s ease',
+            background: 'radial-gradient(circle at center, rgba(77, 171, 247, 1) 0%, rgba(77, 171, 247, 0.7) 50%, transparent 85%)',
+            boxShadow: `
+              inset 0 0 80px rgba(77, 171, 247, 0.9),
+              0 0 120px rgba(77, 171, 247, 0.8),
+              0 0 180px rgba(77, 171, 247, 0.6)
+            `,
+            filter: 'blur(1px)',
+          }} />
+          
+          {/* Crew Chat Glow Section */}
+          <div style={{
+            opacity: showCrewChat ? 1 : 0,
+            transition: 'opacity 0.3s ease',
+            background: 'radial-gradient(circle at center, rgba(77, 171, 247, 1) 0%, rgba(77, 171, 247, 0.7) 50%, transparent 85%)',
+            boxShadow: `
+              inset 0 0 80px rgba(77, 171, 247, 0.9),
+              0 0 120px rgba(77, 171, 247, 0.8),
+              0 0 180px rgba(77, 171, 247, 0.6)
+            `,
+            filter: 'blur(1px)',
+          }} />
+        </div>
+
+        {/* SVG Background - White glow shows through transparent areas */}
+        <img 
+          src="bobottomnav1.svg" 
+          alt="Bottom Navigation"
+          style={{
+            position: 'absolute',
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            pointerEvents: 'none',
+            zIndex: 2,
+          }}
+        />
+        
+        {/* Interactive Buttons Layer - Only clickable areas, no text/emoji */}
         <div style={{
           position: 'relative',
           height: '100%',
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
           alignItems: 'center',
+          zIndex: 3,
         }}>
           
-          {/* Map Each button positioned in the SVG cutouts */}
+          {/* Map Button - Empty, just clickable */}
           <button
             onClick={() => {
               setShowMapPanel(!showMapPanel);
@@ -5789,28 +5887,26 @@ position: 'relative' as 'relative'
               setShowStoryPanel(false);
             }}
             style={{
-              background: showMapPanel ? 'rgba(77, 171, 247, 0.6)' : 'transparent',
+              background: 'transparent',
               border: 'none',
-              color: 'white',
+              color: 'transparent',
               display: 'flex',
-              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '11px',
-              gap: '2px',
               padding: '12px 0',
               cursor: 'pointer',
               transition: 'all 0.3s ease',
               height: '100%',
+              width: '100%',
               borderRadius: '0',
-              backdropFilter: showMapPanel ? 'blur(0px)' : 'none',
+              position: 'relative',
             }}
+            aria-label="Map"
           >
-            <div style={{ fontSize: '20px' }}></div>
-            <div></div>
+            {/* Empty button - icon/text should be in SVG */}
           </button>
 
-          {/* Blackbook Button */}
+          {/* Blackbook Button - Empty, just clickable */}
           <button
             onClick={() => {
               setShowProfilePanel(!showProfilePanel);
@@ -5821,28 +5917,26 @@ position: 'relative' as 'relative'
               setShowStoryPanel(false);
             }}
             style={{
-              background: showProfilePanel ? 'rgba(77, 171, 247, 0.6)' : 'transparent',
+              background: 'transparent',
               border: 'none',
-              color: 'white',
+              color: 'transparent',
               display: 'flex',
-              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '11px',
-              gap: '2px',
               padding: '12px 0',
               cursor: 'pointer',
               transition: 'all 0.3s ease',
               height: '100%',
+              width: '100%',
               borderRadius: '0',
-              backdropFilter: showProfilePanel ? 'blur(0px)' : 'none',
+              position: 'relative',
             }}
+            aria-label="Blackbook"
           >
-            <div style={{ fontSize: '20px' }}></div>
-            
+            {/* Empty button - icon/text should be in SVG */}
           </button>
 
-          {/* Camera Button */}
+          {/* Camera Button - Empty, just clickable */}
           <button
             onClick={() => {
               setShowPhotosPanel(!showPhotosPanel);
@@ -5853,59 +5947,54 @@ position: 'relative' as 'relative'
               setShowStoryPanel(false);
             }}
             style={{
-              background: showPhotosPanel ? 'rgba(77, 171, 247, 0.6)' : 'transparent',
+              background: 'transparent',
               border: 'none',
-              color: 'white',
+              color: 'transparent',
               display: 'flex',
-              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '11px',
-              gap: '2px',
               padding: '12px 0',
               cursor: 'pointer',
               transition: 'all 0.3s ease',
               height: '100%',
+              width: '100%',
               borderRadius: '0',
-              backdropFilter: showPhotosPanel ? 'blur(0px)' : 'none',
+              position: 'relative',
             }}
+            aria-label="Camera"
           >
-            <div style={{ fontSize: '20px' }}></div>
-            
+            {/* Empty button - icon/text should be in SVG */}
           </button>
 
-          {/* Crew Chat Each button positioned in the SVG cutouts */}
-            <button
-              onClick={() => {
-                setShowCrewChat(!showCrewChat);
-                setShowProfilePanel(false);
-                setShowPhotosPanel(false);
-                setShowMapPanel(false);
-                setShowMusicPanel(false);
-                setShowStoryPanel(false);
-              }}
-              style={{
-                background: showCrewChat ? 'rgba(77, 171, 247, 0.6)' : 'transparent',
-                border: 'none',
-                color: 'white',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '11px',
-                gap: '2px',
-                padding: '12px 0',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                height: '100%',
-                borderRadius: '0',
-                backdropFilter: showCrewChat ? 'blur(0px)' : 'none',
-              }}
-            >
-              <div style={{ fontSize: '20px' }}></div>
-              <div></div>
-            </button>
-
+          {/* Crew Chat Button - Empty, just clickable */}
+          <button
+            onClick={() => {
+              setShowCrewChat(!showCrewChat);
+              setShowProfilePanel(false);
+              setShowPhotosPanel(false);
+              setShowMapPanel(false);
+              setShowMusicPanel(false);
+              setShowStoryPanel(false);
+            }}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'transparent',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '12px 0',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              height: '100%',
+              width: '100%',
+              borderRadius: '0',
+              position: 'relative',
+            }}
+            aria-label="Crew Chat"
+          >
+            {/* Empty button - icon/text should be in SVG */}
+          </button>
         </div>
       </div>
 
@@ -5913,9 +6002,9 @@ position: 'relative' as 'relative'
       <div style={{
         position: 'fixed',
         bottom: '68px', // Positioned above the main nav bar
-        left: '250px', // Aligned with the Online button
+        left: '0px', // Aligned with the Online button
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'row',
         gap: '8px',
         zIndex: 1100
       }}>
@@ -6112,7 +6201,42 @@ position: 'relative' as 'relative'
           50% { background-position: 100% 50%; }
           100% { background-position: 0% 50%; }
         }
-      `}</style>
+
+        @keyframes glowPulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.8; }
+        }
+        
+        @keyframes buttonGlowPulse {
+          0%, 100% { 
+            opacity: 1;
+            transform: scale(1);
+          }
+          50% { 
+            opacity: 0.9;
+            transform: scale(1.02);
+          }
+
+          @keyframes whiteGlowPulse {
+          0%, 100% { 
+            opacity: 1;
+            box-shadow: 
+              0 0 40px rgba(255, 255, 255, 0.8),
+              0 0 80px rgba(255, 255, 255, 0.6),
+              0 0 120px rgba(255, 255, 255, 0.4),
+              inset 0 0 60px rgba(255, 255, 255, 0.7);
+          }
+          50% { 
+            opacity: 0.9;
+            box-shadow: 
+              0 0 45px rgba(255, 255, 255, 0.9),
+              0 0 90px rgba(255, 255, 255, 0.7),
+              0 0 140px rgba(255, 255, 255, 0.5),
+              inset 0 0 65px rgba(255, 255, 255, 0.8);
+          }
+        }
+      `}
+      </style>
     </div>
     </StoryManagerProvider>
   );

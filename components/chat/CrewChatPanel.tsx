@@ -174,7 +174,8 @@ export default function CrewChatPanel({ crewId, onClose, userProfile }: CrewChat
       maxHeight: 'calc(100vh - 180px)', // Account for bottom nav
       zIndex: 1400,
       display: 'flex',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      animation: 'slideInRight 0.3s ease-out'  // Add this line
     }}>
       <div style={{
         display: 'flex',
