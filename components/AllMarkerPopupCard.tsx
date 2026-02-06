@@ -1,7 +1,8 @@
 // components/AllMarkerPopupCard.tsx (or update existing one)
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { LikeButton } from './LikeButton';
 import { CommentSection } from './CommentSection';
+import { likeDrop, unlikeDrop, getCommentsForDrop, addCommentToDrop } from '@/lib/firebase/drops';
 
 interface AllMarkerPopupCardProps {
   marker: any;
@@ -19,6 +20,7 @@ export const AllMarkerPopupCard: React.FC<AllMarkerPopupCardProps> = ({
   mapRef
 }) => {
   const [isCommenting, setIsCommenting] = useState(false);
+  const [comments, setComments] = useState<any[]>(marker.comments || []);
   
   // Calculate time ago
   const getTimeAgo = (date: Date) => {
@@ -33,6 +35,80 @@ export const AllMarkerPopupCard: React.FC<AllMarkerPopupCardProps> = ({
     if (diffMins > 0) return `${diffMins}m ago`;
     return 'Just now';
   };
+
+  // Get the actual firestore ID for the marker
+  const getMarkerId = useCallback(() => {
+    return marker.firestoreId || marker.id || marker.dropId;
+  }, [marker]);
+
+  // Handle like toggle with Firestore update
+  const handleLikeToggle = useCallback(async (markerId: string, newLikes: string[]) => {
+    if (!user) return;
+    
+    const id = markerId || getMarkerId();
+    if (!id) return;
+
+    try {
+      const isLiked = newLikes.includes(user.uid);
+      
+      if (isLiked) {
+        await likeDrop(id, user.uid);
+      } else {
+        await unlikeDrop(id, user.uid);
+      }
+      
+      console.log('Like updated successfully');
+    } catch (error) {
+      console.error('Error updating like:', error);
+    }
+  }, [user, getMarkerId]);
+
+  // Handle adding a new comment
+  const handleCommentAdded = useCallback(async (comment: any) => {
+    if (!user || !userProfile) return;
+    
+    const id = getMarkerId();
+    if (!id) return;
+
+    try {
+      const commentId = await addCommentToDrop(
+        id,
+        user.uid,
+        userProfile.username || user.displayName || 'Anonymous',
+        comment.text,
+        userProfile.profilePicUrl || user.photoURL || undefined
+      );
+
+      if (commentId) {
+        const newComment = {
+          id: commentId,
+          userId: user.uid,
+          username: userProfile.username || user.displayName || 'Anonymous',
+          userProfilePic: userProfile.profilePicUrl || user.photoURL,
+          text: comment.text,
+          timestamp: new Date()
+        };
+        
+        setComments(prev => [...prev, newComment]);
+        console.log('Comment added successfully');
+      }
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    }
+  }, [user, userProfile, getMarkerId]);
+
+  // Load comments when opening comment section
+  const loadComments = useCallback(async () => {
+    const id = getMarkerId();
+    if (!id || comments.length > 0) return;
+
+    try {
+      const fetchedComments = await getCommentsForDrop(id);
+      setComments(fetchedComments);
+    } catch (error) {
+      console.error('Error loading comments:', error);
+    }
+  }, [getMarkerId, comments.length]);
 
   return (
     <div style={{
@@ -157,17 +233,17 @@ export const AllMarkerPopupCard: React.FC<AllMarkerPopupCardProps> = ({
         flexWrap: 'wrap'
       }}>
         <LikeButton
-          markerId={marker.id}
+          markerId={getMarkerId()}
           initialLikes={marker.likes || []}
-          onLikeToggle={(markerId: string, newLikes: string[]) => {
-            // Update marker likes
-            console.log('Like toggled for marker:', markerId, 'New likes:', newLikes);
-          }}
+          onLikeToggle={handleLikeToggle}
           user={user}
         />
         
         <button
-          onClick={() => setIsCommenting(!isCommenting)}
+          onClick={() => {
+            setIsCommenting(!isCommenting);
+            if (!isCommenting) loadComments();
+          }}
           style={{
             flex: 1,
             padding: '8px 12px',
@@ -214,12 +290,9 @@ export const AllMarkerPopupCard: React.FC<AllMarkerPopupCardProps> = ({
       {/* Comments Section */}
       {isCommenting && (
         <CommentSection
-          markerId={marker.id}
-          initialComments={marker.comments || []}
-          onCommentAdded={(comment: any) => {
-            // Refresh comments
-            console.log('New comment added:', comment);
-          }}
+          markerId={getMarkerId()}
+          initialComments={comments}
+          onCommentAdded={handleCommentAdded}
           user={user}
           userProfile={userProfile}
         />
