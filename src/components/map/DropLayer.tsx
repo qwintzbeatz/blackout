@@ -49,7 +49,13 @@ const DropLayerOptimized: React.FC<DropLayerProps> = ({
 
   // Filter drops by performance and user preferences
   const filteredDrops = useMemo(() => {
-    return drops.slice(0, dropLimit);
+    const result = drops.slice(0, dropLimit);
+    console.log('🗂️ Drops received:', drops.map(d => ({
+      id: d.id,
+      hasPhoto: !!d.photoUrl,
+      photoUrl: d.photoUrl ? d.photoUrl.substring(0, 50) + '...' : 'none'
+    })));
+    return result;
   }, [drops, dropLimit]);
 
   // Create drop icon based on content type
@@ -216,15 +222,20 @@ const DropLayerOptimized: React.FC<DropLayerProps> = ({
                   <img
                     src={drop.photoUrl}
                     alt="Drop photo"
+                    key={drop.photoUrl} // Force re-render if URL changes
+                    loading="lazy"
+                    crossOrigin="anonymous"
                     style={{
                       width: '100%',
                       maxHeight: '120px',
                       objectFit: 'cover',
                       borderRadius: '4px',
-                      border: '1px solid #ddd'
+                      border: '1px solid #ddd',
+                      cursor: 'pointer'
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
+                      console.log('🖼️ Opening photo:', drop.photoUrl);
                       window.open(drop.photoUrl, '_blank');
                     }}
                   />

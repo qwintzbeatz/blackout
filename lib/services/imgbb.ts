@@ -57,7 +57,9 @@ export async function uploadImageToImgBB(file: File): Promise<string> {
       throw new Error('ImgBB upload failed: Invalid response');
     }
 
-    return data.data.url;
+    const imageUrl = data.data.url;
+    console.log('🖼️ ImgBB upload successful:', imageUrl);
+    return imageUrl;
   } catch (error) {
     console.error('Error uploading image to ImgBB:', error);
     throw error;

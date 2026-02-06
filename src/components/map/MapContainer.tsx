@@ -206,6 +206,7 @@ const MapContainerOptimized: React.FC<MapContainerProps> = ({
         zoom={zoom}
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom={true}
+        zoomControl={false}
       >
         {/* Optimized tile layer based on theme */}
         <TileLayer

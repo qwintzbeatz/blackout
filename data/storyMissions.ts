@@ -1,76 +1,21 @@
-export interface StoryMission {
-  id: string;
-  title: string;
-  description: string;
-  type: 'exploration' | 'marker' | 'social' | 'creative' | 'challenge';
-  difficulty: 'easy' | 'medium' | 'hard' | 'expert';
-  repReward: number;
-  requirements?: string[];
-  crewTrust?: Record<string, number>;
-  location?: [number, number];
-  duration?: number; // in hours
-  isActive: boolean;
-}
+import { StoryMission } from '@/lib/types/story';
 
 export const INITIAL_STORY_MISSIONS: StoryMission[] = [
-  {
-    id: 'act1_intro',
-    title: 'Welcome to the Underground',
-    description: 'Place your first marker and introduce yourself to the scene',
-    type: 'marker',
-    difficulty: 'easy',
-    repReward: 25,
-    requirements: [],
-    isActive: true
-  },
-  {
-    id: 'act1_explore',
-    title: 'Know Your Territory',
-    description: 'Visit 3 different NZ cities and explore their graffiti scenes',
-    type: 'exploration',
-    difficulty: 'easy',
-    repReward: 50,
-    requirements: ['act1_intro'],
-    isActive: false
-  },
-  {
-    id: 'act1_crew',
-    title: 'Find Your Crew',
-    description: 'Connect with local writers or join a crew',
-    type: 'social',
-    difficulty: 'medium',
-    repReward: 75,
-    requirements: ['act1_intro', 'act1_explore'],
-    isActive: false
-  }
+  { id: 'act1_ch1_welcome', act: 1, chapter: 1, title: 'First Mark', subtitle: 'Make your presence known', description: 'Place your first marker in the city.', storyText: ['You\'ve been watching from the shadows. Tonight, you make it official.'], requiredCrew: 'any', requiredMissions: [], trigger: { type: 'marker_placed', value: 1 }, objectives: [{ id: 'obj_place_first_marker', type: 'placement', description: 'Place your first marker', target: { type: 'count', value: 1, required: 1 }, completed: false, progress: 0, maxProgress: 1 }], rewards: { rep: 25, crewTrust: {}, unlockedTracks: ['underground'], unlockedAbilities: ['marker_placement'] }, locationHint: { coords: [174.7673, -36.8501], radius: 5000, description: 'Anywhere in Auckland' }, isMainStory: true, difficulty: 'easy', createdAt: new Date(), updatedAt: new Date() },
+  { id: 'act1_ch2_explore', act: 1, chapter: 2, title: 'Know Your Territory', subtitle: 'Map the underground', description: 'Visit 3 different areas and discover hidden spots.', storyText: ['Auckland is bigger than it looks.'], requiredCrew: 'any', requiredMissions: ['act1_ch1_welcome'], trigger: { type: 'location_visited', value: 3 }, objectives: [{ id: 'obj_visit_spots', type: 'exploration', description: 'Visit 3 graffiti spots', target: { type: 'count', value: 3, required: 3 }, completed: false, progress: 0, maxProgress: 3 }], rewards: { rep: 50, crewTrust: {}, unlockedTracks: ['exploration'], unlockedAbilities: ['spot_discovery'] }, locationHint: { coords: [174.7673, -36.8501], radius: 50000, description: 'Greater Auckland' }, isMainStory: true, difficulty: 'easy', createdAt: new Date(), updatedAt: new Date() },
+  { id: 'act1_ch3_crew', act: 1, chapter: 3, title: 'Choose Your Alliance', subtitle: 'Find your people', description: 'Find the crew that resonates with you.', storyText: ['BLAQWT, SPONTANEOUS, LUZUNT, DON\'T GET CAPPED. Who will you throw in with?'], requiredCrew: 'any', requiredMissions: ['act1_ch2_explore'], trigger: { type: 'crew_trust', value: 10 }, objectives: [{ id: 'obj_join_crew', type: 'story', description: 'Join a crew', target: { type: 'count', value: 1, required: 1 }, completed: false, progress: 0, maxProgress: 1 }], rewards: { rep: 75, crewTrust: { bqc: 5, sps: 5, lzt: 5, dgc: 5 }, unlockedTracks: ['crew_intro'], unlockedAbilities: ['crew_chat'] }, locationHint: { coords: [174.7673, -36.8501], radius: 10000, description: 'Crew hangouts' }, isMainStory: true, difficulty: 'medium', createdAt: new Date(), updatedAt: new Date() },
+  { id: 'act2_ch1_appearances', act: 2, chapter: 1, title: 'Something\'s Wrong', subtitle: 'The disappearance begins', description: 'Writers are vanishing. Their work erased.', storyText: ['A friend hasn\'t been seen in three days. Their last marker? Gone.'], requiredCrew: 'any', requiredMissions: ['act1_ch3_crew'], trigger: { type: 'mission_completed', value: 'act1_ch3_crew' }, objectives: [{ id: 'obj_notice_disappearance', type: 'investigation', description: 'Investigate', target: { type: 'count', value: 1, required: 1 }, completed: false, progress: 0, maxProgress: 1 }], rewards: { rep: 100, crewTrust: {}, unlockedTracks: ['investigation'], unlockedAbilities: ['disappearance_tracking'] }, locationHint: { coords: [174.7673, -36.8501], radius: 10000, description: 'Last known location' }, isMainStory: true, difficulty: 'medium', createdAt: new Date(), updatedAt: new Date() },
+  { id: 'act2_ch2_patterns', act: 2, chapter: 2, title: 'Reading the Signs', subtitle: 'Find the pattern', description: 'Gather evidence. Find what connects them.', storyText: ['One disappearance becomes two. You need to see the pattern.'], requiredCrew: 'any', requiredMissions: ['act2_ch1_appearances'], trigger: { type: 'rep_reached', value: 150 }, objectives: [{ id: 'obj_find_evidence', type: 'investigation', description: 'Find evidence', target: { type: 'count', value: 3, required: 3 }, completed: false, progress: 0, maxProgress: 3 }], rewards: { rep: 125, crewTrust: {}, unlockedTracks: ['mystery'], unlockedAbilities: ['pattern_recognition'] }, locationHint: { coords: [174.7673, -36.8501], radius: 20000, description: 'Disappearance sites' }, isMainStory: true, difficulty: 'medium', createdAt: new Date(), updatedAt: new Date() },
+  { id: 'act3_ch1_insider', act: 3, chapter: 1, title: 'The Mole', subtitle: 'Betrayal from within', description: 'Someone is feeding information.', storyText: ['Someone is selling you all out. Who? You need to find the mole.'], requiredCrew: 'any', requiredMissions: ['act2_ch2_patterns'], trigger: { type: 'mission_completed', value: 'act2_ch2_patterns' }, objectives: [{ id: 'obj_identify_mole', type: 'investigation', description: 'Identify the mole', target: { type: 'count', value: 1, required: 1 }, completed: false, progress: 0, maxProgress: 1 }], rewards: { rep: 200, crewTrust: {}, unlockedTracks: ['betrayal'], unlockedAbilities: ['loyalty_check'] }, locationHint: { coords: [174.7673, -36.8501], radius: 5000, description: 'Crew HQ' }, isMainStory: true, difficulty: 'hard', createdAt: new Date(), updatedAt: new Date() },
+  { id: 'act3_ch2_confrontation', act: 3, chapter: 2, title: 'Face the Truth', subtitle: 'Confront the betrayal', description: 'The mole is revealed.', storyText: ['Do you expose them? Do you understand? Or do you make an example?'], requiredCrew: 'any', requiredMissions: ['act3_ch1_insider'], trigger: { type: 'mission_completed', value: 'act3_ch1_insider' }, objectives: [{ id: 'obj_confront', type: 'story', description: 'Confront', target: { type: 'count', value: 1, required: 1 }, completed: false, progress: 0, maxProgress: 1 }], rewards: { rep: 250, crewTrust: {}, unlockedTracks: ['confrontation'], unlockedAbilities: ['story_choice'] }, locationHint: { coords: [174.7673, -36.8501], radius: 5000, description: 'Secret spot' }, isMainStory: true, difficulty: 'hard', createdAt: new Date(), updatedAt: new Date() },
+  { id: 'act4_ch1_build', act: 4, chapter: 1, title: 'United We Stand', subtitle: 'Form the alliance', description: 'Crews must put aside differences.', storyText: ['It\'s time to build bridges. Time to trust the untrustable.'], requiredCrew: 'any', requiredMissions: ['act3_ch2_confrontation'], trigger: { type: 'crew_trust', value: 30 }, objectives: [{ id: 'obj_form_alliance', type: 'collaboration', description: 'Form alliance', target: { type: 'count', value: 4, required: 4 }, completed: false, progress: 0, maxProgress: 4 }], rewards: { rep: 300, crewTrust: { bqc: 10, sps: 10, lzt: 10, dgc: 10 }, unlockedTracks: ['resistance'], unlockedAbilities: ['crew_alliance'] }, locationHint: { coords: [174.7673, -36.8501], radius: 30000, description: 'All across Auckland' }, isMainStory: true, difficulty: 'hard', createdAt: new Date(), updatedAt: new Date() },
+  { id: 'act4_ch2_counterstrike', act: 4, chapter: 2, title: 'Take It Back', subtitle: 'Reclaim the territory', description: 'Launch coordinated operations.', storyText: ['We\'ve been on the defensive too long. Tonight, we take back what\'s ours.'], requiredCrew: 'any', requiredMissions: ['act4_ch1_build'], trigger: { type: 'mission_completed', value: 'act4_ch1_build' }, objectives: [{ id: 'obj_reclaim_spots', type: 'placement', description: 'Place 10 markers', target: { type: 'count', value: 10, required: 10 }, completed: false, progress: 0, maxProgress: 10 }], rewards: { rep: 350, crewTrust: {}, unlockedTracks: ['counterstrike'], unlockedAbilities: ['rapid_placement'] }, locationHint: { coords: [174.7673, -36.8501], radius: 25000, description: 'Reclamation zones' }, isMainStory: true, difficulty: 'hard', createdAt: new Date(), updatedAt: new Date() },
+  { id: 'act5_ch1_masterpiece', act: 5, chapter: 1, title: 'The Final Piece', subtitle: 'Create your legacy', description: 'One last piece.', storyText: ['This is it. Make it count.'], requiredCrew: 'any', requiredMissions: ['act4_ch2_counterstrike'], trigger: { type: 'rep_reached', value: 1000 }, objectives: [{ id: 'obj_final_piece', type: 'placement', description: 'Create masterpiece', target: { type: 'count', value: 1, required: 1 }, completed: false, progress: 0, maxProgress: 1 }], rewards: { rep: 500, crewTrust: {}, unlockedTracks: ['masterpiece'], unlockedAbilities: ['legend_status'] }, locationHint: { coords: [174.7673, -36.8501], radius: 10000, description: 'Choose wisely' }, isMainStory: true, difficulty: 'epic', createdAt: new Date(), updatedAt: new Date() },
+  { id: 'act6_ch1_resolution', act: 6, chapter: 1, title: 'A New Era', subtitle: 'The aftermath', description: 'The battle is won.', storyText: ['You\'ve shaped this story. Now decide how it ends. Forgive. Punish. Reform.'], requiredCrew: 'any', requiredMissions: ['act5_ch1_masterpiece'], trigger: { type: 'mission_completed', value: 'act5_ch1_masterpiece' }, objectives: [{ id: 'obj_final_choice', type: 'story', description: 'Make choice', target: { type: 'count', value: 1, required: 1 }, completed: false, progress: 0, maxProgress: 1 }], rewards: { rep: 1000, crewTrust: { bqc: 20, sps: 20, lzt: 20, dgc: 20 }, unlockedTracks: ['finale'], unlockedAbilities: ['founder_status'] }, locationHint: { coords: [174.7673, -36.8501], radius: 5000, description: 'Where it began' }, isMainStory: true, difficulty: 'epic', createdAt: new Date(), updatedAt: new Date() }
 ];
 
 export const DAILY_MISSIONS: StoryMission[] = [
-  {
-    id: 'daily_marker',
-    title: 'Daily Tag',
-    description: 'Place at least one marker today',
-    type: 'marker',
-    difficulty: 'easy',
-    repReward: 15,
-    isActive: true
-  },
-  {
-    id: 'daily_social',
-    title: 'Connect & Share',
-    description: 'Comment on another writer\'s work or send a message',
-    type: 'social',
-    difficulty: 'easy',
-    repReward: 10,
-    isActive: true
-  },
-  {
-    id: 'daily_explore',
-    title: 'Urban Explorer',
-    description: 'Discover a new spot in your city',
-    type: 'exploration',
-    difficulty: 'medium',
-    repReward: 20,
-    isActive: true
-  }
+  { id: 'daily_marker', act: 0, chapter: 0, title: 'Daily Tag', subtitle: 'Leave your mark', description: 'Place at least one marker today.', storyText: ['The city forgets those who stay silent.'], requiredCrew: 'any', requiredMissions: [], trigger: { type: 'marker_placed', value: 1 }, objectives: [{ id: 'obj_daily_marker', type: 'placement', description: 'Place marker', target: { type: 'count', value: 1, required: 1 }, completed: false, progress: 0, maxProgress: 1 }], rewards: { rep: 15, crewTrust: {} }, locationHint: { coords: [174.7673, -36.8501], radius: 50000, description: 'Anywhere' }, isMainStory: false, difficulty: 'easy', createdAt: new Date(), updatedAt: new Date() },
+  { id: 'daily_social', act: 0, chapter: 0, title: 'Connect & Share', subtitle: 'Build your network', description: 'Comment on another writer\'s work.', storyText: ['The scene survives on connections.'], requiredCrew: 'any', requiredMissions: [], trigger: { type: 'location_visited', value: 1 }, objectives: [{ id: 'obj_daily_social', type: 'collaboration', description: 'Connect', target: { type: 'count', value: 1, required: 1 }, completed: false, progress: 0, maxProgress: 1 }], rewards: { rep: 10, crewTrust: {} }, locationHint: { coords: [174.7673, -36.8501], radius: 50000, description: 'Anywhere' }, isMainStory: false, difficulty: 'easy', createdAt: new Date(), updatedAt: new Date() },
+  { id: 'daily_explore', act: 0, chapter: 0, title: 'Urban Explorer', subtitle: 'Find hidden spots', description: 'Discover a new spot.', storyText: ['The city has secrets.'], requiredCrew: 'any', requiredMissions: [], trigger: { type: 'location_visited', value: 1 }, objectives: [{ id: 'obj_daily_explore', type: 'exploration', description: 'Visit spot', target: { type: 'count', value: 1, required: 1 }, completed: false, progress: 0, maxProgress: 1 }], rewards: { rep: 20, crewTrust: {} }, locationHint: { coords: [174.7673, -36.8501], radius: 50000, description: 'Anywhere' }, isMainStory: false, difficulty: 'easy', createdAt: new Date(), updatedAt: new Date() }
 ];

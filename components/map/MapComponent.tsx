@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { UserMarker } from '@/lib/utils/types';
 import GPSMarker from './GPSMarker';
 import UserMarkerComponent from './UserMarkerComponent';
@@ -53,6 +53,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
 }) => {
   const [mapReady, setMapReady] = useState(false);
   const [mapInstance, setMapInstance] = useState<any>(null);
+  const mapRef = useRef<any>(null);
 
   // Initialize Leaflet icons only on client side
   useEffect(() => {
@@ -87,10 +88,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
     };
   }, [mapInstance, onMapClick]);
 
-  const handleMapCreated = (map: any) => {
-    setMapInstance(map);
-    if (onMapCreated) {
-      onMapCreated(map);
+  const handleMapCreated = () => {
+    if (mapRef.current) {
+      setMapInstance(mapRef.current);
+      if (onMapCreated) {
+        onMapCreated(mapRef.current);
+      }
     }
   };
 
@@ -166,11 +169,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <MapContainer
+        ref={mapRef}
         center={center}
         zoom={zoom}
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom={true}
-        whenCreated={handleMapCreated}
+        zoomControl={false}
+        whenReady={handleMapCreated}
       >
         {/* Dark Tile Options */}
         {useDarkTiles ? (

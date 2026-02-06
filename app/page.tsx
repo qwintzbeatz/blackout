@@ -39,6 +39,8 @@ import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import React from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
+import { createSprayCanIcon } from '@/components/map/SprayCanIcon';
+
 import PhotoSelectionModal from '@/components/ui/PhotoSelectionModal';
 import DropPopup from '@/components/map/DropPopup';
 import MarkerPopupCard from '@/components/MarkerPopupCard';
@@ -79,28 +81,14 @@ import {
   DirectChat
 } from '@/types';
 
-
-
 // 🔧 PERFORMANCE: Enable SoundCloud for music playback functionality
 const ENABLE_SOUNDCLOUD = true;
-
-
 
 // PERFORMANCE OPTIMIZATIONS:
 // - Component splitting: CrewChatPanel, MusicPlayer, ProfilePanel extracted
 // - State management: useMemo, useCallback, React.memo implemented
 // - Memory cleanup: Proper event listener cleanup in useEffect
 // - Bundle reduction: Separated concerns into modular components
-
-
-
-
-
-
-
-
-
-
 
 // Helper function to calculate distance between two coordinates in meters
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -187,8 +175,6 @@ const getTrackNameFromUrl = (url: string): string => {
   }
   return 'Unknown Track';
 };
-
-
 
 // Helper function to calculate bounds from markers
 const calculateBoundsFromMarkers = (markers: UserMarker[]): [[number, number], [number, number]] | null => {
@@ -305,8 +291,116 @@ const Circle = dynamic(
   { ssr: false }
 );
 
+// Firestore Marker Interface
+interface FirestoreMarker {
+  position: [number, number];
+  name: string;
+  description: MarkerDescription;
+  color: string;
+  timestamp: Timestamp;
+  userId: string;
+  username: string;
+  userProfilePic: string;
+  createdAt: Timestamp;
+  distanceFromCenter: number | null;
+  repEarned: number;
+}
+
+// Custom hook for performance monitoring
+const usePerformanceMonitor = () => {
+  const renderCount = useRef(0);
+  
+  
+
+  useEffect(() => {
+    renderCount.current += 1;
+    
+    if (renderCount.current > 50) {
+      console.warn('High render count detected. Check for infinite loops.');
+    }
+  });
+  
+  const logPerformance = useCallback((operation: string, startTime: number) => {
+    const duration = performance.now() - startTime;
+    if (duration > 100) {
+      console.warn(`Slow operation (${operation}): ${duration.toFixed(2)}ms`);
+    }
+  }, []);
+  
+  return { logPerformance };
+};
+
+// Custom hook for loading state management
+const useLoadingManager = () => {
+  const [loadingStates, setLoadingStates] = useState({
+    markers: false,
+    profile: false,
+    drops: false,
+    topPlayers: false,
+    gps: false,
+    auth: true
+  });
+  
+  const setLoading = useCallback((key: keyof typeof loadingStates, value: boolean) => {
+    setLoadingStates(prev => ({ ...prev, [key]: value }));
+  }, []);
+  
+  const isLoading = useMemo(() => {
+    return Object.values(loadingStates).some(state => state);
+  }, [loadingStates]);
+  
+  return { loadingStates, setLoading, isLoading };
+};
+
+// Custom hook for safe operations with error handling
+const useSafeOperation = (errorHandler: any) => {
+  const safeOperation = useCallback(async <T>(
+    operation: () => Promise<T>,
+    fallback?: T
+  ): Promise<T | undefined> => {
+    try {
+      return await operation();
+    } catch (error) {
+      console.error('Operation failed:', error);
+      return fallback;
+    }
+  }, []);
+  
+  return { safeOperation };
+};
+
+// Memoized Marker Component
+
+const MemoizedMarker = React.memo(({ marker, user, onClick }: {
+  marker: UserMarker,
+  user: FirebaseUser | null,
+  onClick: (marker: UserMarker) => void
+}) => {
+  const customIcon = useMemo(() => {
+    if (typeof window === 'undefined') return undefined;
+    
+    const markerColor = marker.color || '#ff6b6b';
+    return createSprayCanIcon(markerColor, 36);
+  }, [marker.color]);
+  
+  return (
+    <Marker 
+      position={marker.position}
+      icon={customIcon}
+      eventHandlers={{ click: () => onClick(marker) }}
+    />
+  );
+});
+
+MemoizedMarker.displayName = 'MemoizedMarker';
+
+
 const HomeComponent = () => {
   const { hasRecentErrors } = useErrorHandler();
+  const { logPerformance } = usePerformanceMonitor();
+  const { loadingStates, setLoading, isLoading } = useLoadingManager();
+  const { safeOperation } = useSafeOperation(useErrorHandler());
+  
   // ========== STATE DECLARATIONS ==========
   const [mapReady, setMapReady] = useState(false);
   const [zoom, setZoom] = useState<number>(4);
@@ -346,34 +440,6 @@ const HomeComponent = () => {
   // Marker color states
   const [selectedMarkerColor, setSelectedMarkerColor] = useState('#10b981');
 
-  // Initialize selected marker color from user profile on mount
-  useEffect(() => {
-    if (userProfile?.favoriteColor) {
-      setSelectedMarkerColor(userProfile.favoriteColor);
-    }
-  }, [userProfile?.favoriteColor]);
-
-  // Fix marker colors on page refresh - ensure all markers use correct colors
-  useEffect(() => {
-    if (userProfile?.favoriteColor && userMarkers.length > 0) {
-      // Update any markers that might have wrong colors
-      const updatedMarkers = userMarkers.map(marker => {
-        // Only update markers that belong to the current user and have wrong color
-        if (marker.userId === user?.uid && marker.color !== userProfile.favoriteColor) {
-          return {
-            ...marker,
-            color: userProfile.favoriteColor || '#10b981' // Ensure color is never undefined
-          };
-        }
-        return marker;
-      });
-      
-      if (updatedMarkers.some((marker, index) => marker.color !== userMarkers[index].color)) {
-        setUserMarkers(updatedMarkers);
-      }
-    }
-  }, [userProfile?.favoriteColor, userMarkers, user?.uid]);
-  
   // Audio player states
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.5);
@@ -447,7 +513,7 @@ const HomeComponent = () => {
   const [crewDetectionEnabled, setCrewDetectionEnabled] = useState(true);
   const [markerQuality, setMarkerQuality] = useState<'low' | 'medium' | 'high'>('medium');
   
-  // Dynamic quality settings - Now this works
+  // Dynamic quality settings
   const [graphicsQuality, setGraphicsQuality] = useState<'low' | 'medium' | 'high'>(
     detectDevicePerformance()
   );
@@ -456,10 +522,26 @@ const HomeComponent = () => {
   const markerLimit = graphicsQuality === 'low' ? 12 : graphicsQuality === 'medium' ? 25 : 50;
   
   // ========== PERFORMANCE MEMOIZATION ==========
+  // Memoize markers by user
+  const markersByUser = useMemo(() => {
+    const byUser = userMarkers.reduce((acc, marker) => {
+      if (!acc[marker.userId]) {
+        acc[marker.userId] = [];
+      }
+      acc[marker.userId].push(marker);
+      return acc;
+    }, {} as Record<string, UserMarker[]>);
+    
+    return byUser;
+  }, [userMarkers]);
+
   // Memoize filtered markers
   const filteredMarkers = useMemo(() => {
-    return userMarkers.filter(marker => !showOnlyMyDrops || marker.userId === user?.uid);
-  }, [userMarkers, showOnlyMyDrops, user?.uid]);
+    if (showOnlyMyDrops && user) {
+      return markersByUser[user.uid] || [];
+    }
+    return userMarkers.slice(0, markerLimit);
+  }, [userMarkers, showOnlyMyDrops, user, markerLimit, markersByUser]);
 
   // Memoize marker bounds
   const markerBounds = useMemo(() => {
@@ -485,7 +567,7 @@ const {
   stopTracking
 } = useGPSTracker();
 
-  // 🆕 MISSION TRIGGERS HOOK - Moved before useEffect dependencies
+  // 🆕 MISSION TRIGGERS HOOK
   const {
     triggerDisappearance,
     checkMissionCompletion,
@@ -502,20 +584,66 @@ const {
   // Derive GPS status from state
   const gpsStatus = gpsLoading ? 'acquiring' : gpsError ? 'error' : isTracking ? 'tracking' : 'idle';
 
-  // ========== EXISTING FUNCTIONS ==========
-  
-    useEffect(() => {
-    if (mapRef.current) {
-      // Wait for map to initialize
-      setTimeout(() => {
-        const zoomControl = document.querySelector('.leaflet-control-zoom');
-        if (zoomControl) {
-          zoomControl.remove();
-        }
-      }, 500);
+  // ========== CLEANUP EFFECT ==========
+  useEffect(() => {
+    const intervals: NodeJS.Timeout[] = [];
+    
+    // Clean up crew detection interval
+    if (crewDetectionEnabled && userProfile?.crewId) {
+      const crewInterval = setInterval(() => {
+        detectNearbyCrewMembers();
+      }, 30000);
+      intervals.push(crewInterval);
     }
-  }, [mapRef.current]);
+    
+    // Clean up map listeners
+    const mapInstance = mapRef.current;
+    
+    return () => {
+      // Clear all intervals
+      intervals.forEach(clearInterval);
+      
+      // Clean up map listeners
+      if (mapInstance) {
+        mapInstance.off('click');
+      }
+      
+      // Clean up SoundCloud iframes
+      const soundCloudIframes = document.querySelectorAll('iframe[src*="soundcloud.com"]');
+      soundCloudIframes.forEach(iframe => {
+        iframe.remove();
+      });
+    };
+  }, [crewDetectionEnabled, userProfile?.crewId]);
 
+  // Initialize selected marker color from user profile on mount
+  useEffect(() => {
+    if (userProfile?.favoriteColor) {
+      setSelectedMarkerColor(userProfile.favoriteColor);
+    }
+  }, [userProfile?.favoriteColor]);
+
+  // Fix marker colors on page refresh - ensure all markers use correct colors
+  useEffect(() => {
+    if (userProfile?.favoriteColor && userMarkers.length > 0) {
+      // Update any markers that might have wrong colors
+      const updatedMarkers = userMarkers.map(marker => {
+        // Only update markers that belong to the current user and have wrong color
+        if (marker.userId === user?.uid && marker.color !== userProfile.favoriteColor) {
+          return {
+            ...marker,
+            color: userProfile.favoriteColor || '#10b981'
+          };
+        }
+        return marker;
+      });
+      
+      if (updatedMarkers.some((marker, index) => marker.color !== userMarkers[index].color)) {
+        setUserMarkers(updatedMarkers);
+      }
+    }
+  }, [userProfile?.favoriteColor, userMarkers, user?.uid]);
+  
   useEffect(() => {
     const initializeSoundCloudTracks = async () => {
       const soundCloudUrls = unlockedTracks.filter(track => track.includes('soundcloud.com'));
@@ -596,9 +724,10 @@ const {
   };
 
   const loadAllMarkers = async (): Promise<void> => {
+    const startTime = performance.now();
     setLoadingMarkers(true);
     try {
-      // 🔧 PERFORMANCE: Dynamic limit based on marker quality - Ultra aggressive
+      // 🔧 PERFORMANCE: Dynamic limit based on marker quality
       const markerLimit = markerQuality === 'low' ? 12 : markerQuality === 'medium' ? 25 : 50;
       const q = query(
         collection(db, 'markers'),
@@ -610,7 +739,7 @@ const {
       const loadedMarkers: UserMarker[] = [];
       
       querySnapshot.forEach((doc) => {
-        const data = doc.data();
+        const data = doc.data() as FirestoreMarker;
         loadedMarkers.push({
           id: `marker-${doc.id}`,
           firestoreId: doc.id,
@@ -631,12 +760,11 @@ const {
       loadedMarkers.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
       setUserMarkers(loadedMarkers);
       
-      console.log(`Loaded ${loadedMarkers.length} markers from all players`);
-      
     } catch (error) {
       console.error('Error loading all markers:', error);
     } finally {
       setLoadingMarkers(false);
+      logPerformance('loadAllMarkers', startTime);
     }
   };
 
@@ -717,8 +845,13 @@ const {
       const isSolo = profileCrewChoice === 'solo';
       
       if (!isSolo && selectedCrew) {
-        // selectedCrew should be 'bqc', 'sps', 'lzt', or 'dgc'
-        crewId = selectedCrew; // ✅ This should be the crew code
+        // Validate selectedCrew is a valid crew ID
+        const validCrewIds = ['bqc', 'sps', 'lzt', 'dgc'];
+        if (!validCrewIds.includes(selectedCrew)) {
+          throw new Error('Invalid crew selection');
+        }
+        
+        crewId = selectedCrew;
         const selectedCrewData = CREWS.find(c => c.id === selectedCrew);
         crewName = selectedCrewData?.name || null;
         
@@ -960,13 +1093,6 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         kaiTiakiEvaluationsReceived: data.kaiTiakiEvaluationsReceived || 0
       };
       
-      console.log('Loaded user profile:', {
-        username: userProfileData.username,
-        crewId: userProfileData.crewId,
-        crewName: userProfileData.crewName,
-        isSolo: userProfileData.isSolo
-      });
-      
       // Set profile first, then start data loading
       setUserProfile(userProfileData);
       setShowProfileSetup(false);
@@ -1051,63 +1177,70 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     loadDrops();
   }, [loadDrops]);
 
-  useEffect(() => {
+  // Crew detection function
+  const detectNearbyCrewMembers = useCallback(async () => {
     if (!gpsPosition || !userProfile || !user || userProfile.isSolo || !userProfile.crewId) {
       setExpandedRadius(50);
       setNearbyCrewMembers([]);
       return;
     }
 
-    const detectNearbyCrewMembers = async () => {
-      try {
-        const crewDoc = await getDoc(doc(db, 'crews', userProfile.crewId!));
-        if (!crewDoc.exists()) {
-          setExpandedRadius(50);
-          setNearbyCrewMembers([]);
-          return;
-        }
-
-        const crewData = crewDoc.data();
-        const crewMemberIds = crewData.members || [];
-        
-        const otherMemberIds = crewMemberIds.filter((uid: string) => uid !== user.uid);
-        
-        if (otherMemberIds.length === 0) {
-          setExpandedRadius(50);
-          setNearbyCrewMembers([]);
-          return;
-        }
-
-        const nearbyMembers: NearbyCrewMember[] = [];
-        
-        topPlayers.forEach((player) => {
-          if (otherMemberIds.includes(player.uid) && player.position) {
-            const distance = calculateDistance(
-              gpsPosition[0],
-              gpsPosition[1],
-              player.position[0],
-              player.position[1]
-            );
-            
-            if (distance <= 200) {
-              nearbyMembers.push({
-                uid: player.uid,
-                username: player.username,
-                distance: Math.round(distance)
-              });
-            }
-          }
-        });
-
-        const newRadius = 50 + (nearbyMembers.length * 50);
-        setExpandedRadius(newRadius);
-        setNearbyCrewMembers(nearbyMembers);
-      } catch (error) {
-        console.error('Error detecting nearby crew members:', error);
+    try {
+      const crewDoc = await getDoc(doc(db, 'crews', userProfile.crewId!));
+      if (!crewDoc.exists()) {
         setExpandedRadius(50);
         setNearbyCrewMembers([]);
+        return;
       }
-    };
+
+      const crewData = crewDoc.data();
+      const crewMemberIds = crewData.members || [];
+      
+      const otherMemberIds = crewMemberIds.filter((uid: string) => uid !== user.uid);
+      
+      if (otherMemberIds.length === 0) {
+        setExpandedRadius(50);
+        setNearbyCrewMembers([]);
+        return;
+      }
+
+      const nearbyMembers: NearbyCrewMember[] = [];
+      
+      topPlayers.forEach((player) => {
+        if (otherMemberIds.includes(player.uid) && player.position) {
+          const distance = calculateDistance(
+            gpsPosition[0],
+            gpsPosition[1],
+            player.position[0],
+            player.position[1]
+          );
+          
+          if (distance <= 200) {
+            nearbyMembers.push({
+              uid: player.uid,
+              username: player.username,
+              distance: Math.round(distance)
+            });
+          }
+        }
+      });
+
+      const newRadius = 50 + (nearbyMembers.length * 50);
+      setExpandedRadius(newRadius);
+      setNearbyCrewMembers(nearbyMembers);
+    } catch (error) {
+      console.error('Error detecting nearby crew members:', error);
+      setExpandedRadius(50);
+      setNearbyCrewMembers([]);
+    }
+  }, [gpsPosition, userProfile, user, topPlayers]);
+
+  useEffect(() => {
+    if (!gpsPosition || !userProfile || !user || userProfile.isSolo || !userProfile.crewId) {
+      setExpandedRadius(50);
+      setNearbyCrewMembers([]);
+      return;
+    }
 
     // Run immediately
     detectNearbyCrewMembers();
@@ -1117,7 +1250,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     const interval = setInterval(detectNearbyCrewMembers, detectionInterval);
     
     return () => clearInterval(interval);
-  }, [gpsPosition, userProfile, user, topPlayers, crewDetectionEnabled]); // ADD crewDetectionEnabled to deps
+  }, [gpsPosition, userProfile, user, topPlayers, crewDetectionEnabled, detectNearbyCrewMembers]);
   
   useEffect(() => {
     if (gpsPosition && !mapCenter) {
@@ -1221,30 +1354,82 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     }
   };
 
-  const handlePhotoSelected = useCallback(async (file: File) => {
-    if (!user || !userProfile || !pendingDropPosition) {
+  // UPDATED: Handle photo selection with GPS extraction
+  const handlePhotoSelect = useCallback(async (photoData: { 
+    url: string; 
+    file: File; 
+    location?: { lat: number; lng: number } 
+  }) => {
+    if (!user || !userProfile) {
       return;
     }
 
     setIsUploadingPhoto(true);
     try {
-      const photoUrl = await uploadImageToImgBB(file);
+      const photoUrl = photoData.url;
+      
+      // Determine where to place the drop
+      let dropLat: number, dropLng: number;
+      let usePhotoLocation = false;
+
+      if (photoData.location) {
+        // Use the photo's GPS location
+        dropLat = photoData.location.lat;
+        dropLng = photoData.location.lng;
+        usePhotoLocation = true;
+        
+        // Check if photo location is within New Zealand bounds
+        const withinNZ = dropLat >= NZ_BOUNDS[0][0] && dropLat <= NZ_BOUNDS[1][0] &&
+                        dropLng >= NZ_BOUNDS[0][1] && dropLng <= NZ_BOUNDS[1][1];
+        
+        if (!withinNZ) {
+          alert('⚠️ This photo was taken outside New Zealand.\n\nThe drop will be placed at your current location instead.');
+          if (gpsPosition) {
+            dropLat = gpsPosition[0];
+            dropLng = gpsPosition[1];
+            usePhotoLocation = false;
+          } else {
+            throw new Error('Photo location outside NZ and no GPS available');
+          }
+        }
+      } else {
+        // Use pending drop position (manual placement)
+        if (!pendingDropPosition) {
+          throw new Error('No drop position available');
+        }
+        dropLat = pendingDropPosition.lat;
+        dropLng = pendingDropPosition.lng;
+      }
 
       const newDrop: Drop = {
-        lat: pendingDropPosition.lat,
-        lng: pendingDropPosition.lng,
+        lat: dropLat,
+        lng: dropLng,
         photoUrl,
         createdBy: user.uid,
         timestamp: new Date(),
         likes: [],
         username: userProfile.username,
         userProfilePic: userProfile.profilePicUrl,
+        photoMetadata: {
+          hasLocation: usePhotoLocation,
+          originalLat: photoData.location?.lat,
+          originalLng: photoData.location?.lng,
+          timestamp: new Date(photoData.file.lastModified)
+        }
       };
 
       const dropId = await saveDropToFirestore(newDrop);
       
       if (dropId) {
-        const repEarned = 10;
+        console.log('📸 Photo drop created:', {
+          dropId,
+          photoUrl: newDrop.photoUrl,
+          hasGPSLocation: usePhotoLocation,
+          location: usePhotoLocation ? `${dropLat}, ${dropLng}` : 'Manual placement'
+        });
+        
+        // Reward for GPS-tagged photos
+        const repEarned = usePhotoLocation ? 15 : 10;
         const newRep = (userProfile.rep || 0) + repEarned;
         const newRank = calculateRank(newRep);
         const newLevel = calculateLevel(newRep);
@@ -1258,7 +1443,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           rank: newRank,
           level: newLevel,
           unlockedTracks: newTracks,
-          lastActive: Timestamp.now()
+          lastActive: Timestamp.now(),
+          photosTaken: (userProfile.photosTaken || 0) + 1
         });
 
         setUserProfile(prev => prev ? {
@@ -1266,7 +1452,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           rep: newRep,
           rank: newRank,
           level: newLevel,
-          unlockedTracks: newTracks
+          unlockedTracks: newTracks,
+          photosTaken: (prev.photosTaken || 0) + 1
         } : prev);
 
         setUnlockedTracks(newTracks);
@@ -1279,11 +1466,20 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         const trackUnlocked = newTracks.length > currentTracks.length;
         const unlockedTrackName = trackUnlocked ? getTrackNameFromUrl(newTracks[newTracks.length - 1]) : '';
 
-        const message = trackUnlocked
-          ? `🎵 NEW TRACK UNLOCKED! 🎵\n\n${unlockedTrackName}\n\nDrop placed successfully! 📸\n+${repEarned} REP\nNew Rank: ${newRank}`
-          : `Drop placed successfully! 📸\n\n+${repEarned} REP\nNew Rank: ${newRank}`;
+        const message = usePhotoLocation
+          ? trackUnlocked
+            ? `🎵 NEW TRACK UNLOCKED! 🎵\n\n${unlockedTrackName}\n\n📍 GPS Photo Drop Placed!\n+${repEarned} REP (GPS Bonus!)\nNew Rank: ${newRank}`
+            : `📍 GPS Photo Drop Placed!\n\n+${repEarned} REP (GPS Bonus!)\nNew Rank: ${newRank}`
+          : trackUnlocked
+            ? `🎵 NEW TRACK UNLOCKED! 🎵\n\n${unlockedTrackName}\n\n📸 Photo Drop Placed!\n+${repEarned} REP\nNew Rank: ${newRank}`
+            : `📸 Photo Drop Placed!\n\n+${repEarned} REP\nNew Rank: ${newRank}`;
 
         alert(message);
+
+        // Center map on the drop location
+        if (mapRef.current) {
+          mapRef.current.setView([dropLat, dropLng], 17);
+        }
       } else {
         throw new Error('Failed to save drop');
       }
@@ -1293,88 +1489,88 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     } finally {
       setIsUploadingPhoto(false);
     }
-  }, [user, userProfile, pendingDropPosition, loadDrops]);
+  }, [user, userProfile, pendingDropPosition, gpsPosition, loadDrops]);
 
-const handleMarkerDrop = useCallback(async () => {
-  if (!user || !userProfile || !pendingDropPosition) {
-    return;
-  }
-
-  try {
-    const newDrop: Drop = {
-      lat: pendingDropPosition.lat,
-      lng: pendingDropPosition.lng,
-      createdBy: user.uid,
-      timestamp: new Date(),
-      likes: [],
-      username: userProfile.username,
-      userProfilePic: userProfile.profilePicUrl,
-    };
-
-    const dropId = await saveDropToFirestore(newDrop);
-
-    const markerData: UserMarker = {
-      id: `temp-${Date.now()}`,
-      position: [pendingDropPosition.lat, pendingDropPosition.lng],
-      name: 'Pole',
-      description: selectedMarkerType,
-      color: selectedMarkerColor, // USE SELECTED COLOR HERE
-      timestamp: new Date(),
-      userId: user.uid,
-      username: userProfile.username,
-      userProfilePic: userProfile.profilePicUrl,
-    };
-
-    const markerId = await saveMarkerToFirestore(markerData);
-
-    if (dropId && markerId) {
-      const repEarned = 5;
-      const newRep = (userProfile.rep || 0) + repEarned;
-      const newRank = calculateRank(newRep);
-      const newLevel = calculateLevel(newRep);
-
-      const currentTracks = userProfile.unlockedTracks || ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'];
-      const newTracks = unlockRandomTrack(currentTracks);
-
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
-        rep: newRep,
-        level: newLevel,
-        rank: newRank,
-        unlockedTracks: newTracks,
-      });
-
-      setUserProfile(prev => prev ? {
-        ...prev,
-        rep: newRep,
-        level: newLevel,
-        rank: newRank,
-        unlockedTracks: newTracks
-      } : null);
-
-      setUnlockedTracks(newTracks);
-
-      const trackUnlocked = newTracks.length > currentTracks.length;
-      const unlockedTrackName = trackUnlocked ? getTrackNameFromUrl(newTracks[newTracks.length - 1]) : '';
-
-      const notificationMessage = trackUnlocked
-        ? `🎵 ${unlockedTrackName} Unlocked! 🎵\n${selectedMarkerType} marker placed!`
-        : `${selectedMarkerType} marker placed!`;
-
-      setRepNotification({ show: true, amount: repEarned, message: notificationMessage });
-
-      await loadDrops();
-      await loadAllMarkers();
+  const handleMarkerDrop = useCallback(async () => {
+    if (!user || !userProfile || !pendingDropPosition) {
+      return;
     }
 
-    setShowDropTypeModal(false);
-    setPendingDropPosition(null);
+    try {
+      const newDrop: Drop = {
+        lat: pendingDropPosition.lat,
+        lng: pendingDropPosition.lng,
+        createdBy: user.uid,
+        timestamp: new Date(),
+        likes: [],
+        username: userProfile.username,
+        userProfilePic: userProfile.profilePicUrl,
+      };
 
-  } catch (error) {
-    console.error('Error creating marker drop:', error);
-    alert(`Failed to create marker drop: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
-}, [user, userProfile, pendingDropPosition, selectedMarkerType, selectedMarkerColor, loadDrops, loadAllMarkers]);
+      const dropId = await saveDropToFirestore(newDrop);
+
+      const markerData: UserMarker = {
+        id: `temp-${Date.now()}`,
+        position: [pendingDropPosition.lat, pendingDropPosition.lng],
+        name: 'Pole',
+        description: selectedMarkerType,
+        color: selectedMarkerColor, // USE SELECTED COLOR HERE
+        timestamp: new Date(),
+        userId: user.uid,
+        username: userProfile.username,
+        userProfilePic: userProfile.profilePicUrl,
+      };
+
+      const markerId = await saveMarkerToFirestore(markerData);
+
+      if (dropId && markerId) {
+        const repEarned = 5;
+        const newRep = (userProfile.rep || 0) + repEarned;
+        const newRank = calculateRank(newRep);
+        const newLevel = calculateLevel(newRep);
+
+        const currentTracks = userProfile.unlockedTracks || ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'];
+        const newTracks = unlockRandomTrack(currentTracks);
+
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, {
+          rep: newRep,
+          level: newLevel,
+          rank: newRank,
+          unlockedTracks: newTracks,
+        });
+
+        setUserProfile(prev => prev ? {
+          ...prev,
+          rep: newRep,
+          level: newLevel,
+          rank: newRank,
+          unlockedTracks: newTracks
+        } : null);
+
+        setUnlockedTracks(newTracks);
+
+        const trackUnlocked = newTracks.length > currentTracks.length;
+        const unlockedTrackName = trackUnlocked ? getTrackNameFromUrl(newTracks[newTracks.length - 1]) : '';
+
+        const notificationMessage = trackUnlocked
+          ? `🎵 ${unlockedTrackName} Unlocked! 🎵\n${selectedMarkerType} marker placed!`
+          : `${selectedMarkerType} marker placed!`;
+
+        setRepNotification({ show: true, amount: repEarned, message: notificationMessage });
+
+        await loadDrops();
+        await loadAllMarkers();
+      }
+
+      setShowDropTypeModal(false);
+      setPendingDropPosition(null);
+
+    } catch (error) {
+      console.error('Error creating marker drop:', error);
+      alert(`Failed to create marker drop: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, [user, userProfile, pendingDropPosition, selectedMarkerType, selectedMarkerColor, loadDrops, loadAllMarkers]);
 
   const handlePhotoDrop = useCallback(() => {
     setShowDropTypeModal(false);
@@ -1580,54 +1776,65 @@ const handleMarkerDrop = useCallback(async () => {
     }
   };
 
-
   // ========== MISSION TRIGGERS ==========
   // Trigger missions when markers are placed
   useEffect(() => {
-    if (userProfile && userProfile.markersPlaced && triggerMissionEvent) {
-      // Trigger missions based on markers placed
-      if (userProfile.markersPlaced >= 3) {
-        triggerMissionEvent('place_3_markers', {
-          count: userProfile.markersPlaced,
-          timestamp: new Date()
-        });
+    try {
+      if (userProfile && userProfile.markersPlaced && triggerMissionEvent) {
+        // Trigger missions based on markers placed
+        if (userProfile.markersPlaced >= 3) {
+          triggerMissionEvent('place_3_markers', {
+            count: userProfile.markersPlaced,
+            timestamp: new Date()
+          });
+        }
+        
+        if (userProfile.markersPlaced >= 10) {
+          triggerMissionEvent('place_10_markers', {
+            count: userProfile.markersPlaced,
+            timestamp: new Date()
+          });
+        }
       }
-      
-      if (userProfile.markersPlaced >= 10) {
-        triggerMissionEvent('place_10_markers', {
-          count: userProfile.markersPlaced,
-          timestamp: new Date()
-        });
-      }
+    } catch (error) {
+      console.error('Mission trigger error:', error);
     }
   }, [userProfile?.markersPlaced, triggerMissionEvent]);
 
   // Trigger missions when REP increases
   useEffect(() => {
-    if (userProfile?.rep && triggerMissionEvent) {
-      if (userProfile.rep >= 50) {
-        triggerMissionEvent('reach_50_rep', {
-          rep: userProfile.rep,
-          timestamp: new Date()
-        });
+    try {
+      if (userProfile?.rep && triggerMissionEvent) {
+        if (userProfile.rep >= 50) {
+          triggerMissionEvent('reach_50_rep', {
+            rep: userProfile.rep,
+            timestamp: new Date()
+          });
+        }
+        
+        if (userProfile.rep >= 100) {
+          triggerMissionEvent('reach_100_rep', {
+            rep: userProfile.rep,
+            timestamp: new Date()
+          });
+        }
       }
-      
-      if (userProfile.rep >= 100) {
-        triggerMissionEvent('reach_100_rep', {
-          rep: userProfile.rep,
-          timestamp: new Date()
-        });
-      }
+    } catch (error) {
+      console.error('Mission trigger error:', error);
     }
   }, [userProfile?.rep, triggerMissionEvent]);
 
   // The useMissionTriggers hook should be integrated
   // with marker placement and REP gains
   useEffect(() => {
-    if (userProfile?.markersPlaced) {
-      triggerMissionEvent('markers_placed', {
-        count: userProfile.markersPlaced
-      });
+    try {
+      if (userProfile?.markersPlaced) {
+        triggerMissionEvent('markers_placed', {
+          count: userProfile.markersPlaced
+        });
+      }
+    } catch (error) {
+      console.error('Mission trigger error:', error);
     }
   }, [userProfile?.markersPlaced]);
 
@@ -2317,7 +2524,7 @@ const handleMarkerDrop = useCallback(async () => {
                 Custom avatar generated from your username
               </div>
             </div>
-  
+
             <div style={{ marginBottom: '15px' }}>
               <input
                 type="text"
@@ -2335,7 +2542,7 @@ const handleMarkerDrop = useCallback(async () => {
                 maxLength={20}
               />
             </div>
-  
+
             <div style={{ marginBottom: '25px' }}>
               <div style={{ fontSize: '14px', color: '#374151', marginBottom: '10px', textAlign: 'left' }}>
                 Gender:
@@ -2364,14 +2571,14 @@ const handleMarkerDrop = useCallback(async () => {
                     />
                     <span style={{ fontSize: '13px', textTransform: 'capitalize' }}>
                       {option === 'prefer-not-to-say' ? 'Prefer not to say' : 
-                       option === 'male' ? '👨 Male' :
-                       option === 'female' ? '👩 Female' : 'Other'}
+                      option === 'male' ? '👨 Male' :
+                      option === 'female' ? '👩 Female' : 'Other'}
                     </span>
                   </label>
                 ))}
               </div>
             </div>
-  
+
             <div style={{ marginBottom: '25px' }}>
               <div style={{ fontSize: '14px', color: '#374151', marginBottom: '10px', textAlign: 'left' }}>
                 Choose Your Path:
@@ -2534,7 +2741,7 @@ const handleMarkerDrop = useCallback(async () => {
                 </div>
               )}
             </div>
-  
+
             <button
               type="submit"
               disabled={profileLoading || (profileCrewChoice === 'crew' && !selectedCrew)}
@@ -2714,19 +2921,20 @@ const handleMarkerDrop = useCallback(async () => {
         maxBoundsViscosity={1.0}
         minZoom={5}
         maxZoom={18}
-        ref={(mapInstance: any) => {
+        ref={(mapInstance: L.Map | null) => {
           if (mapInstance) {
             mapRef.current = mapInstance;
             mapInstance.setMaxBounds(NZ_BOUNDS);
             
             // Clean up previous listener
-            if (mapRef.current) {
-              mapRef.current.off('click');
-            }
+            mapInstance.off('click');
             
             // Use memoized click handler
-            if (!isOfflineMode && mapRef.current) {
-              mapRef.current.on('click', memoizedHandleMapClick);
+            if (!isOfflineMode) {
+              const clickHandler = (e: L.LeafletMouseEvent) => {
+                handleMapClick(e);
+              };
+              mapInstance.on('click', clickHandler);
             }
           }
         }}
@@ -3061,61 +3269,16 @@ const handleMarkerDrop = useCallback(async () => {
         })}
 
         {/* ALL USER MARKERS (including other players') */}
-        {userMarkers
+        {filteredMarkers
           .filter(marker => !showOnlyMyDrops || marker.userId === user?.uid)
-          .map((marker) => {
-            const customIcon = typeof window !== 'undefined' ? 
-              new (require('leaflet').DivIcon)({
-                html: `
-                  <div style="
-                    width: 24px;
-                    height: 24px;
-                    background-color: ${marker.color};
-                    border: 2px solid white;
-                    border-radius: 50%;
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    color: white;
-                    font-weight: bold;
-                    font-size: 10px;
-                    position: relative;
-                    cursor: pointer;
-                  ">
-                    ${marker.username?.charAt(0).toUpperCase() || 'U'}
-                    ${marker.userId === user?.uid ? `
-                      <div style="
-                        position: absolute;
-                        top: -3px;
-                        right: -3px;
-                        width: 8px;
-                        height: 8px;
-                        background-color: #4dabf7;
-                        border-radius: 50%;
-                        border: 1px solid white;
-                      "></div>
-                    ` : ''}
-                  </div>
-                `,
-                iconSize: [24, 24],
-                iconAnchor: [12, 12],
-                popupAnchor: [0, -12]
-              }) : undefined;
-
-            return (
-              <Marker 
-                key={marker.id}
-                position={marker.position}
-                icon={customIcon}
-                eventHandlers={{
-                  click: () => setSelectedMarker(marker)
-                }}
-              >
-
-              </Marker>
-            );
-          })
+          .map((marker) => (
+            <MemoizedMarker
+              key={marker.id}
+              marker={marker}
+              user={user}
+              onClick={setSelectedMarker}
+            />
+          ))
         }
 
         {/* Marker Popup Card */}
@@ -3215,7 +3378,7 @@ const handleMarkerDrop = useCallback(async () => {
                   box-shadow: 0 2px 8px rgba(0,0,0,0.4);
                   display: flex;
                   align-items: center;
-                  justify-content: center;
+                  justifyContent: 'center';
                 ">
                   🎵
                 </div>`,
@@ -3262,7 +3425,7 @@ const handleMarkerDrop = useCallback(async () => {
                   box-shadow: 0 2px 8px rgba(0,0,0,0.4);
                   display: flex;
                   align-items: center;
-                  justify-content: center;
+                  justifyContent: 'center';
                   color: white;
                   font-weight: bold;
                   font-size: 16px;
@@ -3281,7 +3444,7 @@ const handleMarkerDrop = useCallback(async () => {
                       height: 16px;
                       display: flex;
                       align-items: center;
-                      justify-content: center;
+                      justifyContent: 'center';
                       font-size: 9px;
                       font-weight: bold;
                       border: 2px solid white;
@@ -3516,7 +3679,7 @@ const handleMarkerDrop = useCallback(async () => {
                 <div style={{ textAlign: 'left' }}>
                   <div>Place Photo</div>
                   <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: 'normal' }}>
-                    Upload a photo (+10 REP)
+                    Upload a photo (+10 REP, +15 REP with GPS!)
                   </div>
                 </div>
               </button>
@@ -3636,13 +3799,12 @@ const handleMarkerDrop = useCallback(async () => {
 
       {/* Photo Selection Modal */}
       <PhotoSelectionModal
-        isOpen={showPhotoModal}
+        isVisible={showPhotoModal}
         onClose={() => {
           setShowPhotoModal(false);
           setPendingDropPosition(null);
         }}
-        onPhotoSelected={handlePhotoSelected}
-        isUploading={isUploadingPhoto}
+        onPhotoSelect={handlePhotoSelect}
       />
 
       {/* Offline/Online Mode Toggle */}
@@ -4058,8 +4220,6 @@ const handleMarkerDrop = useCallback(async () => {
                 </div>
               )}
 
-
-
               {userProfile?.isSolo && (
                 <div style={{ marginTop: '8px' }}>
                   <input
@@ -4089,15 +4249,14 @@ const handleMarkerDrop = useCallback(async () => {
                         const crewQuery = query(crewsRef, where('nameLower', '==', crewNameLower));
                         const crewSnapshot = await getDocs(crewQuery);
                         
-                        let crewId: CrewId;
+                        let crewId: string;
                         let finalCrewName: string;
                         
                         if (crewSnapshot.empty) {
-                          // For new crews, use a generated ID but validate it's a valid CrewId
-                        const newCrewRef = doc(crewsRef);
-                        const newCrewId = newCrewRef.id;
-                        // Validate the generated ID is a valid CrewId
-                        crewId = newCrewId as CrewId;
+                          // For new crews, use a generated ID
+                          const newCrewRef = doc(crewsRef);
+                          crewId = newCrewRef.id;
+                          finalCrewName = crewName;
                           await setDoc(newCrewRef, {
                             name: crewName,
                             nameLower: crewNameLower,
@@ -4105,16 +4264,13 @@ const handleMarkerDrop = useCallback(async () => {
                             createdAt: Timestamp.now(),
                             createdBy: user.uid
                           });
-                          finalCrewName = crewName;
                         } else {
                           const crewDoc = crewSnapshot.docs[0];
-                          const existingCrewId = crewDoc.id;
-                          // Validate the existing crew ID is a valid CrewId
-                          crewId = existingCrewId as CrewId;
+                          crewId = crewDoc.id;
                           finalCrewName = crewDoc.data().name;
                           const currentMembers = crewDoc.data().members || [];
                           if (!currentMembers.includes(user.uid)) {
-                            await updateDoc(doc(db, 'crews', existingCrewId), {
+                            await updateDoc(doc(db, 'crews', crewId), {
                               members: [...currentMembers, user.uid]
                             });
                           }
@@ -4129,7 +4285,7 @@ const handleMarkerDrop = useCallback(async () => {
                         
                         setUserProfile(prev => prev ? {
                           ...prev,
-                          crewId: crewId,
+                          crewId: crewId as CrewId,
                           crewName: finalCrewName,
                           isSolo: false
                         } : null);
@@ -4788,8 +4944,7 @@ const handleMarkerDrop = useCallback(async () => {
                     padding: '8px',
                     borderRadius: '6px',
                     cursor: 'pointer',
-                    fontSize: '12px'
-                  }}>
+                    fontSize: '12px' }}>
                   📤 Export
                 </button>
                 
@@ -5321,11 +5476,11 @@ const handleMarkerDrop = useCallback(async () => {
                 <span>GPS status:</span>
                 <span style={{
                   color: gpsStatus === 'tracking' ? '#10b981' :
-                         gpsStatus === 'acquiring' ? '#f59e0b' : '#ef4444'
+                        gpsStatus === 'acquiring' ? '#f59e0b' : '#ef4444'
                 }}>
                   {gpsStatus === 'tracking' ? 'Active' :
-                   gpsStatus === 'acquiring' ? 'Acquiring...' :
-                   gpsStatus === 'error' ? 'Error' : 'Initializing'}
+                  gpsStatus === 'acquiring' ? 'Acquiring...' :
+                  gpsStatus === 'error' ? 'Error' : 'Initializing'}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
@@ -6116,8 +6271,8 @@ position: 'relative' as 'relative'
             marginTop: '8px',
             fontSize: '11px',
             color: gpsStatus === 'tracking' ? '#10b981' :
-                   gpsStatus === 'acquiring' ? '#f59e0b' :
-                   gpsStatus === 'error' ? '#ef4444' : '#6b7280'
+                  gpsStatus === 'acquiring' ? '#f59e0b' :
+                  gpsStatus === 'error' ? '#ef4444' : '#6b7280'
           }}>
             📡 GPS: {
               isOfflineMode ? 'Offline Mode' :
@@ -6225,8 +6380,9 @@ position: 'relative' as 'relative'
             opacity: 0.9;
             transform: scale(1.02);
           }
+        }
 
-          @keyframes whiteGlowPulse {
+        @keyframes whiteGlowPulse {
           0%, 100% { 
             opacity: 1;
             box-shadow: 
@@ -6237,12 +6393,25 @@ position: 'relative' as 'relative'
           }
           50% { 
             opacity: 0.9;
-            box-shadow: 
+            boxShadow: 
               0 0 45px rgba(255, 255, 255, 0.9),
               0 0 90px rgba(255, 255, 255, 0.7),
               0 0 140px rgba(255, 255, 255, 0.5),
               inset 0 0 65px rgba(255, 255, 255, 0.8);
           }
+        }
+                    /* Hide Leaflet zoom controls */
+        .leaflet-control-zoom {
+          display: none !important;
+        }
+
+        .leaflet-control-zoom-in,
+        .leaflet-control-zoom-out {
+          display: none !important;
+        }
+
+        .leaflet-control-zoom a {
+          display: none !important;
         }
       `}
       </style>

@@ -6,6 +6,22 @@
   padding: 0;
 }
 
+/* Spray Can Icon Styles */
+.spray-can-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.spray-can-icon svg {
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+  display: block !important;
+}
+
+.leaflet-div-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
 html, body {
   height: 100%;
   width: 100%;

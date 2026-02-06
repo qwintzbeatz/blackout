@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { uploadImageToImgBB } from '@/lib/services/imgbb';
+import PhotoSelectionModal from '@/components/ui/PhotoSelectionModal';
 
 interface DropPopupProps {
   isVisible: boolean;
@@ -41,6 +42,17 @@ const DropPopupOptimized: React.FC<DropPopupProps> = ({
   const [trackUrl, setTrackUrl] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+
+  // Debug logging for photo state
+  useEffect(() => {
+    console.log('🎨 Photo Drop State:', {
+      dropType,
+      hasSelectedFile: !!selectedFile,
+      hasPreviewUrl: !!previewUrl,
+      fileName: selectedFile?.name
+    });
+  }, [dropType, selectedFile, previewUrl]);
 
   // Calculate upload cost
   const uploadCost = useMemo(() => {
@@ -66,13 +78,21 @@ const DropPopupOptimized: React.FC<DropPopupProps> = ({
     }
   }, []);
 
-  // Handle file input
-  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      handleFileSelect(file);
-    }
-  }, [handleFileSelect]);
+  
+
+  // Handle photo modal selection
+  const handlePhotoSelect = useCallback((photoData: { url: string; file: File }) => {
+    console.log('📸 Photo selected in DropPopup:', photoData.file.name);
+    setSelectedFile(photoData.file);
+    // Create preview URL for the selected file
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      console.log('🖼️ Preview created');
+      setPreviewUrl(e.target?.result as string);
+    };
+    reader.readAsDataURL(photoData.file);
+    setError(null);
+  }, []);
 
   // Validate track URL
   const validateTrackUrl = useCallback((url: string): boolean => {
@@ -106,8 +126,7 @@ const DropPopupOptimized: React.FC<DropPopupProps> = ({
       
       // Upload photo if selected
       if (selectedFile && dropType === 'photo') {
-        const result = await uploadImageToImgBB(selectedFile);
-        photoUrl = result.url;
+        photoUrl = await uploadImageToImgBB(selectedFile);
       }
       
       // Create drop data
@@ -116,7 +135,7 @@ const DropPopupOptimized: React.FC<DropPopupProps> = ({
         lng: position.lng,
         photoUrl: photoUrl,
         trackUrl: dropType === 'music' ? trackUrl : undefined,
-        markerType: dropType === 'marker' ? selectedMarkerType : undefined
+        markerType: dropType === 'marker' ? selectedMarkerType : 'default'
       };
       
       onDropCreate(dropData);
@@ -224,43 +243,60 @@ const DropPopupOptimized: React.FC<DropPopupProps> = ({
         {/* Photo Drop */}
         {dropType === 'photo' && (
           <div>
-            <div
-              onClick={() => document.getElementById('photo-input')?.click()}
-              style={{
-                border: '2px dashed rgba(255,255,255,0.3)',
-                borderRadius: '8px',
-                padding: '20px',
-                textAlign: 'center',
-                cursor: 'pointer'
-              }}
-            >
-              <input
-                id="photo-input"
-                type="file"
-                accept="image/*"
-                onChange={handleFileInputChange}
-                style={{ display: 'none' }}
-              />
-              
-              {previewUrl ? (
+            {selectedFile && previewUrl ? (
+              <div style={{
+                marginBottom: '16px',
+                textAlign: 'center'
+              }}>
                 <img
                   src={previewUrl}
-                  alt="Preview"
+                  alt="Selected photo"
                   style={{
                     maxWidth: '100%',
                     maxHeight: '150px',
-                    borderRadius: '4px'
+                    borderRadius: '8px',
+                    border: '2px solid rgba(255,255,255,0.3)'
                   }}
                 />
-              ) : (
+                <div style={{
+                  fontSize: '12px',
+                  color: '#b0b0b0',
+                  marginTop: '8px'
+                }}>
+                  {selectedFile.name}
+                </div>
+              </div>
+            ) : (
+              <div
+                onClick={() => setShowPhotoModal(true)}
+                style={{
+                  border: '2px dashed rgba(255,255,255,0.3)',
+                  borderRadius: '8px',
+                  padding: '40px 20px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#ff6b35';
+                  e.currentTarget.style.backgroundColor = 'rgba(255,107,53,0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)';
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
                 <div>
-                  <div style={{ fontSize: '32px', marginBottom: '8px' }}>📸</div>
+                  <div style={{ fontSize: '48px', marginBottom: '12px' }}>📸</div>
+                  <div style={{ fontSize: '14px', marginBottom: '4px' }}>
+                    Take Photo or Upload
+                  </div>
                   <div style={{ fontSize: '12px', color: '#b0b0b0' }}>
-                    Click to select photo
+                    Camera or file selection
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -406,6 +442,13 @@ const DropPopupOptimized: React.FC<DropPopupProps> = ({
           {isCreating ? 'Creating...' : 'Create Drop'}
         </button>
       </div>
+      
+      {/* Photo Selection Modal */}
+      <PhotoSelectionModal
+        isVisible={showPhotoModal}
+        onClose={() => setShowPhotoModal(false)}
+        onPhotoSelect={handlePhotoSelect}
+      />
     </div>
   );
 };
