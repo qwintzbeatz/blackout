@@ -447,6 +447,34 @@ const HomeComponent = () => {
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [unlockedTracks, setUnlockedTracks] = useState<string[]>(['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1']);
   
+  // Local audio state for signup/login flow
+  const [useLocalAudio, setUseLocalAudio] = useState(true);
+  const localAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Start local audio when app mounts
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !localAudioRef.current) {
+      localAudioRef.current = new Audio('/blackout-classic.mp3');
+      localAudioRef.current.volume = volume;
+      localAudioRef.current.loop = true;
+    }
+    
+    // Try to play on mount (may be blocked by browsers without user interaction)
+    const tryPlayAudio = async () => {
+      if (localAudioRef.current) {
+        localAudioRef.current.volume = volume;
+        try {
+          await localAudioRef.current.play();
+          setIsPlaying(true);
+        } catch (err) {
+          console.log('Audio autoplay blocked, will play on user interaction');
+        }
+      }
+    };
+    
+    tryPlayAudio();
+  }, []);
+  
   // SoundCloud states
   const [soundCloudTracks, setSoundCloudTracks] = useState<SoundCloudTrack[]>([]);
   const [isSoundCloudLoading, setIsSoundCloudLoading] = useState(false);
@@ -975,11 +1003,31 @@ const {
   const handleLogin = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     setAuthError(null);
+    
+    // 🎵 Play local audio immediately on user interaction (no autoplay restrictions)
+    setUseLocalAudio(true);
+    setIsPlaying(true);
+    
+    // Create and play local audio
+    if (typeof window !== 'undefined' && !localAudioRef.current) {
+      localAudioRef.current = new Audio('/blackout-classic.mp3');
+      localAudioRef.current.volume = volume;
+      localAudioRef.current.loop = true;
+    }
+    
+    if (localAudioRef.current) {
+      localAudioRef.current.volume = volume;
+      localAudioRef.current.play().catch(err => {
+        console.log('Local audio autoplay blocked, will play after user interaction');
+      });
+    }
+    
     try {
       await signInWithEmailAndPassword(auth, email, password);
       setShowLogin(false);
       setEmail('');
       setPassword('');
+      // Note: Audio will continue playing and switch to SoundCloud when map loads
     } catch (error: any) {
       setAuthError(error.message);
     }
@@ -988,11 +1036,31 @@ const {
   const handleSignup = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     setAuthError(null);
+    
+    // 🎵 Play local audio immediately on user interaction (no autoplay restrictions)
+    setUseLocalAudio(true);
+    setIsPlaying(true);
+    
+    // Create and play local audio
+    if (typeof window !== 'undefined' && !localAudioRef.current) {
+      localAudioRef.current = new Audio('/blackout-classic.mp3');
+      localAudioRef.current.volume = volume;
+      localAudioRef.current.loop = true;
+    }
+    
+    if (localAudioRef.current) {
+      localAudioRef.current.volume = volume;
+      localAudioRef.current.play().catch(err => {
+        console.log('Local audio autoplay blocked, will play after user interaction');
+      });
+    }
+    
     try {
       await createUserWithEmailAndPassword(auth, email, password);
       setShowSignup(false);
       setEmail('');
       setPassword('');
+      // Note: Audio will continue playing and switch to SoundCloud when map loads
     } catch (error: any) {
       setAuthError(error.message);
     }
@@ -1180,6 +1248,37 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       setStoryManagerInitialized(false);
     }
   }, [user, userProfile]);
+
+  // 🎵 Switch from local audio to SoundCloud when map loads
+  useEffect(() => {
+    if (userProfile && useLocalAudio) {
+      // User has authenticated and map is loading - switch to SoundCloud
+      // Stop local audio
+      if (localAudioRef.current) {
+        localAudioRef.current.pause();
+        localAudioRef.current = null;
+      }
+      
+      // Switch to SoundCloud mode
+      setUseLocalAudio(false);
+      
+      // Set the default SoundCloud track and start playing
+      const defaultTrack = 'https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1';
+      setUnlockedTracks([defaultTrack]);
+      setCurrentTrackIndex(0);
+      setIsPlaying(true);
+    }
+  }, [userProfile, useLocalAudio]);
+
+  // Cleanup local audio on unmount
+  useEffect(() => {
+    return () => {
+      if (localAudioRef.current) {
+        localAudioRef.current.pause();
+        localAudioRef.current = null;
+      }
+    };
+  }, []);
 
   
 
@@ -1911,7 +2010,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         
         <div style={{
           position: 'absolute',
-          top: 20,
+          top: 220,
           right: 20,
           backgroundColor: 'rgba(15, 23, 42, 0.9)',
           padding: '15px 20px',
@@ -1994,62 +2093,26 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             </button>
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-            <span style={{ fontSize: '14px', color: '#cbd5e1' }}>🔈</span>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={volume}
-              onChange={handleVolumeChange}
-              style={{
-                flex: 1,
-                height: '6px',
-                borderRadius: '3px',
-                background: 'linear-gradient(to right, #ef4444, #f59e0b, #10b981)',
-                outline: 'none',
-                WebkitAppearance: 'none',
-                cursor: 'pointer'
-              }}
-            />
-            <span style={{ fontSize: '12px', color: 'white', minWidth: '40px', textAlign: 'right' }}>
-              {Math.round(volume * 100)}%
-            </span>
-          </div>
-
+          {/* Local audio player - No SoundCloud iframe on login screen */}
           <div style={{ 
             marginTop: '15px',
-            minHeight: '166px',
+            padding: '20px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: 'rgba(255, 255, 255, 0.05)',
             borderRadius: '8px',
-            overflow: 'hidden'
+            gap: '15px'
           }}>
-            {isSoundCloudLoading ? (
-              <div style={{ padding: '20px', color: '#cbd5e1', fontSize: '12px' }}>
-                Loading SoundCloud track...
+            <div style={{ fontSize: '32px' }}>🎵</div>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: '14px', color: 'white', fontWeight: 'bold' }}>
+                Blackout Classic
               </div>
-            ) : unlockedTracks.length > 0 ? (
-              <iframe
-                id="soundcloud-login-player"
-                src={createSoundCloudIframeUrl(unlockedTracks[currentTrackIndex])}
-                width="100%"
-                height="166"
-                frameBorder="no"
-                scrolling="no"
-                style={{ border: 'none', backgroundColor: 'transparent' }}
-                title="SoundCloud Player"
-                allow="autoplay"
-              />
-            ) : (
-              <div style={{ padding: '20px', color: '#cbd5e1', fontSize: '12px', textAlign: 'center' }}>
-                <div style={{ fontSize: '24px', marginBottom: '10px' }}>🎵</div>
-                No tracks available
+              <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                Local Audio • Looping
               </div>
-            )}
+            </div>
           </div>
         </div>
 

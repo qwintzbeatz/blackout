@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Drop, Comment } from '@/lib/types/blackout';
 import { User as FirebaseUser } from 'firebase/auth';
+import { generateAvatarUrl, getTrackNameFromUrl, getTrackPlatform, getTimeAgo } from '@/lib/utils/dropHelpers';
 
 interface MusicDropPopupProps {
   drop: Drop;
@@ -40,33 +41,6 @@ const SoundCloudWaveform: React.FC<SoundCloudWaveformProps> = ({ isActive }) => 
       ))}
     </div>
   );
-};
-
-// Function to get track name from URL
-const getTrackNameFromUrl = (url: string): string => {
-  if (url === 'blackout-classic.mp3') return 'Blackout (Default)';
-  if (url.includes('soundcloud.com')) {
-    const segments = url.split('/');
-    const trackSegment = segments[segments.length - 1];
-    return trackSegment.split('-').map(word =>
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ');
-  }
-  return 'Unknown Track';
-};
-
-// Function to get track platform
-const getTrackPlatform = (url: string): string => {
-  if (url.includes('soundcloud.com')) return 'SoundCloud';
-  if (url.includes('bandcamp.com')) return 'Bandcamp';
-  if (url.includes('youtube.com')) return 'YouTube';
-  return 'External';
-};
-
-// Simple avatar generator for fallback
-const generateAvatarUrl = (userId: string, username: string) => {
-  const seed = username || userId;
-  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=4dabf7`;
 };
 
 const MusicDropPopup: React.FC<MusicDropPopupProps> = ({

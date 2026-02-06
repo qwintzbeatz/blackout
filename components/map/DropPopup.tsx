@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Drop } from '@/lib/utils/types';
 import { likeDrop, unlikeDrop } from '@/lib/firebase/drops';
 import { User } from 'firebase/auth';
+import { getTrackNameFromUrl } from '@/lib/utils/dropHelpers';
 
 const Popup = dynamic(
   () => import('react-leaflet').then((mod) => mod.Popup),
@@ -67,18 +68,6 @@ export default function DropPopup({ drop, user, onLikeUpdate }: DropPopupProps) 
       hour: '2-digit',
       minute: '2-digit',
     }).format(date);
-  };
-
-  const getTrackNameFromUrl = (url: string): string => {
-    if (url === 'blackout-classic.mp3') return 'Blackout (Default)';
-    if (url.includes('soundcloud.com')) {
-      const segments = url.split('/');
-      const trackSegment = segments[segments.length - 1];
-      return trackSegment.split('-').map((word) =>
-        word.charAt(0).toUpperCase() + word.slice(1)
-      ).join(' ');
-    }
-    return 'Unknown Track';
   };
 
   return (

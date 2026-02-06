@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Drop } from '@/lib/types/blackout';
 import { User as FirebaseUser } from 'firebase/auth';
 import { likeDrop, unlikeDrop, addCommentToDrop, getCommentsForDrop, DropComment } from '@/lib/firebase/drops';
+import { generateAvatarUrl, getTimeAgo } from '@/lib/utils/dropHelpers';
 
 interface MarkerDropPopupProps {
   drop: Drop;
@@ -125,26 +126,7 @@ const MarkerDropPopup: React.FC<MarkerDropPopupProps> = ({
     }
   };
 
-  const getTimeAgo = (timestamp: Date) => {
-    const now = new Date();
-    const diffMs = now.getTime() - timestamp.getTime();
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    if (diffDays > 0) return `${diffDays}d ago`;
-    if (diffHours > 0) return `${diffHours}h ago`;
-    if (diffMins > 0) return `${diffMins}m ago`;
-    return 'Just now';
-  };
-
-  // Simple avatar generator for fallback
-  const generateAvatarUrl = (userId: string, username: string) => {
-    const seed = username || userId;
-    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=4dabf7`;
-  };
-
-  // Real comment section component
+  // Comment section component
   const CommentSection = () => (
     <div style={{
       marginTop: '12px',
