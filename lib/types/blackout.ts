@@ -75,6 +75,11 @@ export interface Drop {
   comments?: Comment[];
   username: string;
   userProfilePic: string;
+  // Additional properties used in UI
+  userId?: string;
+  color?: string;
+  repEarned?: number;
+  markerType?: string;
 }
 
 // User Profile type

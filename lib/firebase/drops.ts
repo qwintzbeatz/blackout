@@ -151,3 +151,88 @@ export const unlikeDrop = async (dropId: string, userId: string): Promise<boolea
     return false;
   }
 };
+
+// Comment interface
+export interface DropComment {
+  id: string;
+  dropId: string;
+  userId: string;
+  username: string;
+  userProfilePic?: string;
+  text: string;
+  timestamp: Date;
+}
+
+/**
+ * Add a comment to a drop
+ */
+export const addCommentToDrop = async (
+  dropId: string,
+  userId: string,
+  username: string,
+  text: string,
+  userProfilePic?: string
+): Promise<string | null> => {
+  try {
+    const commentData = {
+      dropId,
+      userId,
+      username,
+      userProfilePic,
+      text,
+      timestamp: Timestamp.now(),
+    };
+
+    const docRef = await addDoc(collection(db, 'drops', dropId, 'comments'), commentData);
+    return docRef.id;
+  } catch (error) {
+    console.error('Error adding comment:', error);
+    return null;
+  }
+};
+
+/**
+ * Get comments for a drop
+ */
+export const getCommentsForDrop = async (dropId: string): Promise<DropComment[]> => {
+  try {
+    const q = query(
+      collection(db, 'drops', dropId, 'comments'),
+      orderBy('timestamp', 'asc')
+    );
+
+    const querySnapshot = await getDocs(q);
+    const comments: DropComment[] = [];
+
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      comments.push({
+        id: doc.id,
+        dropId: data.dropId,
+        userId: data.userId,
+        username: data.username,
+        userProfilePic: data.userProfilePic,
+        text: data.text,
+        timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(),
+      });
+    });
+
+    return comments;
+  } catch (error) {
+    console.error('Error getting comments:', error);
+    return [];
+  }
+};
+
+/**
+ * Delete a comment from a drop
+ */
+export const deleteCommentFromDrop = async (dropId: string, commentId: string): Promise<boolean> => {
+  try {
+    await deleteDoc(doc(db, 'drops', dropId, 'comments', commentId));
+    return true;
+  } catch (error) {
+    console.error('Error deleting comment:', error);
+    return false;
+  }
+};

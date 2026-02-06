@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Drop } from '@/lib/types/blackout';
 import { User as FirebaseUser } from 'firebase/auth';
+import { likeDrop, unlikeDrop, addCommentToDrop, getCommentsForDrop, DropComment } from '@/lib/firebase/drops';
 
 interface MarkerDropPopupProps {
   drop: Drop;
@@ -10,7 +11,10 @@ interface MarkerDropPopupProps {
   onLikeUpdate: (dropId: string, newLikes: string[]) => void;
   onClose?: () => void;
   mapRef?: any;
-  onCommentAdded?: (comment: any) => void;
+  userProfile?: {
+    username?: string;
+    profilePicUrl?: string;
+  };
 }
 
 const MarkerDropPopup: React.FC<MarkerDropPopupProps> = ({
@@ -19,25 +23,105 @@ const MarkerDropPopup: React.FC<MarkerDropPopupProps> = ({
   onLikeUpdate,
   onClose,
   mapRef,
-  onCommentAdded
+  userProfile
 }) => {
   const [isLiked, setIsLiked] = useState(drop.likes?.includes(user?.uid || '') || false);
   const [likeCount, setLikeCount] = useState(drop.likes?.length || 0);
   const [isCommenting, setIsCommenting] = useState(false);
+  const [comments, setComments] = useState<DropComment[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [isPostingComment, setIsPostingComment] = useState(false);
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
+
+  // Load comments when opening comment section
+  useEffect(() => {
+    if (isCommenting && comments.length === 0) {
+      loadComments();
+    }
+  }, [isCommenting]);
+
+  const loadComments = async () => {
+    const firestoreId = drop.firestoreId || drop.id;
+    if (!firestoreId) return;
+    
+    setIsLoadingComments(true);
+    try {
+      const fetchedComments = await getCommentsForDrop(firestoreId);
+      setComments(fetchedComments);
+    } catch (error) {
+      console.error('Error loading comments:', error);
+    } finally {
+      setIsLoadingComments(false);
+    }
+  };
 
   const handleLike = async () => {
     if (!user) return;
     
+    const firestoreId = drop.firestoreId || drop.id;
+    if (!firestoreId) return;
+
     try {
-      const newLikes = isLiked 
-        ? drop.likes.filter(id => id !== user.uid)
-        : [...drop.likes, user.uid];
+      let success: boolean;
       
-      setIsLiked(!isLiked);
-      setLikeCount(newLikes.length);
-      onLikeUpdate(drop.firestoreId || drop.id || 'unknown', newLikes);
+      if (isLiked) {
+        success = await unlikeDrop(firestoreId, user.uid);
+      } else {
+        success = await likeDrop(firestoreId, user.uid);
+      }
+      
+      if (success) {
+        const newLikes = isLiked 
+          ? drop.likes.filter(id => id !== user.uid)
+          : [...(drop.likes || []), user.uid];
+        
+        setIsLiked(!isLiked);
+        setLikeCount(newLikes.length);
+        onLikeUpdate(firestoreId, newLikes);
+      }
     } catch (error) {
       console.error('Error updating like:', error);
+    }
+  };
+
+  const handlePostComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !newComment.trim() || !userProfile) return;
+    
+    const firestoreId = drop.firestoreId || drop.id;
+    if (!firestoreId) return;
+
+    setIsPostingComment(true);
+    
+    try {
+      const commentId = await addCommentToDrop(
+        firestoreId,
+        user.uid,
+        userProfile.username || user.displayName || 'Anonymous',
+        newComment.trim(),
+        userProfile.profilePicUrl || user.photoURL || undefined
+      );
+
+      if (commentId) {
+        // Add the new comment to the local state
+        const newCommentObj: DropComment = {
+          id: commentId,
+          dropId: firestoreId,
+          userId: user.uid,
+          username: userProfile.username || user.displayName || 'Anonymous',
+          userProfilePic: userProfile.profilePicUrl || user.photoURL || undefined,
+          text: newComment.trim(),
+          timestamp: new Date()
+        };
+        
+        setComments(prev => [...prev, newCommentObj]);
+        setNewComment('');
+        setIsCommenting(false);
+      }
+    } catch (error) {
+      console.error('Error posting comment:', error);
+    } finally {
+      setIsPostingComment(false);
     }
   };
 
@@ -60,7 +144,7 @@ const MarkerDropPopup: React.FC<MarkerDropPopupProps> = ({
     return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=4dabf7`;
   };
 
-  // Simple comment section component
+  // Real comment section component
   const CommentSection = () => (
     <div style={{
       marginTop: '12px',
@@ -69,70 +153,121 @@ const MarkerDropPopup: React.FC<MarkerDropPopupProps> = ({
       borderRadius: '8px',
       border: '1px solid rgba(255,255,255,0.1)'
     }}>
+      {/* Comments header */}
       <div style={{
+        fontSize: '12px',
+        fontWeight: 'bold',
+        color: '#cbd5e1',
+        marginBottom: '10px',
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
-        marginBottom: '12px'
+        gap: '6px'
       }}>
-        <img
-          src={user?.photoURL || generateAvatarUrl(user?.uid || 'default', user?.displayName || 'User')}
-          alt="Your avatar"
-          style={{
-            width: '28px',
-            height: '28px',
-            borderRadius: '50%',
-            border: '1px solid rgba(255,255,255,0.2)'
-          }}
-        />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '12px', fontWeight: '500' }}>
-            {user?.displayName || 'Anonymous'}
-          </div>
-          <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-            Add a comment...
+        💬 Comments ({comments.length})
+      </div>
+
+      {/* Comment form */}
+      <form onSubmit={handlePostComment} style={{ marginBottom: '12px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+          <img
+            src={user?.photoURL || generateAvatarUrl(user?.uid || 'default', user?.displayName || 'User')}
+            alt="You"
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '50%',
+              border: '2px solid #4dabf7',
+              objectFit: 'cover'
+            }}
+          />
+          <div style={{ flex: 1 }}>
+            <input
+              type="text"
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              placeholder={user ? "Write your comment..." : "Log in to comment"}
+              disabled={!user || isPostingComment}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                borderRadius: '6px',
+                border: '1px solid #555',
+                backgroundColor: 'rgba(255,255,255,0.05)',
+                color: 'white',
+                fontSize: '12px',
+                outline: 'none'
+              }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
+              <button
+                type="submit"
+                disabled={!user || !newComment.trim() || isPostingComment}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: (!user || !newComment.trim() || isPostingComment) ? '#555' : '#10b981',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: (!user || !newComment.trim() || isPostingComment) ? 'not-allowed' : 'pointer',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  opacity: (!user || !newComment.trim() || isPostingComment) ? 0.7 : 1
+                }}
+              >
+                {isPostingComment ? 'Posting...' : 'Post'}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <input
-          type="text"
-          placeholder="Write your comment..."
-          style={{
-            flex: 1,
-            padding: '8px 12px',
-            background: 'rgba(255,255,255,0.07)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: '8px',
-            color: 'white',
-            fontSize: '12px',
-            outline: 'none'
-          }}
-        />
-        <button
-          onClick={() => {
-            if (onCommentAdded) {
-              onCommentAdded({
-                text: "New comment",
-                userId: user?.uid,
-                timestamp: new Date()
-              });
-              setIsCommenting(false);
-            }
-          }}
-          style={{
-            padding: '8px 16px',
-            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-            border: 'none',
-            color: 'white',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontSize: '12px',
-            fontWeight: '500'
-          }}
-        >
-          Post
-        </button>
+      </form>
+
+      {/* Comments list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {isLoadingComments ? (
+          <div style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', padding: '8px' }}>
+            Loading comments...
+          </div>
+        ) : comments.length === 0 ? (
+          <div style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', padding: '8px', fontStyle: 'italic' }}>
+            No comments yet. Be the first!
+          </div>
+        ) : (
+          comments.map((comment) => (
+            <div
+              key={comment.id}
+              style={{
+                display: 'flex',
+                gap: '8px',
+                padding: '6px',
+                backgroundColor: 'rgba(255,255,255,0.03)',
+                borderRadius: '6px'
+              }}
+            >
+              <img
+                src={comment.userProfilePic || generateAvatarUrl(comment.userId, comment.username)}
+                alt={comment.username}
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  border: '1px solid #444',
+                  objectFit: 'cover'
+                }}
+              />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#e0e0e0', marginBottom: '2px' }}>
+                  {comment.username}
+                </div>
+                <div style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: '1.3' }}>
+                  {comment.text}
+                </div>
+                <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px' }}>
+                  {comment.timestamp.toLocaleDateString()}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
@@ -161,8 +296,8 @@ const MarkerDropPopup: React.FC<MarkerDropPopupProps> = ({
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <img
-            src={drop.userProfilePic || generateAvatarUrl(drop.userId, drop.username)}
-            alt={drop.username}
+            src={drop.userProfilePic || generateAvatarUrl(drop.userId || 'anonymous', drop.username || 'User')}
+            alt={drop.username || 'User'}
             style={{
               width: '36px',
               height: '36px',
