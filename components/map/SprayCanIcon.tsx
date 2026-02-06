@@ -1,23 +1,11 @@
 'use client';
 
-import L from 'leaflet';
+import { useMemo } from 'react';
 
 interface SprayCanIconProps {
   color: string;
   size?: number;
   withDrip?: boolean;
-}
-
-export function createSprayCanIcon(color: string, size: number = 40): L.DivIcon {
-  const svg = createSprayCanSVG(color, size, true);
-  
-  return L.divIcon({
-    html: svg,
-    className: 'spray-can-icon',
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size],
-    popupAnchor: [0, -size],
-  });
 }
 
 export function createSprayCanSVG(color: string, size: number = 40, withDrip: boolean = true): string {
@@ -50,8 +38,42 @@ export function createSprayCanSVG(color: string, size: number = 40, withDrip: bo
   return `<svg width="${width}" height="${height}" viewBox="0 0 ${40 + padding * 2} ${60 + padding * 2}" xmlns="http://www.w3.org/2000/svg"><g transform="translate(${padding}, ${padding})">${content}</g></svg>`;
 }
 
+// Dynamic import for Leaflet to avoid SSR issues
+let L: any;
+let isLeafletLoaded = false;
+
+function getLeaflet() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  if (!isLeafletLoaded) {
+    L = require('leaflet');
+    isLeafletLoaded = true;
+  }
+  return L;
+}
+
+export function createSprayCanIcon(color: string, size: number = 40) {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  
+  const L = getLeaflet();
+  if (!L) return null;
+  
+  const svg = createSprayCanSVG(color, size, true);
+  
+  return L.divIcon({
+    html: svg,
+    className: 'spray-can-icon',
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size],
+    popupAnchor: [0, -size],
+  });
+}
+
 // React component version for inline use
 export default function SprayCanIcon({ color, size = 40, withDrip = true }: SprayCanIconProps) {
-  const svg = createSprayCanSVG(color, size, withDrip);
+  const svg = useMemo(() => createSprayCanSVG(color, size, withDrip), [color, size, withDrip]);
   return <div dangerouslySetInnerHTML={{ __html: svg }} style={{ display: 'inline-block' }} />;
 }
