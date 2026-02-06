@@ -3,6 +3,7 @@
 import { StoryManagerProvider } from '@/components/story/StoryManager';
 import StoryPanel from '@/components/story/StoryPanel';
 import { useMissionTriggers } from '@/hooks/useMissionTriggers';
+import { useTimeOfDay } from '@/hooks/useTimeOfDay';
 
 import { 
   doc, 
@@ -580,6 +581,15 @@ const {
     gpsPosition,
     userProfile
   });
+
+  // 🆕 TIME OF DAY HOOK - Day/Night weather system
+  const { 
+    hour, 
+    isNight, 
+    timeString, 
+    sunPosition,
+    theme 
+  } = useTimeOfDay();
 
   // Derive GPS status from state
   const gpsStatus = gpsLoading ? 'acquiring' : gpsError ? 'error' : isTracking ? 'tracking' : 'idle';
@@ -2889,7 +2899,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           </div>
         )}
 
-      {/* Top-Left Logo */}
+      {/* Top-Left Logo - Changes color based on day/night */}
       <div style={{
         position: 'fixed',
         top: '15px',
@@ -2903,11 +2913,70 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           style={{
             width: '120px',
             height: 'auto',
-            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))',
-            opacity: 0.9
+            filter: isNight 
+              ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.5)) brightness(0) invert(1)'  // White at night
+              : 'drop-shadow(0 2px 4px rgba(255,255,255,0.3)) brightness(0) saturate(0)',  // Black in day
+            opacity: 0.9,
+            transition: 'filter 0.5s ease'
           }}
         />
       </div>
+      
+      {/* 🆕 Day/Night Time Indicator */}
+      <div style={{
+        position: 'fixed',
+        bottom: '80px',
+        left: '145px',
+        zIndex: 1100,
+        background: isNight ? 'rgba(30, 41, 59, 0.9)' : 'rgba(248, 250, 252, 0.9)',
+        padding: '8px 12px',
+        borderRadius: '8px',
+        border: isNight ? '1px solid rgba(148, 163, 184, 0.3)' : '1px solid rgba(148, 163, 184, 0.3)',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        transition: 'all 0.3s ease'
+      }}>
+        {/* Sun/Moon Icon */}
+        <div style={{
+          fontSize: '20px',
+          animation: isNight ? 'pulse 2s infinite' : 'spin 10s linear infinite'
+        }}>
+          {isNight ? '🌙' : '☀️'}
+        </div>
+        
+        {/* Time Display */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start'
+        }}>
+          <div style={{
+            fontSize: '14px',
+            fontWeight: 'bold',
+            color: isNight ? '#e2e8f0' : '#1e293b',
+            fontFamily: 'monospace'
+          }}>
+            {timeString}
+          </div>
+          <div style={{
+            fontSize: '10px',
+            color: isNight ? '#94a3b8' : '#64748b',
+            textTransform: 'capitalize'
+          }}>
+            {isNight ? 'Night' : 'Day'} Mode
+          </div>
+        </div>
+      </div>
+      
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
           
       <MapContainer
         center={
@@ -2939,10 +3008,20 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           }
         }}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/attribution">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        />
+        {/* 🆕 Day/Night Tile Layer - Switches based on time */}
+        {isNight ? (
+          // Night mode - Dark tiles
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/attribution">CARTO</a>'
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          />
+        ) : (
+          // Day mode - Light tiles
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+        )}
         
         {/* User GPS Marker */}
         {gpsPosition && (
@@ -3831,8 +3910,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         }}
         style={{
           position: 'absolute',
-          top: 25,
-          left: 250,
+          bottom: 80,
+          left: 300,
           backgroundColor: isOfflineMode ? '#ef4444' : '#10b981',
           color: 'white',
           padding: '10px 15px',

@@ -2,6 +2,7 @@
   "build": {
     "env": {
       "NEXT_TELEMETRY_DISABLED": "1"
-    }
+    },
+    "command": "npm run build"
   }
 }
