@@ -64,6 +64,7 @@ import { EnhancedErrorBoundary } from '@/src/components/ui/EnhancedErrorBoundary
 import { ErrorRecoveryPanel } from '@/src/components/ui/ErrorRecoveryPanel';
 import { useErrorHandler } from '@/src/hooks/useErrorHandler';
 import ErrorTest from '@/components/ui/ErrorTest';
+import ProfileSetupSticker from '@/components/ProfileSetupSticker';
 import { HIPHOP_TRACKS } from '@/constants/tracks';
 import { MarkerName, MarkerDescription, Gender, MARKER_COLORS, MARKER_NAMES, MARKER_DESCRIPTIONS } from '@/constants/markers';
 import { NEW_ZEALAND_LOCATIONS, NZ_BOUNDS, NZ_CENTER, NZ_DEFAULT_ZOOM, GPS_DEFAULT_ZOOM } from '@/constants/locations';
@@ -865,10 +866,13 @@ const {
     }
   };
 
-  const handleProfileSetup = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault();
-    
-    if (!user || !profileUsername.trim()) {
+  const handleProfileSetup = async (data: {
+    username: string;
+    gender: string;
+    crewChoice: 'crew' | 'solo';
+    selectedCrew?: string;
+  }): Promise<void> => {
+    if (!user || !data.username.trim()) {
       alert('Please enter a username');
       return;
     }
@@ -876,21 +880,15 @@ const {
     setProfileLoading(true);
     
     try {
-      const profilePicUrl = generateAvatarUrl(user.uid, profileUsername.trim(), profileGender);
+      const profilePicUrl = generateAvatarUrl(user.uid, data.username.trim(), data.gender as Gender);
       
       let crewId: CrewId | null = null;
       let crewName: string | null = null;
-      const isSolo = profileCrewChoice === 'solo';
+      const isSolo = data.crewChoice === 'solo';
       
-      if (!isSolo && selectedCrew) {
-        // Validate selectedCrew is a valid crew ID
-        const validCrewIds = ['bqc', 'sps', 'lzt', 'dgc'];
-        if (!validCrewIds.includes(selectedCrew)) {
-          throw new Error('Invalid crew selection');
-        }
-        
-        crewId = selectedCrew;
-        const selectedCrewData = CREWS.find(c => c.id === selectedCrew);
+      if (!isSolo && data.selectedCrew) {
+        crewId = data.selectedCrew as CrewId;
+        const selectedCrewData = CREWS.find(c => c.id === data.selectedCrew);
         crewName = selectedCrewData?.name || null;
         
         const crewsRef = collection(db, 'crews');
@@ -923,8 +921,8 @@ const {
       const userProfileData: UserProfile = {
         uid: user.uid,
         email: user.email || '',
-        username: profileUsername.trim(),
-        gender: profileGender,
+        username: data.username.trim(),
+        gender: data.gender as Gender,
         profilePicUrl: profilePicUrl,
         rep: 0,
         level: 1,
@@ -989,7 +987,7 @@ const {
       
       // 🎵 Show welcome message with music info
       setTimeout(() => {
-        alert(`🎉 Welcome to Blackout NZ, ${profileUsername}!\n\n🎵 Your music is now playing: Blackout - Classic\n\nThe city awaits your tags. Get out there and make your mark!`);
+        alert(`🎉 Welcome to Blackout NZ, ${data.username}!\n\n🎵 Your music is now playing: Blackout - Classic\n\nThe city awaits your tags. Get out there and make your mark!`);
       }, 500);
       
     } catch (error: any) {
@@ -1383,7 +1381,11 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
   useEffect(() => {
     if (gpsPosition && isTracking && mapRef.current) {
       setMapCenter(gpsPosition);
-      mapRef.current.setView(gpsPosition, zoom);
+      try {
+        mapRef.current.setView(gpsPosition, zoom);
+      } catch (e) {
+        // Map may be unmounted
+      }
     }
   }, [gpsPosition, isTracking, zoom]);
 
@@ -1577,11 +1579,11 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
         const message = usePhotoLocation
           ? trackUnlocked
-            ? `🎵 NEW TRACK UNLOCKED! 🎵\n\n${unlockedTrackName}\n\n📍 GPS Photo Drop Placed!\n+${repEarned} REP (GPS Bonus!)\nNew Rank: ${newRank}`
-            : `📍 GPS Photo Drop Placed!\n\n+${repEarned} REP (GPS Bonus!)\nNew Rank: ${newRank}`
+            ? "🎵 NEW TRACK UNLOCKED! 🎵\n\n" + unlockedTrackName + "\n\n📍 GPS Photo Drop Placed!\n+" + repEarned + " REP (GPS Bonus!)\nNew Rank: " + newRank
+            : "📍 GPS Photo Drop Placed!\n\n+" + repEarned + " REP (GPS Bonus!)\nNew Rank: " + newRank
           : trackUnlocked
-            ? `🎵 NEW TRACK UNLOCKED! 🎵\n\n${unlockedTrackName}\n\n📸 Photo Drop Placed!\n+${repEarned} REP\nNew Rank: ${newRank}`
-            : `📸 Photo Drop Placed!\n\n+${repEarned} REP\nNew Rank: ${newRank}`;
+            ? "🎵 NEW TRACK UNLOCKED! 🎵\n\n" + unlockedTrackName + "\n\n📸 Photo Drop Placed!\n+" + repEarned + " REP\nNew Rank: " + newRank
+            : "📸 Photo Drop Placed!\n\n+" + repEarned + " REP\nNew Rank: " + newRank;
 
         alert(message);
 
@@ -2501,396 +2503,20 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
   
 
-  // ========== PROFILE SETUP UI ==========
+  // ========== PROFILE SETUP UI - HELLO MY NAME IS STICKER ==========
   if (showProfileSetup && user) {
     return (
-      <div style={{
-        height: '100vh',
-        width: '100vw',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#0f172a',
-        backgroundImage: 'radial-gradient(circle at 10% 20%, rgba(255, 107, 107, 0.1) 0%, transparent 20%), radial-gradient(circle at 90% 80%, rgba(78, 205, 196, 0.1) 0%, transparent 20%)'
-      }}>
-        <div style={{
-          backgroundColor: 'rgba(15, 23, 42, 0.9)',
-          padding: '40px',
-          borderRadius: '20px',
-          boxShadow: '0 25px 50px rgba(0,0,0,0.3)',
-          width: '100%',
-          maxWidth: '500px',
-          textAlign: 'center',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          backdropFilter: 'blur(20px)'
-        }}>
-          <div style={{
-            marginBottom: '30px',
-            textAlign: 'center'
-          }}>
-            <div style={{
-              fontSize: '28px',
-              fontWeight: 'bold',
-              background: 'linear-gradient(135deg, #ff6b6b, #4ecdc4, #4dabf7)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              marginBottom: '10px'
-            }}>
-              🎨 BLACKOUT NZ
-            </div>
-            <div style={{
-              color: '#cbd5e1',
-              fontSize: '16px',
-              marginBottom: '5px'
-            }}>
-              Create Your Graffiti Profile
-            </div>
-            <div style={{
-              fontSize: '14px',
-              color: '#94a3b8',
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              padding: '10px',
-              borderRadius: '8px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              marginTop: '15px'
-            }}>
-              <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>Choose your crew</span> and begin the street art journey across Aotearoa
-            </div>
-          </div>
-          
-          <form onSubmit={handleProfileSetup}>
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{
-                width: '100px',
-                height: '100px',
-                borderRadius: '50%',
-                backgroundColor: '#f3f4f6',
-                margin: '0 auto 10px',
-                overflow: 'hidden',
-                position: 'relative',
-                border: '3px solid #4dabf7',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center'
-              }}>
-                {profileUsername ? (
-                  <img 
-                    src={generateAvatarUrl(user?.uid || 'default', profileUsername, profileGender)}
-                    alt="Avatar Preview"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                ) : (
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    height: '100%',
-                    color: '#6b7280',
-                    fontSize: '24px'
-                  }}>
-                    👤
-                  </div>
-                )}
-              </div>
-              <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                Custom avatar generated from your username
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '15px' }}>
-              <input
-                type="text"
-                placeholder="Choose a username *"
-                value={profileUsername}
-                onChange={(e) => setProfileUsername(e.target.value)}
-                required
-                style={{
-                  width: '100%',
-                  padding: '12px 15px',
-                  border: '2px solid #d1d5db',
-                  borderRadius: '8px',
-                  fontSize: '14px'
-                }}
-                maxLength={20}
-              />
-            </div>
-
-            <div style={{ marginBottom: '25px' }}>
-              <div style={{ fontSize: '14px', color: '#374151', marginBottom: '10px', textAlign: 'left' }}>
-                Gender:
-              </div>
-              <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                {(['male', 'female', 'other', 'prefer-not-to-say'] as const).map((option) => (
-                  <label 
-                    key={option}
-                    style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      cursor: 'pointer',
-                      padding: '8px 12px',
-                      backgroundColor: profileGender === option ? '#e0f2fe' : '#f9fafb',
-                      borderRadius: '8px',
-                      border: `1px solid ${profileGender === option ? '#4dabf7' : '#e5e7eb'}`
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="gender"
-                      value={option}
-                      checked={profileGender === option}
-                      onChange={() => setProfileGender(option)}
-                      style={{ marginRight: '8px' }}
-                    />
-                    <span style={{ fontSize: '13px', textTransform: 'capitalize' }}>
-                      {option === 'prefer-not-to-say' ? 'Prefer not to say' : 
-                      option === 'male' ? '👨 Male' :
-                      option === 'female' ? '👩 Female' : 'Other'}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '25px' }}>
-              <div style={{ fontSize: '14px', color: '#374151', marginBottom: '10px', textAlign: 'left' }}>
-                Choose Your Path:
-              </div>
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-                <button
-                  type="button"
-                  onClick={() => setProfileCrewChoice('crew')}
-                  style={{
-                    flex: 1,
-                    padding: '12px',
-                    backgroundColor: profileCrewChoice === 'crew' ? '#e0f2fe' : '#f9fafb',
-                    borderRadius: '8px',
-                    border: `2px solid ${profileCrewChoice === 'crew' ? '#4dabf7' : '#e5e7eb'}`,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '5px'
-                  }}
-                >
-                  <div style={{ fontSize: '20px' }}>👥</div>
-                  <div style={{ fontSize: '13px', fontWeight: '500' }}>
-                    Join a Story Crew
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                    Team up with a pre-defined crew
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setProfileCrewChoice('solo')}
-                  style={{
-                    flex: 1,
-                    padding: '12px',
-                    backgroundColor: profileCrewChoice === 'solo' ? '#e0f2fe' : '#f9fafb',
-                    borderRadius: '8px',
-                    border: `2px solid ${profileCrewChoice === 'solo' ? '#4dabf7' : '#e5e7eb'}`,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '5px'
-                  }}
-                >
-                  <div style={{ fontSize: '20px' }}>🎯</div>
-                  <div style={{ fontSize: '13px', fontWeight: '500' }}>
-                    Go Solo
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                    Play independently
-                  </div>
-                </button>
-              </div>
-              
-              {profileCrewChoice === 'crew' && (
-                <div>
-                  <div style={{ fontSize: '13px', color: '#374151', marginBottom: '10px', textAlign: 'left' }}>
-                    Select Your Story Crew:
-                  </div>
-                  
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '15px' }}>
-                    {CREWS.map((crew) => (
-                      <div
-                        key={crew.id}
-                        onClick={() => {
-                          setSelectedCrew(crew.id as CrewId | '');
-                          setProfileCrewName(crew.name);
-                        }}
-                        style={{
-                          padding: '12px',
-                          backgroundColor: selectedCrew === crew.id ? `${crew.colors.primary}20` : '#f9fafb',
-                          border: `2px solid ${selectedCrew === crew.id ? crew.colors.primary : '#e5e7eb'}`,
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div style={{
-                            width: '40px',
-                            height: '40px',
-                            borderRadius: '50%',
-                            backgroundColor: crew.colors.primary,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#ffffff',
-                          fontWeight: 'bold',
-                          fontSize: '16px'
-                        }}>
-                            {crew.name.charAt(0)}
-                          </div>
-                          <div style={{ textAlign: 'left', flex: 1 }}>
-                            <div style={{ fontWeight: 'bold', color: crew.colors.primary, fontSize: '13px' }}>
-                              {crew.name}
-                            </div>
-                            <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                              {crew.leader}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {selectedCrew === crew.id && (
-                          <div style={{ 
-                            marginTop: '10px', 
-                            padding: '8px',
-                            backgroundColor: `${crew.colors.primary}10`,
-                            borderRadius: '6px',
-                            borderLeft: `3px solid ${crew.colors.primary}`
-                          }}>
-                            <div style={{ fontSize: '11px', color: '#374151', fontWeight: '500' }}>
-                              {crew.description}
-                            </div>
-                            <div style={{ fontSize: '10px', color: '#6b7280', marginTop: '4px' }}>
-                              Bonus: {crew.bonus}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {selectedCrew && (
-                    <div style={{ 
-                      fontSize: '12px', 
-                      color: '#6b7280',
-                      backgroundColor: '#f0f9ff',
-                      padding: '12px',
-                      borderRadius: '8px',
-                      textAlign: 'left',
-                      marginTop: '15px'
-                    }}>
-
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {profileCrewChoice === 'solo' && (
-                <div style={{ 
-                  fontSize: '12px', 
-                  color: '#6b7280', 
-                  padding: '12px',
-                  backgroundColor: '#f0f9ff',
-                  borderRadius: '8px',
-                  textAlign: 'left',
-                  marginTop: '10px'
-                }}>
-                  <div style={{ fontWeight: 'bold', color: '#1e3a8a', marginBottom: '5px' }}>
-                    🎯 Solo Path Selected
-                  </div>
-                  <div style={{ fontSize: '11px' }}>
-                    You can join a crew later from your profile. 
-                    Play at your own pace and choose when to team up.
-                    <div style={{ marginTop: '8px', fontStyle: 'italic' }}>
-                      Note: Some story missions require crew membership.
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              disabled={profileLoading || (profileCrewChoice === 'crew' && !selectedCrew)}
-              style={{
-                backgroundColor: '#4dabf7',
-                color: 'white',
-                border: 'none',
-                padding: '14px',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                cursor: (profileLoading || (profileCrewChoice === 'crew' && !selectedCrew)) ? 'not-allowed' : 'pointer',
-                width: '100%',
-                opacity: (profileLoading || (profileCrewChoice === 'crew' && !selectedCrew)) ? 0.7 : 1,
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                if (!profileLoading && !(profileCrewChoice === 'crew' && !selectedCrew)) {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 6px 12px rgba(59, 130, 246, 0.3)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            >
-              {profileLoading 
-                ? 'Creating Profile...' 
-                : profileCrewChoice === 'crew' 
-                  ? selectedCrew 
-                    ? `Join ${CREWS.find(c => c.id === selectedCrew)?.name || 'Crew'}! 👥` 
-                    : 'Select a Crew'
-                  : 'Start Solo Journey! 🎯'
-              }
-            </button>
-            
-            <div style={{ 
-              marginTop: '20px', 
-              fontSize: '12px', 
-              color: '#6b7280',
-              textAlign: 'left',
-              backgroundColor: '#f0f9ff',
-              padding: '12px',
-              borderRadius: '8px'
-            }}>
-              <div style={{ fontWeight: 'bold', color: '#1e3a8a', marginBottom: '5px' }}>
-                👁️ You'll see ALL drops
-              </div>
-              <div style={{ fontSize: '11px' }}>
-                Every writer's tags will appear on your map in real-time!
-                <div style={{ marginTop: '5px', fontStyle: 'italic' }}>
-                  The Blackout story begins after your first 3 markers...
-                </div>
-              </div>
-            </div>
-          </form>
-</div>
-      
-      {/* Performance Settings Panel */}
-      <PerformanceSettingsPanel 
-        isOpen={showPerformanceSettings}
-        onClose={() => setShowPerformanceSettings(false)}
+      <ProfileSetupSticker
+        user={user}
+        onSubmit={handleProfileSetup}
+        loading={profileLoading}
+        crews={CREWS}
+        onCrewSelect={setSelectedCrew}
+        selectedCrew={selectedCrew}
+        crewChoice={profileCrewChoice}
+        onCrewChoiceChange={setProfileCrewChoice}
       />
-
-      {/* Error Recovery Panel */}
-      <ErrorRecoveryPanel 
-        isOpen={showErrorRecovery}
-        error={recoveryError || undefined}
-        onClose={() => setShowErrorRecovery(false)}
-        onRetry={() => {
-          // Retry logic here if needed
-        }}
-      />
-    </div>
-  );
+    );
   }
 
   // ========== MAP LOADING CHECK ==========

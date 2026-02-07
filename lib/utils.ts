@@ -306,7 +306,7 @@ export const createSoundCloudIframeUrl = (trackUrl: string): string => {
   const params = new URLSearchParams({
     url: trackUrl,
     color: 'ff5500',
-    auto_play: 'false',
+    auto_play: 'true',
     hide_related: 'true',
     show_comments: 'false',
     show_user: 'false',
@@ -327,7 +327,7 @@ export const createSoundCloudIframeUrl = (trackUrl: string): string => {
 // ========== AVATAR GENERATION ==========
 
 // Updated avatar generator function with gender-specific avatars and size parameter
-export const generateAvatarUrl = (userId: string, username: string, gender?: Gender, size: number = 80): string => {
+export const generateAvatarUrl = (userId: string, username: string, gender?: Gender, size: number = 80, backgroundColor?: string): string => {
   const seed = username || userId;
   
   // Define avatar styles based on gender
@@ -343,12 +343,8 @@ export const generateAvatarUrl = (userId: string, username: string, gender?: Gen
     avatarStyle = 'identicon'; // android/geometric style
   }
   
-  // Color palette for avatars
-  const colors = [
-    '4dabf7', '10b981', '8b5cf6', 'f59e0b', 'ec4899', 'f97316',
-    '3b82f6', '06b6d4', '8b5cf6', 'ef4444', '84cc16', '14b8a6'
-  ];
-  const selectedColor = colors[Math.floor(Math.random() * colors.length)];
+  // Use provided background color (e.g., crew color), or default to white
+  const selectedColor = backgroundColor || 'ffffff';
   
   // Construct URL based on style
   let url = '';
