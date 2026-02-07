@@ -9,6 +9,10 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // Bundle analysis for production builds
+  experimental: {
+    optimizePackageImports: ['firebase', 'leaflet', 'mapbox-gl', 'framer-motion'],
+  },
 };
 
 export default nextConfig;

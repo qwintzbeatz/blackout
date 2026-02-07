@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "node build-wrapper.js",
+    "build:analyze": "ANALYZE=true next build",
     "build:vercel": "next build",
     "start": "next start",
     "lint": "next lint"
