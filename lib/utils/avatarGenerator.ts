@@ -1,4 +1,3 @@
-// Avatar generation utility with gender-specific styles
 export const generateAvatarUrl = (
   userId: string,
   username: string,
@@ -6,33 +5,45 @@ export const generateAvatarUrl = (
   size: number = 60,
   backgroundColor?: string
 ): string => {
-  const seed = username || userId;
+  // Create VERY different seeds for different genders
+  let seed = username || userId;
   
-  // Use provided background color (e.g., crew color), or default to white
-  const selectedColor = backgroundColor || 'ffffff';
+  // Add gender prefix that will generate different looking avatars
+  if (gender === 'female') {
+    seed = `female-${seed}`; // "female-" prefix
+  } else if (gender === 'male') {
+    seed = `male-${seed}`; // "male-" prefix
+  } else if (gender === 'other') {
+    seed = `neutral-${seed}`; // "neutral-" prefix
+  } else {
+    seed = `default-${seed}`; // "default-" prefix
+  }
   
-  // Create base URL
-  let url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}`;
+  // Set color based on gender
+  let selectedColor = backgroundColor;
   
-  // Add size parameter (DiceBear accepts size parameter)
-  url += `&size=${size}`;
-  
-  // Apply gender-specific styling if specified
-  if (gender && gender !== 'prefer-not-to-say' && gender !== 'other') {
-    // DiceBear doesn't have direct gender parameter, but we can adjust style
-    // options to be more gender-typical if desired
-    if (gender === 'female') {
-      url += '&top[]=longHair&facialHairProbability=0';
-    } else if (gender === 'male') {
-      url += '&facialHairProbability=30&top[]=shortHair';
+  if (!selectedColor) {
+    switch (gender) {
+      case 'male':
+        selectedColor = '4dabf7'; // Blue
+        break;
+      case 'female':
+        selectedColor = 'ec4899'; // Pink
+        break;
+      case 'other':
+        selectedColor = '10b981'; // Green
+        break;
+      case 'prefer-not-to-say':
+        selectedColor = '6b7280'; // Grey
+        break;
+      default:
+        selectedColor = '6b7280'; // Grey
     }
   }
   
-  // Additional customization for "other" or neutral presentation
-  if (gender === 'other') {
-    // Use more neutral/versatile options
-    url += '&top[]=hat&facialHairProbability=0';
-  }
+  // Remove # if present
+  selectedColor = selectedColor.replace('#', '');
   
-  return url;
+  // Simple URL - no extra parameters
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}&size=${size}`;
 };

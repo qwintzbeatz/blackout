@@ -20,7 +20,7 @@ import { CREWS } from '@/data/crews';
 import { UserProfile } from '@/lib/types/blackout';
 import CharacterSelection from '@/components/CharacterSelection';
 import { Gender } from '@/types';
-import { generateAvatarUrl } from '@/lib/utils';
+import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
 
 interface CrewData {
   id: string;

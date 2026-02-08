@@ -1,7 +1,8 @@
 // ========== CONSOLIDATED HELPER FUNCTIONS ==========
 // This file consolidates all utility functions from main page and existing helpers
 
-import { MarkerDescription, Gender, UserMarker } from '@/types';
+import { MarkerDescription, Gender } from '@/lib/types/blackout';
+import { UserMarker } from '@/lib/utils/types';
 import { HIPHOP_TRACKS } from '@/lib/constants';
 
 // ========== DISTANCE AND LOCATION FUNCTIONS ==========
@@ -326,69 +327,6 @@ export const createSoundCloudIframeUrl = (trackUrl: string): string => {
 
 // ========== AVATAR GENERATION ==========
 
-// Updated avatar generator function with gender-specific avatars and size parameter
-export const generateAvatarUrl = (userId: string, username: string, gender?: Gender, size: number = 80, backgroundColor?: string): string => {
-  const seed = username || userId;
-  
-  // Define avatar styles based on gender
-  let avatarStyle = 'open-peeps'; // default style
-  
-  if (gender === 'male') {
-    avatarStyle = 'adventurer'; // boyish/ masculine style
-  } else if (gender === 'female') {
-    avatarStyle = 'avataaars'; // girlish/ feminine style
-  } else if (gender === 'other') {
-    avatarStyle = 'bottts'; // alien/robot style for 'other'
-  } else if (gender === 'prefer-not-to-say') {
-    avatarStyle = 'identicon'; // android/geometric style
-  }
-  
-  // Use provided background color (e.g., crew color), or default to white
-  const selectedColor = backgroundColor || 'ffffff';
-  
-  // Construct URL based on style
-  let url = '';
-  
-  switch (avatarStyle) {
-    case 'adventurer': // Male (boyish)
-      url = `https://api.dicebear.com/7.x/adventurer/svg?seed=${seed}&backgroundColor=${selectedColor}&size=${size}`;
-      break;
-      
-    case 'avataaars': // Female (girlish)
-      url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}&size=${size}`;
-      break;
-      
-    case 'bottts': // Other (alien/robot)
-      url = `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}&backgroundColor=${selectedColor}&size=${size}`;
-      break;
-      
-    case 'identicon': // Prefer not to say (android/geometric)
-      url = `https://api.dicebear.com/7.x/identicon/svg?seed=${seed}&backgroundColor=${selectedColor}&size=${size}`;
-      break;
-      
-    default: // open-peeps as fallback
-      url = `https://api.dicebear.com/7.x/open-peeps/svg?seed=${seed}&backgroundColor=${selectedColor}&size=${size}`;
-  }
-  
-  return url;
-};
-
-// Simplified avatar generator (from helpers.ts)
-export const generateSimpleAvatarUrl = (userId: string, username: string, gender?: string, size: number = 80): string => {
-  // Use DiceBear API for free avatars
-  const seed = username || userId;
-  const colors = ['4dabf7', '10b981', '8b5cf6', 'f59e0b', 'ec4899', 'f97316'];
-  const selectedColor = colors[Math.floor(Math.random() * colors.length)];
-  
-  // Build DiceBear URL with size parameter
-  let url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}&size=${size}`;
-  
-  // Add optional features based on gender
-  if (gender === 'male' && Math.random() > 0.5) {
-    url += '&facialHair=beard';
-  }
-  
-  return url;
-};
+export { generateAvatarUrl } from './utils/avatarGenerator';
 
 // ========== END OF HELPER FUNCTIONS ==========

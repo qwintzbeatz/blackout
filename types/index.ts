@@ -1,5 +1,11 @@
 import { MarkerName, MarkerDescription, CrewId, Gender } from '@/constants/markers';
 import { LocationInfo } from '@/constants/locations';
+import { SurfaceType } from '@/constants/surfaces';
+import { GraffitiType } from '@/constants/graffitiTypes';
+
+// Re-export for convenience
+export type { SurfaceType } from '@/constants/surfaces';
+export type { GraffitiType } from '@/constants/graffitiTypes';
 
 export interface UserProfile {
   uid: string;
@@ -85,6 +91,37 @@ export interface UserMarker {
   createdAt?: Date;
   likes?: string[];
   comments?: Comment[];
+  // Surface and Graffiti Type (new) - optional for backward compatibility
+  surface?: SurfaceType;
+  graffitiType?: GraffitiType;
+  // Advanced REP calculation (new)
+  repBreakdown?: {
+    surfaceBase: number;
+    graffitiBase: number;
+    surfaceMultiplier: number;
+    difficultyMultiplier: number;
+    totalMultiplier: number;
+    totalRep: number;
+    breakdown: {
+      surface: string;
+      graffiti: string;
+      bonuses: string[];
+    };
+  };
+  // Edit tracking
+  isEdited?: boolean;
+  editHistory?: MarkerEdit[];
+}
+
+export interface MarkerEdit {
+  editedBy: string;
+  editedAt: Date;
+  previousName?: MarkerName;
+  previousDescription?: MarkerDescription;
+  previousSurface?: SurfaceType;
+  previousGraffitiType?: GraffitiType;
+  previousRep?: number;
+  reason?: string;
 }
 
 export interface Drop {
@@ -99,6 +136,12 @@ export interface Drop {
   likes: string[];
   username: string;
   userProfilePic: string;
+  photoMetadata?: {
+    hasLocation: boolean;
+    originalLat?: number;
+    originalLng?: number;
+    timestamp: Date;
+  };
 }
 
 export interface NearbyCrewMember {

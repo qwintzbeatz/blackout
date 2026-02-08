@@ -4,11 +4,7 @@
 
 import { Drop } from '@/lib/types/blackout';
 
-// Avatar generator fallback
-export const generateAvatarUrl = (userId: string, username: string): string => {
-  const seed = username || userId;
-  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=4dabf7`;
-};
+export { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
 
 // Time formatting
 export const getTimeAgo = (timestamp: Date): string => {

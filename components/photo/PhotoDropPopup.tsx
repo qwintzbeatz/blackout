@@ -3,18 +3,13 @@
 import React, { useState } from 'react';
 import { Drop } from '@/lib/types/blackout';
 import { User as FirebaseUser } from 'firebase/auth';
+import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
 
 interface PhotoDropPopupProps {
   drop: Drop;
   user: FirebaseUser | null;
   onLikeUpdate: (dropId: string, newLikes: string[]) => void;
 }
-
-// Simple avatar generator for fallback
-const generateAvatarUrl = (userId: string, username: string) => {
-  const seed = username || userId;
-  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=4dabf7`;
-};
 
 const PhotoDropPopup: React.FC<PhotoDropPopupProps> = ({
   drop,

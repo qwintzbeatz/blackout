@@ -3,7 +3,7 @@ import { User } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { UserProfile } from '@/lib/types/blackout';
-import { generateAvatarUrl } from '@/lib/utils';
+import { generateRandomAvatar } from '@/src/lib/customAvatar';
 
 export const useUserProfile = (user: User | null) => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -16,9 +16,10 @@ export const useUserProfile = (user: User | null) => {
       if (userDoc.exists()) {
         const data = userDoc.data();
         
+        // Migrate from DiceBear or generate new avatar if needed
         let profilePicUrl = data.profilePicUrl;
-        if (!profilePicUrl || profilePicUrl === '') {
-          profilePicUrl = generateAvatarUrl(currentUser.uid, data.username, data.gender, 60);
+        if (!profilePicUrl || profilePicUrl === '' || profilePicUrl.includes('dicebear.com')) {
+          profilePicUrl = await generateRandomAvatar(currentUser.uid, data.username, data.gender);
         }
         
         setUserProfile({
@@ -27,13 +28,20 @@ export const useUserProfile = (user: User | null) => {
           username: data.username,
           gender: data.gender || 'prefer-not-to-say',
           profilePicUrl: profilePicUrl,
-          xp: data.xp || 0,
+          rep: data.rep || data.xp || 0,
           level: data.level || 1,
           rank: data.rank || 'TOY',
           totalMarkers: data.totalMarkers || 0,
           favoriteColor: data.favoriteColor || '#10b981',
           createdAt: data.createdAt?.toDate() || new Date(),
-          lastActive: data.lastActive?.toDate() || new Date()
+          lastActive: data.lastActive?.toDate() || new Date(),
+          crewName: data.crewName || null,
+          crewId: data.crewId || null,
+          isLeader: data.isLeader || false,
+          unlockedTracks: data.unlockedTracks || [],
+          crewJoinedAt: data.crewJoinedAt?.toDate() || null,
+          crewRank: data.crewRank || 'Member',
+          crewRep: data.crewRep || 0
         });
         setShowProfileSetup(false);
       } else {
@@ -53,7 +61,7 @@ export const useUserProfile = (user: User | null) => {
     
     setLoadingProfile(true);
     try {
-      const profilePicUrl = generateAvatarUrl(user.uid, data.username.trim(), data.gender, 60);
+      const profilePicUrl = await generateRandomAvatar(user.uid, data.username.trim(), data.gender);
       
       const userProfileData = {
         uid: user.uid,
@@ -61,7 +69,7 @@ export const useUserProfile = (user: User | null) => {
         username: data.username.trim(),
         gender: data.gender,
         profilePicUrl: profilePicUrl,
-        xp: 0,
+        rep: 0,
         level: 1,
         rank: 'TOY',
         totalMarkers: 0,
@@ -76,8 +84,15 @@ export const useUserProfile = (user: User | null) => {
       setUserProfile({
         ...userProfileData,
         createdAt: new Date(),
-        lastActive: new Date()
-      } as UserProfile);
+        lastActive: new Date(),
+        crewName: null,
+        crewId: null,
+        isLeader: false,
+        unlockedTracks: [],
+        crewJoinedAt: null,
+        crewRank: 'Member',
+        crewRep: 0
+      });
       
       setShowProfileSetup(false);
       return true;

@@ -1,4 +1,5 @@
 'use client';
+
 import { useState, useEffect } from 'react';
 import { ref, push, onValue, query, orderByChild, limitToLast, remove } from 'firebase/database';
 import { realtimeDb } from '@/lib/firebase';
@@ -6,6 +7,7 @@ import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { useMissionTriggers } from '@/hooks/useMissionTriggers';
 import { Gender } from '@/types';
+import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
 
 interface DirectMessage {
   id: string;
@@ -35,18 +37,6 @@ interface DirectMessagingProps {
   userProfile: any;
   gpsPosition: [number, number] | null;
 }
-
-// Helper function to generate avatar URLs
-const generateAvatarUrl = (userId: string, username: string): string => {
-  const seed = username || userId;
-  const colors = [
-    '4dabf7', '10b981', '8b5cf6', 'f59e0b', 'ec4899', 'f97316',
-    '3b82f6', '06b6d4', '8b5cf6', 'ef4444', '84cc16', '14b8a6'
-  ];
-  const selectedColor = colors[Math.floor(Math.random() * colors.length)];
-  
-  return `https://api.dicebear.com/7.x/open-peeps/svg?seed=${seed}&backgroundColor=${selectedColor}`;
-};
 
 export default function DirectMessaging({ isOpen, onClose, userProfile, gpsPosition }: DirectMessagingProps) {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);

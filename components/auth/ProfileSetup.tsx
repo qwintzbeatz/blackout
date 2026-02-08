@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { generateAvatarUrl } from '@/lib/utils';
+import { useState, useEffect } from 'react';
+import { generateRandomAvatar } from '@/src/lib/customAvatar';
 
 const ProfileSetup: React.FC<{
   onSubmit: (data: any) => Promise<void>;
@@ -10,6 +10,15 @@ const ProfileSetup: React.FC<{
 }> = ({ onSubmit, loading = false, selectedCrewColor }) => {
   const [username, setUsername] = useState('');
   const [gender, setGender] = useState<'male' | 'female' | 'other' | 'prefer-not-to-say'>('prefer-not-to-say');
+  const [avatarUrl, setAvatarUrl] = useState<string>('');
+
+  useEffect(() => {
+    if (username.trim()) {
+      generateRandomAvatar('preview', username, gender).then(setAvatarUrl);
+    } else {
+      setAvatarUrl('');
+    }
+  }, [username, gender]);
 
   return (
     <div className="sticker-overlay">
@@ -22,8 +31,8 @@ const ProfileSetup: React.FC<{
         
         <div className="sticker-polaroid">
           <div className="polaroid-photo">
-            {username ? (
-              <img src={generateAvatarUrl('preview', username, gender, undefined, selectedCrewColor?.replace('#', ''))} alt="Avatar" />
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="Avatar" />
             ) : (
               <span className="avatar-placeholder">👤</span>
             )}

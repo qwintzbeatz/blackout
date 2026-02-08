@@ -5,6 +5,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { UserMarker, Comment, Gender } from '@/types';
 import { User as FirebaseUser } from 'firebase/auth';
+import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
 
 interface MarkerPopupCardProps {
   marker: UserMarker;
@@ -88,12 +89,6 @@ export default function MarkerPopupCard({
     if (diffHours > 0) return `${diffHours}h`;
     if (diffMins > 0) return `${diffMins}m`;
     return 'Just now';
-  };
-
-  // Simple avatar generator for fallback
-  const generateAvatarUrl = (userId: string, username: string) => {
-    const seed = username || userId;
-    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=4dabf7`;
   };
 
   return (

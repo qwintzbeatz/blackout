@@ -6,7 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { ref, onValue, push, remove } from 'firebase/database';
 import { UserProfile, CrewChatMessage } from '@/lib/types/blackout';
 import { panelStyle } from '@/lib/constants';
-import { generateAvatarUrl } from '@/lib/utils';
+import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
 import { User as FirebaseUser } from 'firebase/auth';
 
 import { CrewId } from '@/lib/types/story';

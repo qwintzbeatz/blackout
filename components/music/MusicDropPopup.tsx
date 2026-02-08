@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { Drop, Comment } from '@/lib/types/blackout';
 import { User as FirebaseUser } from 'firebase/auth';
-import { generateAvatarUrl, getTrackNameFromUrl, getTrackPlatform, getTimeAgo } from '@/lib/utils/dropHelpers';
+import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
+import { getTrackNameFromUrl, getTrackPlatform, getTimeAgo } from '@/lib/utils/dropHelpers';
 
 interface MusicDropPopupProps {
   drop: Drop;

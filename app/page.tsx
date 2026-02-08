@@ -65,8 +65,20 @@ import { ErrorRecoveryPanel } from '@/src/components/ui/ErrorRecoveryPanel';
 import { useErrorHandler } from '@/src/hooks/useErrorHandler';
 import ErrorTest from '@/components/ui/ErrorTest';
 import ProfileSetupSticker from '@/components/ProfileSetupSticker';
+import { SurfaceGraffitiSelector } from '@/components/ui/SurfaceGraffitiSelector';
+import { RepNotification } from '@/components/ui/RepNotification';
 import { HIPHOP_TRACKS } from '@/constants/tracks';
 import { MarkerName, MarkerDescription, Gender, MARKER_COLORS, MARKER_NAMES, MARKER_DESCRIPTIONS } from '@/constants/markers';
+import { SurfaceType, GraffitiType } from '@/types';
+import { 
+  migrateMarkerNameToSurface, 
+  migrateMarkerDescriptionToGraffiti,
+  getSurfaceOptions,
+  getGraffitiTypeOptions,
+  SURFACE_TO_MARKER_NAME,
+  GRAFFITI_TO_MARKER_DESCRIPTION
+} from '@/utils/typeMapping';
+import { calculateRep, RepResult } from '@/utils/repCalculator';
 import { NEW_ZEALAND_LOCATIONS, NZ_BOUNDS, NZ_CENTER, NZ_DEFAULT_ZOOM, GPS_DEFAULT_ZOOM } from '@/constants/locations';
 import { detectDevicePerformance, panelStyle } from '@/utils';
 import {
@@ -108,8 +120,28 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 };
 
-// REP Calculation Functions
-const calculateRepForMarker = (distanceFromCenter: number | null, markerDescription: MarkerDescription): number => {
+// Advanced REP Calculation Functions
+const calculateRepForMarker = (
+  markerName: MarkerName, 
+  markerDescription: MarkerDescription,
+  distanceFromCenter: number | null,
+  surface?: SurfaceType,
+  graffitiType?: GraffitiType
+): { rep: number; breakdown?: RepResult['breakdown'] } => {
+  // Use new system if surface and graffiti type are provided
+  if (surface && graffitiType) {
+    const options = {
+      isHeaven: ['rooftop', 'bridge'].includes(surface),
+      isMovingTarget: ['train', 'truck', 'van'].includes(surface),
+      isHighRisk: ['speed_camera', 'traffic_light'].includes(surface),
+      hasStreakBonus: distanceFromCenter !== null && distanceFromCenter <= 50
+    };
+    
+    const result = calculateRep(surface, graffitiType, options);
+    return { rep: result.rep, breakdown: result.breakdown };
+  }
+  
+  // Fallback to old system for backward compatibility
   let rep = 10; // Base REP for placing any marker
   
   if (distanceFromCenter && distanceFromCenter <= 50) {
@@ -136,7 +168,7 @@ const calculateRepForMarker = (distanceFromCenter: number | null, markerDescript
       rep += 3;
   }
   
-  return rep;
+  return { rep };
 };
 
 const calculateRank = (rep: number): string => {
@@ -354,12 +386,12 @@ const useLoadingManager = () => {
   return { loadingStates, setLoading, isLoading };
 };
 
-// Custom hook for safe operations with error handling
-const useSafeOperation = (errorHandler: any) => {
-  const safeOperation = useCallback(async <T>(
-    operation: () => Promise<T>,
-    fallback?: T
-  ): Promise<T | undefined> => {
+// Custom hook for safe operations with error handling (simplified)
+const useSafeOperation = () => {
+  const safeOperation = useCallback(async (
+    operation: () => Promise<any>,
+    fallback?: any
+  ): Promise<any> => {
     try {
       return await operation();
     } catch (error) {
@@ -401,7 +433,7 @@ const HomeComponent = () => {
   const { hasRecentErrors } = useErrorHandler();
   const { logPerformance } = usePerformanceMonitor();
   const { loadingStates, setLoading, isLoading } = useLoadingManager();
-  const { safeOperation } = useSafeOperation(useErrorHandler());
+  const { safeOperation } = useSafeOperation();
   
   // ========== STATE DECLARATIONS ==========
   const [mapReady, setMapReady] = useState(false);
@@ -441,6 +473,10 @@ const HomeComponent = () => {
   
   // Marker color states
   const [selectedMarkerColor, setSelectedMarkerColor] = useState('#10b981');
+  
+  // Surface and graffiti type states (new)
+  const [selectedSurface, setSelectedSurface] = useState<SurfaceType>('wall');
+  const [selectedGraffitiType, setSelectedGraffitiType] = useState<GraffitiType>('tag');
 
   // Audio player states
   const [isPlaying, setIsPlaying] = useState(false);
@@ -481,7 +517,12 @@ const HomeComponent = () => {
   const [isSoundCloudLoading, setIsSoundCloudLoading] = useState(false);
   
   // REP Notification state
-  const [repNotification, setRepNotification] = useState<{ show: boolean, amount: number, message: string } | null>(null);
+  const [repNotification, setRepNotification] = useState<{ 
+    show: boolean, 
+    amount: number, 
+    message: string, 
+    breakdown?: RepResult['breakdown'] 
+  } | null>(null);
   
   // Drop states
   const [drops, setDrops] = useState<Drop[]>([]);
@@ -555,10 +596,11 @@ const HomeComponent = () => {
   // Memoize markers by user
   const markersByUser = useMemo(() => {
     const byUser = userMarkers.reduce((acc, marker) => {
-      if (!acc[marker.userId]) {
-        acc[marker.userId] = [];
+      const userId = marker.userId || 'unknown';
+      if (!acc[userId]) {
+        acc[userId] = [];
       }
-      acc[marker.userId].push(marker);
+      acc[userId].push(marker);
       return acc;
     }, {} as Record<string, UserMarker[]>);
     
@@ -783,14 +825,14 @@ const {
           id: `marker-${doc.id}`,
           firestoreId: doc.id,
           position: data.position,
-          name: data.name,
-          description: data.description,
+          name: data.name as MarkerName,
+          description: data.description as MarkerDescription,
           color: data.color || '#10b981',
           timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(),
           userId: data.userId,
           username: data.username || 'Anonymous',
           userProfilePic: data.userProfilePic || generateAvatarUrl(data.userId, data.username),
-          distanceFromCenter: data.distanceFromCenter,
+          distanceFromCenter: data.distanceFromCenter ?? undefined,
           repEarned: data.repEarned || 0,
           createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date()
         });
@@ -1402,9 +1444,16 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     if (!user || !userProfile) return null;
     
     try {
-      const repEarned = calculateRepForMarker(marker.distanceFromCenter || null, marker.description);
+      // Use new advanced REP calculation
+      const repResult = calculateRepForMarker(
+        marker.name, 
+        marker.description, 
+        marker.distanceFromCenter || null,
+        marker.surface,
+        marker.graffitiType
+      );
       const streakBonus = calculateStreakBonus();
-      const totalRep = repEarned + streakBonus;
+      const totalRep = repResult.rep + streakBonus;
       
       const markerData = {
         position: marker.position,
@@ -1417,7 +1466,11 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         userProfilePic: userProfile.profilePicUrl,
         createdAt: firestoreServerTimestamp(),
         distanceFromCenter: marker.distanceFromCenter || null,
-        repEarned: totalRep
+        repEarned: totalRep,
+        // New surface and graffiti type fields
+        surface: marker.surface || migrateMarkerNameToSurface(marker.name),
+        graffitiType: marker.graffitiType || migrateMarkerDescriptionToGraffiti(marker.description),
+        repBreakdown: repResult.breakdown
       };
       
       const docRef = await addDoc(collection(db, 'markers'), markerData);
@@ -1455,7 +1508,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       setRepNotification({
         show: true,
         amount: totalRep,
-        message: message
+        message: message,
+        breakdown: repResult.breakdown
       });
       
       return docRef.id;
@@ -1623,13 +1677,16 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       const markerData: UserMarker = {
         id: `temp-${Date.now()}`,
         position: [pendingDropPosition.lat, pendingDropPosition.lng],
-        name: 'Pole',
-        description: selectedMarkerType,
-        color: selectedMarkerColor, // USE SELECTED COLOR HERE
+        name: SURFACE_TO_MARKER_NAME[selectedSurface],
+        description: GRAFFITI_TO_MARKER_DESCRIPTION[selectedGraffitiType],
+        color: selectedMarkerColor,
         timestamp: new Date(),
         userId: user.uid,
         username: userProfile.username,
         userProfilePic: userProfile.profilePicUrl,
+        // New surface and graffiti type fields
+        surface: selectedSurface,
+        graffitiType: selectedGraffitiType,
       };
 
       const markerId = await saveMarkerToFirestore(markerData);
@@ -2561,32 +2618,13 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     <StoryManagerProvider user={user} userProfile={userProfile}>
       <div style={{ height: '100vh', width: '100vw', position: 'relative' as const }}>
         {/* REP Notification */}
-        {repNotification && (
-          <div style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            backgroundColor: 'rgba(16, 185, 129, 0.95)',
-            color: 'white',
-            padding: '20px 30px',
-            borderRadius: '15px',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
-            zIndex: 2000,
-            textAlign: 'center',
-            animation: 'popIn 0.5s ease-out'
-          }}>
-            <div style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '10px' }}>
-              🎉 +{repNotification.amount} REP!
-            </div>
-            <div style={{ fontSize: '16px' }}>
-              {repNotification.message}
-            </div>
-            <div style={{ fontSize: '12px', marginTop: '10px', opacity: 0.8 }}>
-              Total: {userProfile?.rep || 0} REP • Rank: {userProfile?.rank || 'TOY'}
-            </div>
-          </div>
-        )}
+        <RepNotification
+          show={repNotification?.show || false}
+          amount={repNotification?.amount || 0}
+          message={repNotification?.message || ''}
+          breakdown={repNotification?.breakdown}
+          onClose={() => setRepNotification(null)}
+        />
 
       {/* Top-Left Logo - Changes color based on day/night */}
       <div style={{
@@ -3345,39 +3383,14 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              {/* Marker Type Selection */}
+              {/* Surface and Graffiti Type Selection */}
               <div style={{ marginBottom: '10px' }}>
-                <label style={{
-                  color: '#f1f5f9',
-                  fontSize: '14px',
-                  fontWeight: 'bold',
-                  marginBottom: '8px',
-                  display: 'block'
-                }}>
-                  🎨 Marker Type:
-                </label>
-                <select
-                  value={selectedMarkerType}
-                  onChange={(e) => setSelectedMarkerType(e.target.value as MarkerDescription)}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    border: '2px solid rgba(59, 130, 246, 0.3)',
-                    backgroundColor: 'rgba(15, 23, 42, 0.8)',
-                    color: '#f1f5f9',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    cursor: 'pointer',
-                    backdropFilter: 'blur(4px)'
-                  }}
-                >
-                  {MARKER_DESCRIPTIONS.map((desc) => (
-                    <option key={desc} value={desc} style={{ backgroundColor: '#1e293b' }}>
-                      {desc}
-                    </option>
-                  ))}
-                </select>
+                <SurfaceGraffitiSelector
+                  selectedSurface={selectedSurface}
+                  selectedGraffitiType={selectedGraffitiType}
+                  onSurfaceChange={setSelectedSurface}
+                  onGraffitiTypeChange={setSelectedGraffitiType}
+                />
               </div>
 
               {/* Marker Option */}
@@ -5259,7 +5272,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           </div>
         )}
 
-        {/* Music Panel */}
+{/* Music Panel */}
             {showMusicPanel && (
 <div style={{
             ...panelStyle,
@@ -5284,7 +5297,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     fontSize: '18px',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px'
+                    gap: '8px',
                   }}>
                     <span>🎵</span>
                     MUSIC COLLECTION
@@ -5316,37 +5329,9 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   flexDirection: 'column',
                   gap: '15px'
                 }}>
-                  {/* Now Playing Info */}
-                  <div style={{
-                    background: 'rgba(138, 43, 226, 0.1)',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(138, 43, 226, 0.2)'
-                  }}>
-                    <div style={{ 
-                      fontSize: '14px', 
-                      fontWeight: 'bold', 
-                      color: 'white',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px'
-                    }}>
-                      <div style={{
-                        width: '10px',
-                        height: '10px',
-                        borderRadius: '50%',
-                        backgroundColor: isPlaying ? '#10b981' : '#ef4444',
-                        animation: isPlaying ? 'pulse 1s infinite' : 'none'
-                      }}></div>
-                      Now Playing: {getCurrentTrackName()}
-                      {isPlaying && <span style={{ fontSize: '11px', color: '#10b981' }}>● LIVE</span>}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '4px' }}>
-                      {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') ? 
-                        '🎧 Playing via SoundCloud' : 
-                        `Track ${currentTrackIndex + 1} of ${unlockedTracks.length}`
-                      }
-                    </div>
+
+
+
                   </div>
 
                   {/* SoundCloud Player */}
@@ -5356,7 +5341,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                       borderRadius: '8px',
                       overflow: 'hidden',
                       border: '1px solid #444',
-                      minHeight: '166px',
+                      minHeight: '60px',
 position: 'relative' as 'relative'
                     }}>
                       {isSoundCloudLoading ? (
@@ -5412,7 +5397,7 @@ position: 'relative' as 'relative'
                       </div>
                     </div>
                   )}
-                </div>
+
 
                 {/* Unlocked Tracks List */}
                 <div style={{ flex: 1, overflowY: 'auto', marginBottom: '15px' }}>

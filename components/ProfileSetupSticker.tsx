@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { generateAvatarUrl } from '@/lib/utils';
+import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
 
 interface CrewData {
   id: string;

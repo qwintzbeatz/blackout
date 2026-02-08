@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Drop } from '@/lib/types/blackout';
 import { SoundCloudManager } from '@/lib/soundcloud/SoundCloudManager';
+import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
 
 interface MusicPopupCardProps {
   drop: Drop;
@@ -49,12 +50,6 @@ const getTrackNameFromUrl = (url: string): string => {
     ).join(' ');
   }
   return 'Unknown Track';
-};
-
-// Simple avatar generator for fallback
-const generateAvatarUrl = (userId: string, username: string) => {
-  const seed = username || userId;
-  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=4dabf7`;
 };
 
 export default function MusicPopupCard({

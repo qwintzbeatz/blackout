@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Drop } from '@/lib/types/blackout';
 import { User as FirebaseUser } from 'firebase/auth';
 import { likeDrop, unlikeDrop, addCommentToDrop, getCommentsForDrop, DropComment } from '@/lib/firebase/drops';
-import { generateAvatarUrl, getTimeAgo } from '@/lib/utils/dropHelpers';
+import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
+import { getTimeAgo } from '@/lib/utils/dropHelpers';
 
 interface MarkerDropPopupProps {
   drop: Drop;

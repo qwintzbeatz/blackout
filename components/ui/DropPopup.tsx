@@ -4,8 +4,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Drop } from '@/lib/types/blackout';
 import { User } from 'firebase/auth';
 import { likeDrop, unlikeDrop } from '@/lib/firebase/drops';
+import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
 import {
-  generateAvatarUrl,
   getTimeAgo,
   formatGPS,
   getCardinalDirection,
