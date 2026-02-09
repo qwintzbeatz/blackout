@@ -731,6 +731,20 @@ const {
     };
   }, []);
 
+  // ========== AUTOPLAY MUSIC ON MAP LOAD ==========
+  useEffect(() => {
+    // Only try autoplay if we have tracks and haven't attempted yet
+    if (unlockedTracks.length > 0 && !isPlaying) {
+      // Small delay to ensure iframe is mounted
+      const autoplayTimer = setTimeout(() => {
+        setIsPlaying(true);
+        console.log('Attempting autoplay...');
+      }, 1000);
+      
+      return () => clearTimeout(autoplayTimer);
+    }
+  }, [unlockedTracks.length]); // Run when tracks change
+
   // Initialize selected marker color from user profile on mount
   useEffect(() => {
     if (userProfile?.favoriteColor) {
@@ -6271,40 +6285,194 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       `}
       </style>
 
-      {/* ========== PERSISTENT AUDIO PLAYER (Always Mounted) ========== */}
-      {/* Hidden SoundCloud player - continues playing even when panel is closed */}
-      {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && (
+      {/* ========== VISIBLE MINI MUSIC PLAYER BAR ========== */}
+      {/* Always visible above navigation when tracks exist */}
+      {unlockedTracks.length > 0 && (
         <div
-          key="persistent-soundcloud-player"
           style={{
             position: 'fixed',
-            bottom: '80px',
-            right: '10px',
-            width: isMobile ? '280px' : '350px',
-            height: iframeHeight,
-            zIndex: showMusicPanel ? 1600 : -1, // Behind map when hidden, in front when panel open
-            opacity: showMusicPanel ? 0 : 0, // Always invisible but interactive when needed
-            pointerEvents: showMusicPanel ? 'none' : 'none', // No interaction needed
+            bottom: '68px', // Above the 68px navigation bar
+            left: '0',
+            right: '0',
+            zIndex: 1101, // Above map (1000), below navigation controls
+            backgroundColor: 'rgba(0, 0, 0, 0.95)',
+            backdropFilter: 'blur(12px)',
+            borderTop: '1px solid rgba(138, 43, 226, 0.3)',
+            padding: isMobile ? '8px 12px' : '10px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: isMobile ? '10px' : '15px',
+            boxShadow: '0 -4px 20px rgba(0,0,0,0.5)'
+          }}
+        >
+          {/* Track Thumbnail */}
+          <div
+            style={{
+              width: isMobile ? '40px' : '48px',
+              height: isMobile ? '40px' : '48px',
+              backgroundColor: 'rgba(138, 43, 226, 0.2)',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: isMobile ? '20px' : '24px',
+              flexShrink: 0
+            }}
+          >
+            🎵
+          </div>
+
+          {/* Track Info & Controls */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Track Name */}
+            <div
+              style={{
+                fontSize: isMobile ? '12px' : '13px',
+                fontWeight: 'bold',
+                color: '#8a2be2',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                marginBottom: '4px'
+              }}
+            >
+              {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') 
+                ? 'SoundCloud Track'
+                : 'Local Audio'}
+            </div>
+
+            {/* Playback Controls */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {/* Previous */}
+              <button
+                onClick={() => {
+                  if (currentTrackIndex > 0) {
+                    setCurrentTrackIndex(currentTrackIndex - 1);
+                    setIsPlaying(true);
+                  }
+                }}
+                disabled={currentTrackIndex === 0}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: currentTrackIndex === 0 ? '#666' : '#8a2be2',
+                  fontSize: '16px',
+                  cursor: currentTrackIndex === 0 ? 'not-allowed' : 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ⏮️
+              </button>
+
+              {/* Play/Pause - Tap to Enable if blocked */}
+              <button
+                onClick={() => {
+                  setIsPlaying(!isPlaying);
+                }}
+                style={{
+                  background: 'rgba(138, 43, 226, 0.2)',
+                  border: '1px solid rgba(138, 43, 226, 0.4)',
+                  color: '#8a2be2',
+                  width: isMobile ? '32px' : '36px',
+                  height: isMobile ? '32px' : '36px',
+                  borderRadius: '50%',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                {isPlaying ? '⏸️' : '▶️'}
+              </button>
+
+              {/* Next */}
+              <button
+                onClick={() => {
+                  if (currentTrackIndex < unlockedTracks.length - 1) {
+                    setCurrentTrackIndex(currentTrackIndex + 1);
+                    setIsPlaying(true);
+                  }
+                }}
+                disabled={currentTrackIndex >= unlockedTracks.length - 1}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: currentTrackIndex >= unlockedTracks.length - 1 ? '#666' : '#8a2be2',
+                  fontSize: '16px',
+                  cursor: currentTrackIndex >= unlockedTracks.length - 1 ? 'not-allowed' : 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ⏭️
+              </button>
+
+              {/* Status Indicator */}
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: isPlaying ? '#10b981' : '#94a3b8',
+                  marginLeft: '8px'
+                }}
+              >
+                {isPlaying ? '▶ Playing' : '⏸ Paused'}
+              </span>
+            </div>
+          </div>
+
+          {/* Expand Button */}
+          <button
+            onClick={() => setShowMusicPanel(!showMusicPanel)}
+            style={{
+              background: showMusicPanel ? 'rgba(138, 43, 226, 0.3)' : 'rgba(138, 43, 226, 0.1)',
+              border: '1px solid rgba(138, 43, 226, 0.3)',
+              color: '#8a2be2',
+              width: isMobile ? '36px' : '40px',
+              height: isMobile ? '36px' : '40px',
+              borderRadius: '8px',
+              fontSize: '16px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}
+          >
+            {showMusicPanel ? '▼' : '▲'}
+          </button>
+        </div>
+      )}
+
+      {/* ========== HIDDEN AUDIO IFRAME FOR SOUNDCLOUD ========== */}
+      {/* Loads SoundCloud widget API for actual audio playback */}
+      {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && (
+        <div
+          key="soundcloud-audio-player"
+          style={{
+            position: 'fixed',
+            bottom: '-1000px', // Off-screen but mounted
+            left: '0',
+            width: '1px',
+            height: '1px',
             overflow: 'hidden',
-            borderRadius: '8px'
+            opacity: 0
           }}
         >
           <iframe
-            id="persistent-soundcloud-player"
-            src={createSoundCloudIframeUrl(unlockedTracks[currentTrackIndex])}
+            id="soundcloud-widget"
+            src={`https://w.soundcloud.com/player/?url=${encodeURIComponent(unlockedTracks[currentTrackIndex])}&auto_play=${isPlaying ? 'true' : 'false'}&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false`}
             width="100%"
-            height={iframeHeight}
+            height="100%"
             frameBorder="no"
             scrolling="no"
-            sandbox="allow-scripts allow-same-origin allow-presentation"
-            style={{
-              border: 'none',
-              backgroundColor: 'transparent',
-              width: '100%',
-              height: '100%'
-            }}
-            title="Persistent SoundCloud Player"
-            allow="autoplay; encrypted-media"
+            allow="autoplay"
+            title="SoundCloud Audio"
           />
         </div>
       )}
