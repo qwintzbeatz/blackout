@@ -6097,29 +6097,18 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       `}
       </style>
 
-      {/* ========== FULL SOUNDCLOUD WIDGET PLAYER ========== */}
-      {/* Visible full widget above navigation */}
+      {/* ========== COMPACT LAZY-LOAD SOUNDCLOUD WIDGET ========== */}
+      {/* Compact bar that expands to full widget */}
       {unlockedTracks.length > 0 && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: '68px', // Above the 68px navigation bar
-            left: '0',
-            right: '0',
-            zIndex: 1101, // Above map (1000)
-            backgroundColor: 'rgba(0, 0, 0, 0.95)',
-            borderTop: '1px solid rgba(138, 43, 226, 0.3)',
-            boxShadow: '0 -4px 20px rgba(0,0,0,0.5)'
-          }}
-        >
-          <SoundCloudPlayer
-            trackUrl={unlockedTracks[currentTrackIndex]}
-            isPlaying={isPlaying}
-            onTrackEnd={playNextTrack}
-            onError={(err) => console.error('SoundCloud error:', err)}
-            isMobile={isMobile}
-          />
-        </div>
+        <SoundCloudPlayer
+          trackUrl={unlockedTracks[currentTrackIndex]}
+          trackName={getCurrentTrackName()}
+          isPlaying={isPlaying}
+          onTrackEnd={playNextTrack}
+          onPlayPause={setIsPlaying}
+          onError={(err) => console.error('SoundCloud error:', err)}
+          isMobile={isMobile}
+        />
       )}
     </div>
     </StoryManagerProvider>
