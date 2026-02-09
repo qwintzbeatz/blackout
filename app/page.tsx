@@ -488,28 +488,23 @@ const HomeComponent = () => {
   const [useLocalAudio, setUseLocalAudio] = useState(true);
   const localAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Start local audio when app mounts
+  // Initialize local audio when app mounts
   useEffect(() => {
     if (typeof window !== 'undefined' && !localAudioRef.current) {
-      localAudioRef.current = new Audio('/blackout-classic.mp3');
+      // Check if first track is local audio
+      const firstTrack = unlockedTracks[0];
+      const isLocalAudio = firstTrack && !firstTrack.includes('soundcloud.com');
+      
+      if (isLocalAudio) {
+        localAudioRef.current = new Audio(firstTrack);
+      } else {
+        // Default fallback audio
+        localAudioRef.current = new Audio('/blackout-classic.mp3');
+      }
+      
       localAudioRef.current.volume = volume;
       localAudioRef.current.loop = true;
     }
-    
-    // Try to play on mount (may be blocked by browsers without user interaction)
-    const tryPlayAudio = async () => {
-      if (localAudioRef.current) {
-        localAudioRef.current.volume = volume;
-        try {
-          await localAudioRef.current.play();
-          setIsPlaying(true);
-        } catch (err) {
-          console.log('Audio autoplay blocked, will play on user interaction');
-        }
-      }
-    };
-    
-    tryPlayAudio();
   }, []);
   
   // SoundCloud states
@@ -744,6 +739,56 @@ const {
       return () => clearTimeout(autoplayTimer);
     }
   }, [unlockedTracks.length]); // Run when tracks change
+
+  // ========== UNIFIED AUDIO CONTROLLER ==========
+  // Controls both local audio and SoundCloud iframe based on isPlaying state
+  useEffect(() => {
+    const currentTrack = unlockedTracks[currentTrackIndex];
+    if (!currentTrack) return;
+
+    const isSoundCloud = currentTrack.includes('soundcloud.com');
+    const soundCloudIframe = document.getElementById('soundcloud-widget') as HTMLIFrameElement;
+
+    if (isSoundCloud) {
+      // Control SoundCloud iframe via postMessage
+      if (soundCloudIframe && soundCloudIframe.contentWindow) {
+        const action = isPlaying ? 'play' : 'pause';
+        soundCloudIframe.contentWindow.postMessage(
+          JSON.stringify({ method: action }),
+          '*'
+        );
+        console.log(`SoundCloud ${action} command sent`);
+      }
+      // Pause local audio when switching to SoundCloud
+      if (localAudioRef.current) {
+        localAudioRef.current.pause();
+      }
+    } else {
+      // Control local audio player
+      if (localAudioRef.current) {
+        // Update source if track changed
+        if (localAudioRef.current.src !== currentTrack && currentTrack !== '/blackout-classic.mp3') {
+          localAudioRef.current.src = currentTrack;
+          localAudioRef.current.load();
+        }
+        
+        if (isPlaying) {
+          localAudioRef.current.play().catch(err => {
+            console.log('Local audio play blocked:', err);
+          });
+        } else {
+          localAudioRef.current.pause();
+        }
+      }
+      // Pause SoundCloud when switching to local
+      if (soundCloudIframe && soundCloudIframe.contentWindow) {
+        soundCloudIframe.contentWindow.postMessage(
+          JSON.stringify({ method: 'pause' }),
+          '*'
+        );
+      }
+    }
+  }, [isPlaying, currentTrackIndex, unlockedTracks]);
 
   // Initialize selected marker color from user profile on mount
   useEffect(() => {
@@ -6345,12 +6390,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {/* Previous */}
               <button
-                onClick={() => {
-                  if (currentTrackIndex > 0) {
-                    setCurrentTrackIndex(currentTrackIndex - 1);
-                    setIsPlaying(true);
-                  }
-                }}
+                onClick={playPreviousTrack}
                 disabled={currentTrackIndex === 0}
                 style={{
                   background: 'none',
@@ -6367,11 +6407,9 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                 ⏮️
               </button>
 
-              {/* Play/Pause - Tap to Enable if blocked */}
+              {/* Play/Pause */}
               <button
-                onClick={() => {
-                  setIsPlaying(!isPlaying);
-                }}
+                onClick={togglePlay}
                 style={{
                   background: 'rgba(138, 43, 226, 0.2)',
                   border: '1px solid rgba(138, 43, 226, 0.4)',
@@ -6391,12 +6429,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
               {/* Next */}
               <button
-                onClick={() => {
-                  if (currentTrackIndex < unlockedTracks.length - 1) {
-                    setCurrentTrackIndex(currentTrackIndex + 1);
-                    setIsPlaying(true);
-                  }
-                }}
+                onClick={playNextTrack}
                 disabled={currentTrackIndex >= unlockedTracks.length - 1}
                 style={{
                   background: 'none',
