@@ -1289,24 +1289,27 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     }
   }, [user, userProfile]);
 
-  // 🎵 Switch from local audio to SoundCloud when map loads
+  // 🎵 Sync unlocked tracks from userProfile when profile loads
   useEffect(() => {
-    if (userProfile && useLocalAudio) {
-      // User has authenticated and map is loading - switch to SoundCloud
-      // Stop local audio
-      if (localAudioRef.current) {
-        localAudioRef.current.pause();
-        localAudioRef.current = null;
+    if (userProfile?.unlockedTracks && userProfile.unlockedTracks.length > 0) {
+      // Sync unlocked tracks from user profile
+      setUnlockedTracks(userProfile.unlockedTracks);
+      
+      // If local audio was still being used, switch to SoundCloud
+      if (useLocalAudio) {
+        // Stop local audio
+        if (localAudioRef.current) {
+          localAudioRef.current.pause();
+          localAudioRef.current = null;
+        }
+        
+        // Switch to SoundCloud mode
+        setUseLocalAudio(false);
+        
+        // Start playing the first unlocked track
+        setCurrentTrackIndex(0);
+        setIsPlaying(true);
       }
-      
-      // Switch to SoundCloud mode
-      setUseLocalAudio(false);
-      
-      // Set the default SoundCloud track and start playing
-      const defaultTrack = 'https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1';
-      setUnlockedTracks([defaultTrack]);
-      setCurrentTrackIndex(0);
-      setIsPlaying(true);
     }
   }, [userProfile, useLocalAudio]);
 
@@ -1519,7 +1522,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     }
   };
 
-  // UPDATED: Handle photo selection with GPS extraction
+  // UPDATED: Handle photo selection with GPS extraction and ImgBB upload
   const handlePhotoSelect = useCallback(async (photoData: { 
     url: string; 
     file: File; 
@@ -1531,7 +1534,17 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
     setIsUploadingPhoto(true);
     try {
-      const photoUrl = photoData.url;
+      // First, upload the photo to ImgBB to get a proper URL
+      let photoUrl: string;
+      
+      try {
+        photoUrl = await uploadImageToImgBB(photoData.file);
+      } catch (uploadError: any) {
+        console.error('ImgBB upload failed:', uploadError);
+        alert(`Photo upload failed: ${uploadError.message}. Please try a smaller image.`);
+        setIsUploadingPhoto(false);
+        return;
+      }
       
       // Determine where to place the drop
       let dropLat: number, dropLng: number;
@@ -2887,6 +2900,13 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         {showTopPlayers && topPlayers.map((player, index) => {
           if (!player.position) return null;
           
+          // Player card colors based on rank
+          const cardColor = index === 0 ? '#fbbf24' : index === 1 ? '#cbd5e1' : '#d97706';
+          const textColor = index === 0 ? '#7c2d12' : index === 1 ? '#1f2937' : '#7c2d12';
+          
+          // Spray can drip - using emoji for simplicity
+          const sprayCanEmoji = '🎨';
+          
           const customIcon = typeof window !== 'undefined' ? 
             new (require('leaflet').DivIcon)({
               html: `
@@ -2894,7 +2914,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   position: relative;
                   width: 40px;
                   height: 40px;
-                  background-color: ${index === 0 ? '#fbbf24' : index === 1 ? '#cbd5e1' : '#d97706'};
+                  background-color: ${cardColor};
                   border: 3px solid white;
                   border-radius: 50%;
                   box-shadow: 0 3px 10px rgba(0,0,0,0.4);
@@ -2903,7 +2923,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   justify-content: center;
                   font-weight: bold;
                   font-size: 14px;
-                  color: ${index === 0 ? '#7c2d12' : index === 1 ? '#1f2937' : '#7c2d12'};
+                  color: ${textColor};
                   overflow: hidden;
                 ">
                   <div style="
@@ -2911,14 +2931,15 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     top: -5px;
                     left: 50%;
                     transform: translateX(-50%);
-                    background: ${index === 0 ? '#fbbf24' : index === 1 ? '#cbd5e1' : '#d97706'};
-                    color: ${index === 0 ? '#7c2d12' : index === 1 ? '#1f2937' : '#7c2d12'};
+                    background: ${cardColor};
+                    color: ${textColor};
                     font-size: 10px;
                     padding: 1px 6px;
                     border-radius: 10px;
                     white-space: nowrap;
                     font-weight: bold;
                     border: 1px solid white;
+                    z-index: 2;
                   ">
                     #${index + 1}
                   </div>
@@ -2947,15 +2968,16 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     top: '-10px',
                     left: '50%',
                     transform: 'translateX(-50%)',
-                    background: index === 0 ? '#fbbf24' : index === 1 ? '#cbd5e1' : '#d97706',
-                    color: index === 0 ? '#7c2d12' : index === 1 ? '#1f2937' : '#7c2d12',
+                    background: cardColor,
+                    color: textColor,
                     fontSize: '12px',
                     fontWeight: 'bold',
                     padding: '4px 12px',
                     borderRadius: '12px',
                     border: '2px solid white',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                    whiteSpace: 'nowrap'
+                    whiteSpace: 'nowrap',
+                    zIndex: 10
                   }}>
                     {index === 0 ? '🥇 TOP WRITER' : index === 1 ? '🥈 RUNNER-UP' : '🥉 CONTENDER'}
                   </div>
@@ -2967,21 +2989,44 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     marginTop: '15px',
                     marginBottom: '15px'
                   }}>
-                    <img
-                      src={player.profilePicUrl}
-                      alt={player.username}
-                      style={{
-                        width: '60px',
-                        height: '60px',
-                        borderRadius: '50%',
-                        border: `3px solid ${index === 0 ? '#fbbf24' : index === 1 ? '#cbd5e1' : '#d97706'}`
-                      }}
-                    />
+                    {/* Player Avatar with Rectangular Border */}
+                    <div style={{
+                      position: 'relative',
+                      width: '60px',
+                      height: '60px',
+                      borderRadius: '0',
+                      border: `3px solid ${cardColor}`,
+                      overflow: 'visible'
+                    }}>
+                      <img
+                        src={player.profilePicUrl}
+                        alt={player.username}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          display: 'block'
+                        }}
+                      />
+                      {/* Spray Can Drip in Bottom Left */}
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '-8px',
+                        left: '-8px',
+                        width: '20px',
+                        height: '20px',
+                        zIndex: 5,
+                        fontSize: '16px',
+                        lineHeight: '1'
+                      }}>
+                        {sprayCanEmoji}
+                      </div>
+                    </div>
                     <div style={{ textAlign: 'left', flex: 1 }}>
                       <div style={{ 
                         fontSize: '16px', 
                         fontWeight: 'bold',
-                        color: index === 0 ? '#fbbf24' : index === 1 ? '#cbd5e1' : '#d97706'
+                        color: cardColor
                       }}>
                         {player.username}
                       </div>
@@ -3051,8 +3096,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                       centerMap(player.position!, 15);
                     }}
                     style={{
-                      backgroundColor: index === 0 ? '#fbbf24' : index === 1 ? '#cbd5e1' : '#d97706',
-                      color: index === 0 ? '#7c2d12' : index === 1 ? '#1f2937' : '#7c2d12',
+                      backgroundColor: cardColor,
+                      color: textColor,
                       border: 'none',
                       padding: '8px 12px',
                       borderRadius: '6px',
@@ -3748,11 +3793,25 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               style={{
                 width: '40px',
                 height: '40px',
-                borderRadius: '50%',
-                border: `2px solid ${userProfile.isSolo ? '#f59e0b' : '#ff6b6b'}`,
-                objectFit: 'cover'
+                border: `3px solid ${userProfile.isSolo ? '#f59e0b' : '#ff6b6b'}`,
+                borderRadius: '0',
+                objectFit: 'cover',
+                position: 'relative'
               }}
             />
+            {/* Spray Can Drip in Bottom Left */}
+            <div style={{
+              position: 'absolute',
+              bottom: '-6px',
+              left: '-6px',
+              width: '20px',
+              height: '20px',
+              zIndex: 5,
+              fontSize: '16px',
+              lineHeight: '1'
+            }}>
+              🎨
+            </div>
             <div>
               <div style={{ 
                 fontWeight: 'bold', 
@@ -5272,17 +5331,22 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           </div>
         )}
 
-{/* Music Panel */}
-            {showMusicPanel && (
-<div style={{
-            ...panelStyle,
-            border: '1px solid #333',
-            display: 'flex',
-            flexDirection: 'column',
-            animation: 'slideInRight 0.3s ease-out',
-            minWidth: '350px',
-            position: 'absolute' as const
-          }}>
+{/* Music Panel - Always rendered, dynamic z-index */}
+            <div
+              key={`music-panel-${unlockedTracks.length}`}
+              style={{
+                ...panelStyle,
+                border: '1px solid #333',
+                display: 'flex',
+                flexDirection: 'column',
+                animation: showMusicPanel ? 'slideInRight 0.3s ease-out' : 'none',
+                minWidth: '350px',
+                position: 'absolute' as const,
+                zIndex: showMusicPanel ? 1500 : 900,
+                opacity: showMusicPanel ? 1 : 0,
+                pointerEvents: showMusicPanel ? 'auto' : 'none',
+                transition: 'opacity 0.3s ease, z-index 0s'
+              }}>
                 <div style={{
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -5329,11 +5393,6 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   flexDirection: 'column',
                   gap: '15px'
                 }}>
-
-
-
-                  </div>
-
                   {/* SoundCloud Player */}
                   {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && (
                     <div style={{
@@ -5342,7 +5401,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                       overflow: 'hidden',
                       border: '1px solid #444',
                       minHeight: '60px',
-position: 'relative' as 'relative'
+                      position: 'relative' as const
                     }}>
                       {isSoundCloudLoading ? (
                         <div style={{ 
@@ -5397,6 +5456,7 @@ position: 'relative' as 'relative'
                       </div>
                     </div>
                   )}
+                </div>
 
 
                 {/* Unlocked Tracks List */}
@@ -5582,7 +5642,6 @@ position: 'relative' as 'relative'
                   </div>
                 )}
               </div>
-            )}
       </div>
 
       {/* ========== END DUAL CONTROL PANELS ========== */}

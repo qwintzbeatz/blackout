@@ -114,12 +114,29 @@ const DropPopupOptimized: React.FC<DropPopupProps> = ({
     }
   }, [dropType, selectedFile, trackUrl, selectedMarkerType, validateTrackUrl]);
 
-  // Handle create drop
+  // Handle close - defined before handleCreateDrop to avoid reference errors
+  const handleClose = useCallback(() => {
+    setSelectedFile(null);
+    setPreviewUrl('');
+    setTrackUrl('');
+    setSelectedMarkerType('Tag/Signature');
+    setError(null);
+    setIsCreating(false);
+    onClose();
+  }, [onClose]);
+
+  // Handle create drop with timeout
   const handleCreateDrop = useCallback(async () => {
     if (!isFormValid || isCreating) return;
     
     setIsCreating(true);
     setError(null);
+    
+    // Set a timeout for the entire operation (45 seconds for mobile)
+    const timeoutId = setTimeout(() => {
+      setError('Upload timed out. Please try a smaller image or check your connection.');
+      setIsCreating(false);
+    }, 45000);
     
     try {
       let photoUrl: string | undefined;
@@ -128,6 +145,9 @@ const DropPopupOptimized: React.FC<DropPopupProps> = ({
       if (selectedFile && dropType === 'photo') {
         photoUrl = await uploadImageToImgBB(selectedFile);
       }
+      
+      // Clear timeout since upload completed
+      clearTimeout(timeoutId);
       
       // Create drop data
       const dropData = {
@@ -142,22 +162,20 @@ const DropPopupOptimized: React.FC<DropPopupProps> = ({
       handleClose();
       
     } catch (error: any) {
-      setError(error.message || 'Failed to create drop');
+      clearTimeout(timeoutId);
+      // Provide more helpful error messages
+      const errorMsg = error.message || 'Failed to create drop';
+      if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
+        setError('⚠️ Upload timed out. Try a smaller image or check your connection.');
+      } else if (errorMsg.includes('Failed to fetch') || errorMsg.includes('network') || errorMsg.includes('NetworkError')) {
+        setError('⚠️ Network error. Please check your connection and try again.');
+      } else {
+        setError(errorMsg);
+      }
     } finally {
       setIsCreating(false);
     }
-  }, [isFormValid, isCreating, selectedFile, trackUrl, selectedMarkerType, dropType, position, onDropCreate]);
-
-  // Handle close
-  const handleClose = useCallback(() => {
-    setSelectedFile(null);
-    setPreviewUrl('');
-    setTrackUrl('');
-    setSelectedMarkerType('Tag/Signature');
-    setError(null);
-    setIsCreating(false);
-    onClose();
-  }, [onClose]);
+  }, [isFormValid, isCreating, selectedFile, trackUrl, selectedMarkerType, dropType, position, onDropCreate, handleClose]);
 
   if (!isVisible) return null;
 
