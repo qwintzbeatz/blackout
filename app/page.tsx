@@ -58,6 +58,7 @@ import { useFirebaseAuth } from '@/hooks/useFirebaseAuth';
 import { useMarkers } from '@/hooks/useMarkers';
 import { PerformanceSettingsPanel } from '@/src/components/ui/PerformanceSettingsPanel';
 import { CrewId } from '@/constants/markers';
+import SoundCloudPlayer from '@/components/music/SoundCloudPlayer';
 import { CREWS } from '@/data/crews';
 import { useGPSTracker } from '@/hooks/useGPSTracker';
 import { EnhancedErrorBoundary } from '@/src/components/ui/EnhancedErrorBoundary';
@@ -484,33 +485,6 @@ const HomeComponent = () => {
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [unlockedTracks, setUnlockedTracks] = useState<string[]>(['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1']);
   
-  // Local audio state for signup/login flow
-  const [useLocalAudio, setUseLocalAudio] = useState(true);
-  const localAudioRef = useRef<HTMLAudioElement | null>(null);
-
-  // Initialize local audio when app mounts
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !localAudioRef.current) {
-      // Check if first track is local audio
-      const firstTrack = unlockedTracks[0];
-      const isLocalAudio = firstTrack && !firstTrack.includes('soundcloud.com');
-      
-      if (isLocalAudio) {
-        localAudioRef.current = new Audio(firstTrack);
-      } else {
-        // Default fallback audio
-        localAudioRef.current = new Audio('/blackout-classic.mp3');
-      }
-      
-      localAudioRef.current.volume = volume;
-      localAudioRef.current.loop = true;
-    }
-  }, []);
-  
-  // SoundCloud states
-  const [soundCloudTracks, setSoundCloudTracks] = useState<SoundCloudTrack[]>([]);
-  const [isSoundCloudLoading, setIsSoundCloudLoading] = useState(false);
-  
   // REP Notification state
   const [repNotification, setRepNotification] = useState<{ 
     show: boolean, 
@@ -740,56 +714,6 @@ const {
     }
   }, [unlockedTracks.length]); // Run when tracks change
 
-  // ========== UNIFIED AUDIO CONTROLLER ==========
-  // Controls both local audio and SoundCloud iframe based on isPlaying state
-  useEffect(() => {
-    const currentTrack = unlockedTracks[currentTrackIndex];
-    if (!currentTrack) return;
-
-    const isSoundCloud = currentTrack.includes('soundcloud.com');
-    const soundCloudIframe = document.getElementById('soundcloud-widget') as HTMLIFrameElement;
-
-    if (isSoundCloud) {
-      // Control SoundCloud iframe via postMessage
-      if (soundCloudIframe && soundCloudIframe.contentWindow) {
-        const action = isPlaying ? 'play' : 'pause';
-        soundCloudIframe.contentWindow.postMessage(
-          JSON.stringify({ method: action }),
-          '*'
-        );
-        console.log(`SoundCloud ${action} command sent`);
-      }
-      // Pause local audio when switching to SoundCloud
-      if (localAudioRef.current) {
-        localAudioRef.current.pause();
-      }
-    } else {
-      // Control local audio player
-      if (localAudioRef.current) {
-        // Update source if track changed
-        if (localAudioRef.current.src !== currentTrack && currentTrack !== '/blackout-classic.mp3') {
-          localAudioRef.current.src = currentTrack;
-          localAudioRef.current.load();
-        }
-        
-        if (isPlaying) {
-          localAudioRef.current.play().catch(err => {
-            console.log('Local audio play blocked:', err);
-          });
-        } else {
-          localAudioRef.current.pause();
-        }
-      }
-      // Pause SoundCloud when switching to local
-      if (soundCloudIframe && soundCloudIframe.contentWindow) {
-        soundCloudIframe.contentWindow.postMessage(
-          JSON.stringify({ method: 'pause' }),
-          '*'
-        );
-      }
-    }
-  }, [isPlaying, currentTrackIndex, unlockedTracks]);
-
   // Initialize selected marker color from user profile on mount
   useEffect(() => {
     if (userProfile?.favoriteColor) {
@@ -817,28 +741,6 @@ const {
       }
     }
   }, [userProfile?.favoriteColor, userMarkers, user?.uid]);
-  
-  useEffect(() => {
-    const initializeSoundCloudTracks = async () => {
-      const soundCloudUrls = unlockedTracks.filter(track => track.includes('soundcloud.com'));
-      
-      if (soundCloudUrls.length === 0) return;
-      
-      setIsSoundCloudLoading(true);
-      
-      const tracks = soundCloudUrls.map((url, index) => ({
-        url,
-        title: getTrackNameFromUrl(url),
-        isLoaded: false,
-        iframeId: `soundcloud-player-${Date.now()}-${index}`
-      }));
-      
-      setSoundCloudTracks(tracks);
-      setIsSoundCloudLoading(false);
-    };
-
-    initializeSoundCloudTracks();
-  }, [unlockedTracks]);
 
   useEffect(() => {
     if (repNotification) {
@@ -875,11 +777,6 @@ const {
     if (unlockedTracks.length === 0) return 'No tracks unlocked';
     
     const track = unlockedTracks[currentTrackIndex];
-    if (track.includes('soundcloud.com')) {
-      const soundCloudTrack = soundCloudTracks.find(t => t.url === track);
-      return soundCloudTrack?.title || getTrackNameFromUrl(track);
-    }
-    
     return getTrackNameFromUrl(track);
   };
   
@@ -1137,30 +1034,14 @@ const {
     e.preventDefault();
     setAuthError(null);
     
-    // 🎵 Play local audio immediately on user interaction (no autoplay restrictions)
-    setUseLocalAudio(true);
+    // 🎵 Start playing on user interaction
     setIsPlaying(true);
-    
-    // Create and play local audio
-    if (typeof window !== 'undefined' && !localAudioRef.current) {
-      localAudioRef.current = new Audio('/blackout-classic.mp3');
-      localAudioRef.current.volume = volume;
-      localAudioRef.current.loop = true;
-    }
-    
-    if (localAudioRef.current) {
-      localAudioRef.current.volume = volume;
-      localAudioRef.current.play().catch(err => {
-        console.log('Local audio autoplay blocked, will play after user interaction');
-      });
-    }
     
     try {
       await signInWithEmailAndPassword(auth, email, password);
       setShowLogin(false);
       setEmail('');
       setPassword('');
-      // Note: Audio will continue playing and switch to SoundCloud when map loads
     } catch (error: any) {
       setAuthError(error.message);
     }
@@ -1170,30 +1051,14 @@ const {
     e.preventDefault();
     setAuthError(null);
     
-    // 🎵 Play local audio immediately on user interaction (no autoplay restrictions)
-    setUseLocalAudio(true);
+    // 🎵 Start playing on user interaction
     setIsPlaying(true);
-    
-    // Create and play local audio
-    if (typeof window !== 'undefined' && !localAudioRef.current) {
-      localAudioRef.current = new Audio('/blackout-classic.mp3');
-      localAudioRef.current.volume = volume;
-      localAudioRef.current.loop = true;
-    }
-    
-    if (localAudioRef.current) {
-      localAudioRef.current.volume = volume;
-      localAudioRef.current.play().catch(err => {
-        console.log('Local audio autoplay blocked, will play after user interaction');
-      });
-    }
     
     try {
       await createUserWithEmailAndPassword(auth, email, password);
       setShowSignup(false);
       setEmail('');
       setPassword('');
-      // Note: Audio will continue playing and switch to SoundCloud when map loads
     } catch (error: any) {
       setAuthError(error.message);
     }
@@ -1387,34 +1252,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     if (userProfile?.unlockedTracks && userProfile.unlockedTracks.length > 0) {
       // Sync unlocked tracks from user profile
       setUnlockedTracks(userProfile.unlockedTracks);
-      
-      // If local audio was still being used, switch to SoundCloud
-      if (useLocalAudio) {
-        // Stop local audio
-        if (localAudioRef.current) {
-          localAudioRef.current.pause();
-          localAudioRef.current = null;
-        }
-        
-        // Switch to SoundCloud mode
-        setUseLocalAudio(false);
-        
-        // Start playing the first unlocked track
-        setCurrentTrackIndex(0);
-        setIsPlaying(true);
-      }
     }
-  }, [userProfile, useLocalAudio]);
-
-  // Cleanup local audio on unmount
-  useEffect(() => {
-    return () => {
-      if (localAudioRef.current) {
-        localAudioRef.current.pause();
-        localAudioRef.current = null;
-      }
-    };
-  }, []);
+  }, [userProfile]);
 
   
 
@@ -5489,75 +5328,6 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   flexDirection: 'column',
                   gap: '15px'
                 }}>
-                  {/* SoundCloud Track Info (Audio plays in persistent player outside panel) */}
-                  {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && (
-                    <div style={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      borderRadius: '8px',
-                      padding: '15px',
-                      border: '1px solid #444'
-                    }}>
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px'
-                      }}>
-                        <div style={{
-                          width: '48px',
-                          height: '48px',
-                          backgroundColor: 'rgba(255, 85, 0, 0.2)',
-                          borderRadius: '8px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '24px'
-                        }}>
-                          🎵
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{
-                            fontSize: '14px',
-                            fontWeight: 'bold',
-                            color: '#ff5500',
-                            marginBottom: '4px'
-                          }}>
-                            SoundCloud Track
-                          </div>
-                          <div style={{
-                            fontSize: '12px',
-                            color: '#94a3b8'
-                          }}>
-                            {isPlaying ? '▶ Now Playing' : '⏸ Paused'}
-                          </div>
-                        </div>
-                        <div style={{
-                          fontSize: '20px',
-                          animation: isPlaying ? 'pulse 1s infinite' : 'none'
-                        }}>
-                          {isPlaying ? '🔊' : '🔇'}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Local Audio Player */}
-                  {!unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && unlockedTracks[currentTrackIndex] && (
-                    <div style={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      borderRadius: '8px',
-                      padding: '15px',
-                      border: '1px solid #444',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{ fontSize: '32px', marginBottom: '10px' }}>💿</div>
-                      <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
-                        Local Audio File
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '5px' }}>
-                        Using browser audio player
-                      </div>
-                    </div>
-                  )}
                 </div>
 
 
@@ -5587,7 +5357,6 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {unlockedTracks.map((track, index) => {
                         const trackName = getTrackNameFromUrl(track);
-                        const isSoundCloud = track.includes('soundcloud.com');
                         const isCurrentlyPlaying = index === currentTrackIndex;
 
                         return (
@@ -5618,7 +5387,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                               minWidth: '24px',
                               textAlign: 'center'
                             }}>
-                              {isSoundCloud ? '🎵' : '💿'}
+                              🎵
                             </div>
                             <div style={{ flex: 1 }}>
                               <div style={{
@@ -5640,20 +5409,18 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                               </div>
                               <div style={{
                                 fontSize: '11px',
-                                color: isSoundCloud ? '#ff6b6b' : '#10b981',
+                                color: '#ff6b6b',
                                 marginTop: '2px'
                               }}>
-                                {isSoundCloud ? 'SoundCloud' : 'Local Audio'}
+                                SoundCloud
                               </div>
                             </div>
-                            {isSoundCloud && (
-                              <div style={{
-                                fontSize: '12px',
-                                color: '#ff6b6b'
-                              }}>
-                                🎧
-                              </div>
-                            )}
+                            <div style={{
+                              fontSize: '12px',
+                              color: '#ff6b6b'
+                            }}>
+                              🎧
+                            </div>
                           </div>
                         );
                       })}
@@ -6330,8 +6097,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       `}
       </style>
 
-      {/* ========== VISIBLE MINI MUSIC PLAYER BAR ========== */}
-      {/* Always visible above navigation when tracks exist */}
+      {/* ========== FULL SOUNDCLOUD WIDGET PLAYER ========== */}
+      {/* Visible full widget above navigation */}
       {unlockedTracks.length > 0 && (
         <div
           style={{
@@ -6339,173 +6106,18 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             bottom: '68px', // Above the 68px navigation bar
             left: '0',
             right: '0',
-            zIndex: 1101, // Above map (1000), below navigation controls
+            zIndex: 1101, // Above map (1000)
             backgroundColor: 'rgba(0, 0, 0, 0.95)',
-            backdropFilter: 'blur(12px)',
             borderTop: '1px solid rgba(138, 43, 226, 0.3)',
-            padding: isMobile ? '8px 12px' : '10px 20px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: isMobile ? '10px' : '15px',
             boxShadow: '0 -4px 20px rgba(0,0,0,0.5)'
           }}
         >
-          {/* Track Thumbnail */}
-          <div
-            style={{
-              width: isMobile ? '40px' : '48px',
-              height: isMobile ? '40px' : '48px',
-              backgroundColor: 'rgba(138, 43, 226, 0.2)',
-              borderRadius: '6px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: isMobile ? '20px' : '24px',
-              flexShrink: 0
-            }}
-          >
-            🎵
-          </div>
-
-          {/* Track Info & Controls */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {/* Track Name */}
-            <div
-              style={{
-                fontSize: isMobile ? '12px' : '13px',
-                fontWeight: 'bold',
-                color: '#8a2be2',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                marginBottom: '4px'
-              }}
-            >
-              {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') 
-                ? 'SoundCloud Track'
-                : 'Local Audio'}
-            </div>
-
-            {/* Playback Controls */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {/* Previous */}
-              <button
-                onClick={playPreviousTrack}
-                disabled={currentTrackIndex === 0}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: currentTrackIndex === 0 ? '#666' : '#8a2be2',
-                  fontSize: '16px',
-                  cursor: currentTrackIndex === 0 ? 'not-allowed' : 'pointer',
-                  padding: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                ⏮️
-              </button>
-
-              {/* Play/Pause */}
-              <button
-                onClick={togglePlay}
-                style={{
-                  background: 'rgba(138, 43, 226, 0.2)',
-                  border: '1px solid rgba(138, 43, 226, 0.4)',
-                  color: '#8a2be2',
-                  width: isMobile ? '32px' : '36px',
-                  height: isMobile ? '32px' : '36px',
-                  borderRadius: '50%',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                {isPlaying ? '⏸️' : '▶️'}
-              </button>
-
-              {/* Next */}
-              <button
-                onClick={playNextTrack}
-                disabled={currentTrackIndex >= unlockedTracks.length - 1}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: currentTrackIndex >= unlockedTracks.length - 1 ? '#666' : '#8a2be2',
-                  fontSize: '16px',
-                  cursor: currentTrackIndex >= unlockedTracks.length - 1 ? 'not-allowed' : 'pointer',
-                  padding: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                ⏭️
-              </button>
-
-              {/* Status Indicator */}
-              <span
-                style={{
-                  fontSize: '11px',
-                  color: isPlaying ? '#10b981' : '#94a3b8',
-                  marginLeft: '8px'
-                }}
-              >
-                {isPlaying ? '▶ Playing' : '⏸ Paused'}
-              </span>
-            </div>
-          </div>
-
-          {/* Expand Button */}
-          <button
-            onClick={() => setShowMusicPanel(!showMusicPanel)}
-            style={{
-              background: showMusicPanel ? 'rgba(138, 43, 226, 0.3)' : 'rgba(138, 43, 226, 0.1)',
-              border: '1px solid rgba(138, 43, 226, 0.3)',
-              color: '#8a2be2',
-              width: isMobile ? '36px' : '40px',
-              height: isMobile ? '36px' : '40px',
-              borderRadius: '8px',
-              fontSize: '16px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0
-            }}
-          >
-            {showMusicPanel ? '▼' : '▲'}
-          </button>
-        </div>
-      )}
-
-      {/* ========== HIDDEN AUDIO IFRAME FOR SOUNDCLOUD ========== */}
-      {/* Loads SoundCloud widget API for actual audio playback */}
-      {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && (
-        <div
-          key="soundcloud-audio-player"
-          style={{
-            position: 'fixed',
-            bottom: '-1000px', // Off-screen but mounted
-            left: '0',
-            width: '1px',
-            height: '1px',
-            overflow: 'hidden',
-            opacity: 0
-          }}
-        >
-          <iframe
-            id="soundcloud-widget"
-            src={`https://w.soundcloud.com/player/?url=${encodeURIComponent(unlockedTracks[currentTrackIndex])}&auto_play=${isPlaying ? 'true' : 'false'}&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false`}
-            width="100%"
-            height="100%"
-            frameBorder="no"
-            scrolling="no"
-            allow="autoplay"
-            title="SoundCloud Audio"
+          <SoundCloudPlayer
+            trackUrl={unlockedTracks[currentTrackIndex]}
+            isPlaying={isPlaying}
+            onTrackEnd={playNextTrack}
+            onError={(err) => console.error('SoundCloud error:', err)}
+            isMobile={isMobile}
           />
         </div>
       )}

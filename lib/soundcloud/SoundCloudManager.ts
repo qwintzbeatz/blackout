@@ -51,7 +51,7 @@ export class SoundCloudManager {
     this.destroyWidget(iframeId);
 
     try {
-      const widget = window.SC.Widget(iframe);
+      const widget = new window.SC.Widget(iframe);
       this.widgets.set(iframeId, widget);
 
       widget.bind(window.SC.Widget.Events.READY, () => {
@@ -154,14 +154,16 @@ export class SoundCloudManager {
 declare global {
   interface Window {
     SC: {
-      Widget: {
-        (iframe: HTMLIFrameElement): any;
+      Widget: new (iframe: HTMLIFrameElement) => any & {
         Events: {
           READY: string;
           PLAY: string;
+          PLAY_PROGRESS: string;
           PAUSE: string;
           FINISH: string;
           ERROR: string;
+          CLICK_DOWNLOAD: string;
+          CLICK_BUY: string;
         };
       };
     };
