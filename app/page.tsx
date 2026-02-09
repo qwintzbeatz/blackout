@@ -5367,7 +5367,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
 {/* Music Panel - Always rendered, dynamic z-index */}
             <div
-              key={`music-panel-${unlockedTracks.length}-${showMusicPanel ? 'visible' : 'hidden'}`}
+              key={`music-panel-${unlockedTracks.length}`}
               style={{
                 ...panelStyle,
                 border: '1px solid #333',
@@ -5430,59 +5430,54 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   flexDirection: 'column',
                   gap: '15px'
                 }}>
-                  {/* SoundCloud Player - Mobile Optimized */}
+                  {/* SoundCloud Track Info (Audio plays in persistent player outside panel) */}
                   {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && (
                     <div style={{
                       backgroundColor: 'rgba(255, 255, 255, 0.05)',
                       borderRadius: '8px',
-                      overflow: 'hidden',
-                      border: '1px solid #444',
-                      minHeight: isMobile ? '100px' : '60px',
-                      position: 'relative' as const,
-                      WebkitOverflowScrolling: 'touch'
+                      padding: '15px',
+                      border: '1px solid #444'
                     }}>
-                      {isSoundCloudLoading ? (
-                        <div style={{ 
-                          padding: isMobile ? '20px' : '30px', 
-                          color: '#cbd5e1', 
-                          fontSize: isMobile ? '11px' : '12px',
-                          textAlign: 'center',
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px'
+                      }}>
+                        <div style={{
+                          width: '48px',
+                          height: '48px',
+                          backgroundColor: 'rgba(255, 85, 0, 0.2)',
+                          borderRadius: '8px',
                           display: 'flex',
-                          flexDirection: 'column',
                           alignItems: 'center',
-                          gap: '10px'
+                          justifyContent: 'center',
+                          fontSize: '24px'
                         }}>
-                          <div style={{ fontSize: isMobile ? '20px' : '24px' }}>⏳</div>
-                          Loading SoundCloud track...
+                          🎵
                         </div>
-                      ) : (
-                        <div style={{ 
-                          position: 'relative', 
-                          width: '100%',
-                          height: iframeHeight,
-                          WebkitTransform: 'translateZ(0)',
-                          transform: 'translateZ(0)'
+                        <div style={{ flex: 1 }}>
+                          <div style={{
+                            fontSize: '14px',
+                            fontWeight: 'bold',
+                            color: '#ff5500',
+                            marginBottom: '4px'
+                          }}>
+                            SoundCloud Track
+                          </div>
+                          <div style={{
+                            fontSize: '12px',
+                            color: '#94a3b8'
+                          }}>
+                            {isPlaying ? '▶ Now Playing' : '⏸ Paused'}
+                          </div>
+                        </div>
+                        <div style={{
+                          fontSize: '20px',
+                          animation: isPlaying ? 'pulse 1s infinite' : 'none'
                         }}>
-                          <iframe
-                            id="soundcloud-music-panel"
-                            src={createSoundCloudIframeUrl(unlockedTracks[currentTrackIndex])}
-                            width="100%"
-                            height={iframeHeight}
-                            frameBorder="no"
-                            scrolling="no"
-                            sandbox="allow-scripts allow-same-origin allow-presentation"
-                            loading="lazy"
-                            style={{ 
-                              border: 'none',
-                              backgroundColor: 'transparent',
-                              width: '100%',
-                              height: '100%'
-                            }}
-                            title="SoundCloud Player"
-                            allow="autoplay; encrypted-media"
-                          />
+                          {isPlaying ? '🔊' : '🔇'}
                         </div>
-                      )}
+                      </div>
                     </div>
                   )}
 
@@ -6275,6 +6270,44 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         }
       `}
       </style>
+
+      {/* ========== PERSISTENT AUDIO PLAYER (Always Mounted) ========== */}
+      {/* Hidden SoundCloud player - continues playing even when panel is closed */}
+      {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && (
+        <div
+          key="persistent-soundcloud-player"
+          style={{
+            position: 'fixed',
+            bottom: '80px',
+            right: '10px',
+            width: isMobile ? '280px' : '350px',
+            height: iframeHeight,
+            zIndex: showMusicPanel ? 1600 : -1, // Behind map when hidden, in front when panel open
+            opacity: showMusicPanel ? 0 : 0, // Always invisible but interactive when needed
+            pointerEvents: showMusicPanel ? 'none' : 'none', // No interaction needed
+            overflow: 'hidden',
+            borderRadius: '8px'
+          }}
+        >
+          <iframe
+            id="persistent-soundcloud-player"
+            src={createSoundCloudIframeUrl(unlockedTracks[currentTrackIndex])}
+            width="100%"
+            height={iframeHeight}
+            frameBorder="no"
+            scrolling="no"
+            sandbox="allow-scripts allow-same-origin allow-presentation"
+            style={{
+              border: 'none',
+              backgroundColor: 'transparent',
+              width: '100%',
+              height: '100%'
+            }}
+            title="Persistent SoundCloud Player"
+            allow="autoplay; encrypted-media"
+          />
+        </div>
+      )}
     </div>
     </StoryManagerProvider>
   );
