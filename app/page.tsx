@@ -564,6 +564,10 @@ const HomeComponent = () => {
   const [showMapPanel, setShowMapPanel] = useState(false);
   const [showMusicPanel, setShowMusicPanel] = useState(false);
 
+  // Mobile detection state
+  const [isMobile, setIsMobile] = useState(false);
+  const [iframeHeight, setIframeHeight] = useState(166);
+
   
   // 🆕 Mission notification state
   const [missionNotification, setMissionNotification] = useState<{
@@ -696,6 +700,36 @@ const {
       });
     };
   }, [crewDetectionEnabled, userProfile?.crewId]);
+
+  // ========== MOBILE DETECTION & RESPONSIVE IFRAME ==========
+  useEffect(() => {
+    const checkMobile = () => {
+      const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                             window.innerWidth < 768;
+      setIsMobile(isMobileDevice);
+      
+      // Set iframe height based on screen size
+      if (window.innerWidth < 480) {
+        setIframeHeight(120); // Small phones
+      } else if (window.innerWidth < 768) {
+        setIframeHeight(140); // Tablets/large phones
+      } else {
+        setIframeHeight(166); // Desktop
+      }
+    };
+    
+    // Check on mount
+    checkMobile();
+    
+    // Listen for resize and orientation changes
+    window.addEventListener('resize', checkMobile);
+    window.addEventListener('orientationchange', checkMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('orientationchange', checkMobile);
+    };
+  }, []);
 
   // Initialize selected marker color from user profile on mount
   useEffect(() => {
@@ -5333,19 +5367,22 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
 {/* Music Panel - Always rendered, dynamic z-index */}
             <div
-              key={`music-panel-${unlockedTracks.length}`}
+              key={`music-panel-${unlockedTracks.length}-${showMusicPanel ? 'visible' : 'hidden'}`}
               style={{
                 ...panelStyle,
                 border: '1px solid #333',
                 display: 'flex',
                 flexDirection: 'column',
                 animation: showMusicPanel ? 'slideInRight 0.3s ease-out' : 'none',
-                minWidth: '350px',
+                minWidth: isMobile ? '280px' : '350px',
+                maxWidth: isMobile ? '95vw' : '400px',
                 position: 'absolute' as const,
                 zIndex: showMusicPanel ? 1500 : 900,
                 opacity: showMusicPanel ? 1 : 0,
                 pointerEvents: showMusicPanel ? 'auto' : 'none',
-                transition: 'opacity 0.3s ease, z-index 0s'
+                transition: 'opacity 0.3s ease, z-index 0s',
+                WebkitOverflowScrolling: 'touch',
+                touchAction: 'auto'
               }}>
                 <div style={{
                   display: 'flex',
@@ -5393,45 +5430,56 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   flexDirection: 'column',
                   gap: '15px'
                 }}>
-                  {/* SoundCloud Player */}
+                  {/* SoundCloud Player - Mobile Optimized */}
                   {unlockedTracks[currentTrackIndex]?.includes('soundcloud.com') && (
                     <div style={{
                       backgroundColor: 'rgba(255, 255, 255, 0.05)',
                       borderRadius: '8px',
                       overflow: 'hidden',
                       border: '1px solid #444',
-                      minHeight: '60px',
-                      position: 'relative' as const
+                      minHeight: isMobile ? '100px' : '60px',
+                      position: 'relative' as const,
+                      WebkitOverflowScrolling: 'touch'
                     }}>
                       {isSoundCloudLoading ? (
                         <div style={{ 
-                          padding: '30px', 
+                          padding: isMobile ? '20px' : '30px', 
                           color: '#cbd5e1', 
-                          fontSize: '12px',
+                          fontSize: isMobile ? '11px' : '12px',
                           textAlign: 'center',
                           display: 'flex',
                           flexDirection: 'column',
                           alignItems: 'center',
                           gap: '10px'
                         }}>
-                          <div style={{ fontSize: '24px' }}>⏳</div>
+                          <div style={{ fontSize: isMobile ? '20px' : '24px' }}>⏳</div>
                           Loading SoundCloud track...
                         </div>
                       ) : (
-                        <div style={{ position: 'relative', width: '100%' }}>
+                        <div style={{ 
+                          position: 'relative', 
+                          width: '100%',
+                          height: iframeHeight,
+                          WebkitTransform: 'translateZ(0)',
+                          transform: 'translateZ(0)'
+                        }}>
                           <iframe
                             id="soundcloud-music-panel"
                             src={createSoundCloudIframeUrl(unlockedTracks[currentTrackIndex])}
                             width="100%"
-                            height="166"
+                            height={iframeHeight}
                             frameBorder="no"
                             scrolling="no"
+                            sandbox="allow-scripts allow-same-origin allow-presentation"
+                            loading="lazy"
                             style={{ 
                               border: 'none',
-                              backgroundColor: 'transparent'
+                              backgroundColor: 'transparent',
+                              width: '100%',
+                              height: '100%'
                             }}
                             title="SoundCloud Player"
-                            allow="autoplay"
+                            allow="autoplay; encrypted-media"
                           />
                         </div>
                       )}

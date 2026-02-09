@@ -28,9 +28,16 @@ html, body {
   overflow: hidden;
 }
 
-/* Disable zoom */
+/* Disable zoom - but allow auto for iframes */
 * {
   touch-action: manipulation;
+}
+
+/* Override for SoundCloud iframe to ensure mobile touch works */
+iframe[id*="soundcloud"] {
+  touch-action: auto !important;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
 }
 
 /* App container for fixed positioning */
