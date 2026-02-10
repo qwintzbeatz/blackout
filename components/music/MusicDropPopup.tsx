@@ -1,60 +1,35 @@
-//this is the music drop leaflet i
-'use client';
+// Full-Screen SoundMap Card - Music Drop Popup
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Drop, Comment } from '@/lib/types/blackout';
-import { User as FirebaseUser } from 'firebase/auth';
-import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
-import { getTrackNameFromUrl, getTrackPlatform, getTimeAgo } from '@/lib/utils/dropHelpers';
+import React, { useState, useEffect, useRef } from "react";
+import { Drop } from "@/lib/types/blackout";
+import { User as FirebaseUser } from "firebase/auth";
+import { getTrackNameFromUrl, getTrackPlatform, isSpotifyUrl, getSpotifyEmbedUrl } from "@/lib/utils/dropHelpers";
 
 interface MusicDropPopupProps {
   drop: Drop;
   user: FirebaseUser | null;
   onLikeUpdate: (dropId: string, newLikes: string[]) => void;
+  onClose?: () => void;
 }
 
-interface SoundCloudWaveformProps {
-  isActive: boolean;
-}
-
-const SoundCloudWaveform: React.FC<SoundCloudWaveformProps> = ({ isActive }) => {
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '2px',
-      height: '60px',
-      padding: '0 8px'
-    }}>
-      {[...Array(20)].map((_, i) => (
-        <div
-          key={i}
-          style={{
-            width: '3px',
-            height: Math.random() * (isActive ? 40 : 20) + 10,
-            backgroundColor: isActive ? '#ff5500' : '#e0e0e0',
-            borderRadius: '2px',
-            transition: 'all 0.3s ease',
-            opacity: isActive ? 0.8 : 0.3,
-            transform: `scaleY(${isActive ? 1 : 0.5})`,
-            transformOrigin: 'bottom'
-          }}
-        />
-      ))}
-    </div>
-  );
-};
-
-const MusicDropPopup: React.FC<MusicDropPopupProps> = ({
-  drop,
-  user,
-  onLikeUpdate
-}) => {
+const MusicDropPopup: React.FC<MusicDropPopupProps> = ({ drop, user, onLikeUpdate, onClose }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(drop.likes?.length || 0);
-  const [showComments, setShowComments] = useState(false);
-  const [comment, setComment] = useState('');
+  const [embedUrl, setEmbedUrl] = useState<string>("");
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  
+  const isSpotify = isSpotifyUrl(drop.trackUrl || "");
+  const trackPlatform = getTrackPlatform(drop.trackUrl || "");
+  const trackName = getTrackNameFromUrl(drop.trackUrl || "");
+  const accentColor = isSpotify ? "#1DB954" : "#ff5500";
+
+  useEffect(() => {
+    if (isSpotify && drop.trackUrl) {
+      setEmbedUrl(getSpotifyEmbedUrl(drop.trackUrl));
+    }
+  }, [isSpotify, drop.trackUrl]);
 
   useEffect(() => {
     if (drop.likes && user) {
@@ -65,410 +40,193 @@ const MusicDropPopup: React.FC<MusicDropPopupProps> = ({
 
   const handleLike = async () => {
     if (!user) return;
-
-    const newLikes = isLiked 
-      ? drop.likes?.filter(id => id !== user.uid) || []
-      : [...(drop.likes || []), user.uid];
-
-    await onLikeUpdate(drop.firestoreId || drop.id || '', newLikes);
+    const newLikes = isLiked ? drop.likes?.filter((id) => id !== user.uid) || [] : [...(drop.likes || []), user.uid];
+    await onLikeUpdate(drop.firestoreId || drop.id || "", newLikes);
     setIsLiked(!isLiked);
     setLikeCount(newLikes.length);
   };
 
-  const handleComment = async () => {
-    if (!user || !comment.trim()) return;
+  const handlePlayPause = () => {
+    if (isSpotify && iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage({ command: isPlaying ? "pause" : "play" }, "*");
+    }
+    setIsPlaying(!isPlaying);
+  };
 
-    // Add comment logic here (implementation needed)
-    // TODO: Implement comment system when backend supports it
-    console.log('Adding comment:', comment);
-    setComment('');
-    setShowComments(false);
+  const handleClose = () => {
+    if (onClose) onClose();
   };
 
   const formatTimeAgo = (timestamp: Date) => {
     const now = new Date();
     const diff = now.getTime() - timestamp.getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    
-    if (days > 0) {
-      return `${days} day${days > 1 ? 's' : ''} ago`;
-    }
-    
+    if (days > 0) return `${days}d ago`;
     const hours = Math.floor(diff / (1000 * 60 * 60));
-    if (hours > 0) {
-      return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    }
-    
+    if (hours > 0) return `${hours}h ago`;
     const minutes = Math.floor(diff / (1000 * 60));
-    return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+    return `${minutes}m ago`;
   };
 
   return (
-    <div
-      style={{
-        position: 'relative',
-        zIndex: 10000,
-        pointerEvents: 'auto',
-        minWidth: '280px',
-        maxWidth: '280px'
-      }}
-    >
-      {/* Main Card */}
-      <div
-        style={{
-          width: '280px',
-          background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)',
-          borderRadius: '12px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          overflow: 'hidden',
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            padding: '16px 20px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-            background: 'rgba(255, 255, 255, 0.02)'
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px'
-            }}
-          >
-            {/* Creator Avatar */}
+    <div style={{
+      position: "fixed",
+      inset: 0,
+      zIndex: 9999,
+      pointerEvents: "auto",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+    }}>
+      <div style={{
+        position: "absolute",
+        inset: 0,
+        background: "rgba(0, 0, 0, 0.95)",
+        backdropFilter: "blur(20px)",
+      }} onClick={handleClose} />
+      
+      <div style={{
+        position: "relative",
+        width: "90vw",
+        maxWidth: "450px",
+        height: "auto",
+        maxHeight: "90vh",
+        background: "linear-gradient(180deg, #1a1a2e 0%, #0f0f23 100%)",
+        borderRadius: "24px",
+        boxShadow: "0 25px 80px rgba(0, 0, 0, 0.8)",
+        border: "1px solid " + accentColor + "40",
+        overflow: "hidden",
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        display: "flex",
+        flexDirection: "column",
+        animation: "popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
+      }}>
+        <button onClick={handleClose} style={{
+          position: "absolute",
+          top: "16px",
+          right: "16px",
+          width: "40px",
+          height: "40px",
+          borderRadius: "50%",
+          background: "rgba(255, 255, 255, 0.1)",
+          border: "1px solid rgba(255, 255, 255, 0.2)",
+          color: "#fff",
+          fontSize: "24px",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 10,
+        }}>
+          ×
+        </button>
+
+        <div style={{ padding: "28px 24px 20px", background: "linear-gradient(135deg, " + accentColor + "20 0%, transparent 100%)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+            <div style={{
+              padding: "6px 12px",
+              background: accentColor + "25",
+              border: "1px solid " + accentColor + "50",
+              borderRadius: "20px",
+              fontSize: "11px",
+              fontWeight: "700",
+              color: accentColor,
+              textTransform: "uppercase",
+            }}>
+              🎵 {trackPlatform || "Track"}
+            </div>
+            <span style={{ fontSize: "12px", color: "#64748b" }}>{formatTimeAgo(drop.timestamp)}</span>
+          </div>
+
+          <h2 style={{ fontSize: "24px", fontWeight: "700", color: "#fff", margin: "0 0 12px", lineHeight: 1.2 }}>{trackName}</h2>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             {drop.userProfilePic ? (
-              <img
-                src={drop.userProfilePic}
-                alt={drop.username}
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  border: '2px solid #ff5500'
-                }}
-              />
+              <img src={drop.userProfilePic} alt={drop.username} style={{ width: "28px", height: "28px", borderRadius: "50%", border: "2px solid " + accentColor, objectFit: "cover" }} />
             ) : (
-              <div
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  backgroundColor: '#ff5500',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  color: 'white'
-                }}
-              >
-                {(drop.username || 'anonymous')[0]?.toUpperCase()}
+              <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: accentColor, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: "bold", color: "white" }}>
+                {(drop.username || "a")[0]?.toUpperCase()}
               </div>
             )}
-
-            {/* Track Info */}
-            <div style={{ flex: 1 }}>
-              <div
-                style={{
-                  fontSize: '11px',
-                  color: '#999',
-                  marginBottom: '4px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '1px'
-                }}
-              >
-                MUSIC DROP
-              </div>
-              <div
-                style={{
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: '#fff',
-                  lineHeight: '1.2'
-                }}
-              >
-                {getTrackNameFromUrl(drop.trackUrl || '')}
-              </div>
-              <div
-                style={{
-                  fontSize: '12px',
-                  color: '#999',
-                  marginTop: '2px'
-                }}
-              >
-                by {drop.username}
-              </div>
-            </div>
+            <span style={{ fontSize: "14px", color: "#94a3b8" }}>{drop.username}</span>
           </div>
         </div>
 
-        {/* Album Art/Media */}
-        {drop.photoUrl && (
-          <div
-            style={{
-              height: '180px',
-              background: `url(${drop.photoUrl}) center/cover`,
-              backgroundSize: 'cover',
-              position: 'relative'
-            }}
-          >
-            {/* Overlay Gradient */}
-            <div
-              style={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: '60%',
-                background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%)'
-              }}
-            />
-          </div>
-        )}
-
-        {/* Track URL Preview */}
-        {drop.trackUrl && (
-          <div style={{ padding: '16px 20px' }}>
-            <div
-              style={{
-                backgroundColor: '#ff5500',
-                borderRadius: '8px',
-                padding: '12px',
-                marginBottom: '12px'
-              }}
-            >
-              <div
-                style={{
-                  color: 'white',
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  marginBottom: '8px'
-                }}
-              >
-                🎵 {getTrackPlatform(drop.trackUrl || '')} Track
-              </div>
-              <div
-                style={{
-                  color: '#ffcc00',
-                  fontSize: '11px',
-                  wordBreak: 'break-all'
-                }}
-              >
-                {drop.trackUrl || ''}
+        <div style={{ padding: "20px 24px", flex: 1 }}>
+          {drop.photoUrl ? (
+            <div style={{ width: "100%", height: "180px", background: "url(" + drop.photoUrl + ") center/cover", borderRadius: "16px", position: "relative", boxShadow: "0 10px 30px rgba(0, 0, 0, 0.4)" }}>
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(26, 26, 46, 0.95) 0%, transparent 50%)", borderRadius: "16px" }} />
+              <div style={{ position: "absolute", bottom: "12px", left: "16px" }}>
+                <div style={{ fontSize: "16px", fontWeight: "700", color: "#fff" }}>{trackName}</div>
               </div>
             </div>
-
-            {/* SoundCloud Waveform */}
-            <div style={{ marginBottom: '12px' }}>
-              <SoundCloudWaveform isActive={isPlaying} />
+          ) : isSpotify && embedUrl ? (
+            <div style={{ width: "100%", borderRadius: "12px", overflow: "hidden", background: "#191414" }}>
+              <iframe ref={iframeRef} src={embedUrl} width="100%" height="80" style={{ border: "none" }} allow="autoplay; clipboard-write; encrypted-media; picture-in-picture" allowFullScreen title="Spotify Player" />
             </div>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div
-          style={{
-            padding: '16px 20px',
-            display: 'flex',
-            gap: '12px',
-            alignItems: 'center',
-            borderTop: '1px solid rgba(255, 255, 255, 0.1)'
-          }}
-        >
-          {/* Play Button */}
-          <button
-            onClick={() => {
-              setIsPlaying(!isPlaying);
-              if (drop.trackUrl) {
-                window.open(drop.trackUrl, '_blank');
-              }
-            }}
-            style={{
-              flex: 1,
-              padding: '12px',
-              backgroundColor: isPlaying ? '#ff5500' : '#fff',
-              color: isPlaying ? '#fff' : '#000',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px'
-            }}
-          >
-            {isPlaying ? '⏸' : '▶'}
-            {isPlaying ? 'Pause' : 'Play'}
-          </button>
-
-          {/* Like Button */}
-          <button
-            onClick={handleLike}
-            disabled={!user}
-            style={{
-              padding: '12px 16px',
-              backgroundColor: isLiked ? '#ff5500' : 'transparent',
-              color: isLiked ? '#fff' : '#999',
-              border: isLiked ? 'none' : '1px solid #333',
-              borderRadius: '8px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: user ? 'pointer' : 'not-allowed',
-              transition: 'all 0.2s ease',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            {isLiked ? '❤️' : '🤍'}
-            {likeCount}
-          </button>
+          ) : (
+            <div style={{ width: "100%", height: "120px", background: "linear-gradient(135deg, " + accentColor + "20 0%, rgba(138, 43, 226, 0.1) 100%)", borderRadius: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "40px", marginBottom: "8px" }}>🎵</div>
+                <div style={{ fontSize: "14px", fontWeight: "600", color: "#fff" }}>{trackName}</div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Timestamp */}
-        <div
-          style={{
-            padding: '0 20px 16px',
-            borderTop: '1px solid rgba(255, 255, 255, 0.1)'
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '12px',
-              color: '#999'
-            }}
-          >
-            <span>Dropped {formatTimeAgo(drop.timestamp)}</span>
-            {drop.lat && drop.lng && (
-              <span>• 📍 {drop.lat.toFixed(4)}, {drop.lng.toFixed(4)}</span>
+        <div style={{ padding: "20px 24px 28px", display: "flex", alignItems: "center", gap: "16px" }}>
+          <button onClick={handlePlayPause} style={{
+            width: "64px",
+            height: "64px",
+            borderRadius: "50%",
+            background: "linear-gradient(135deg, " + accentColor + " 0%, " + (isSpotify ? "#1ed760" : "#ff6b00") + " 100%)",
+            border: "none",
+            color: "#fff",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 6px 25px " + accentColor + "60",
+            flexShrink: 0,
+          }}>
+            {isPlaying ? (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
+            ) : (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
             )}
+          </button>
+
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: "14px", fontWeight: "600", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{trackName}</div>
+            <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>{drop.username}</div>
           </div>
+
+          <button onClick={handleLike} disabled={!user} style={{
+            width: "48px",
+            height: "48px",
+            borderRadius: "12px",
+            background: isLiked ? "rgba(239, 68, 68, 0.2)" : "rgba(255, 255, 255, 0.05)",
+            border: isLiked ? "1px solid rgba(239, 68, 68, 0.5)" : "1px solid rgba(255, 255, 255, 0.1)",
+            color: isLiked ? "#ef4444" : "#94a3b8",
+            cursor: user ? "pointer" : "not-allowed",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill={isLiked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+          </button>
+          <span style={{ fontSize: "13px", color: isLiked ? "#ef4444" : "#64748b", fontWeight: "600" }}>{likeCount}</span>
         </div>
-
-        {/* Comments Section */}
-        {showComments && (
-          <div
-            style={{
-              borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-              backgroundColor: 'rgba(255, 255, 255, 0.02)'
-            }}
-          >
-            <div style={{ padding: '16px 20px' }}>
-              <div style={{ fontSize: '12px', color: '#999', marginBottom: '12px' }}>
-                Comments ({drop.comments?.length || 0})
-              </div>
-              
-              {/* Comment Input */}
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                <input
-                  type="text"
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder="Add a comment..."
-                  style={{
-                    flex: 1,
-                    padding: '10px',
-                    backgroundColor: '#2a2a2a',
-                    border: '1px solid #333',
-                    borderRadius: '6px',
-                    color: '#fff',
-                    fontSize: '12px',
-                    outline: 'none'
-                  }}
-                />
-                <button
-                  onClick={handleComment}
-                  style={{
-                    padding: '10px 16px',
-                    backgroundColor: '#ff5500',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Post
-                </button>
-              </div>
-
-              {/* Existing Comments */}
-              {drop.comments?.map((comment: Comment, index: number) => (
-                <div
-                  key={comment.id || index}
-                  style={{
-                    padding: '12px',
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                    fontSize: '12px'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <div
-                      style={{
-                        width: '24px',
-                        height: '24px',
-                        borderRadius: '50%',
-                        backgroundColor: '#333',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '10px',
-                        fontWeight: 'bold',
-                        color: '#fff'
-                      }}
-                    >
-                      {comment.username[0]?.toUpperCase()}
-                    </div>
-                    <div>
-                      <div style={{ color: '#999', fontSize: '10px', marginBottom: '2px' }}>
-                        {comment.username}
-                      </div>
-                      <div style={{ color: '#fff', lineHeight: '1.4' }}>
-                        {comment.text}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ color: '#999', fontSize: '10px' }}>
-                    {formatTimeAgo(comment.timestamp)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
-
-      {/* Bottom Bar */}
-      <div
-        style={{
-          height: '4px',
-          background: 'linear-gradient(90deg, #ff5500 0%, #ff6b00 50%, #ff8800 100%)',
-          position: 'relative'
-        }}
-      >
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '0',
-            left: '0',
-            right: '0',
-            height: '2px',
-            background: 'rgba(255, 255, 255, 0.2)'
-          }}
-        />
-      </div>
+      <style>{`
+        @keyframes popIn {
+          0% { transform: scale(0.9); opacity: 0; }
+          70% { transform: scale(1.02); }
+          100% { transform: scale(1); opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 };

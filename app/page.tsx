@@ -68,6 +68,7 @@ import ErrorTest from '@/components/ui/ErrorTest';
 import ProfileSetupSticker from '@/components/ProfileSetupSticker';
 import { SurfaceGraffitiSelector } from '@/components/ui/SurfaceGraffitiSelector';
 import { RepNotification } from '@/components/ui/RepNotification';
+import SongUnlockModal from '@/components/ui/SongUnlockModal';
 import { SPOTIFY_TRACKS, UNLOCKABLE_TRACKS, DEFAULT_TRACK, isSpotifyUrl, getTrackName, getSpotifyTrackName } from '@/constants/all_tracks';
 
 // Helper to get a random starting track
@@ -564,6 +565,17 @@ const HomeComponent = () => {
   // Crew selection state
   const [selectedCrew, setSelectedCrew] = useState<CrewId | ''>('');
   const [crewChoice, setCrewChoice] = useState<'crew' | 'solo'>('crew');
+  
+  // 🆕 Selected Music Drop for full-screen modal
+  const [selectedMusicDrop, setSelectedMusicDrop] = useState<Drop | null>(null);
+  
+  // 🆕 Song Unlock Modal state
+  const [songUnlockModal, setSongUnlockModal] = useState<{
+    isOpen: boolean;
+    trackUrl: string;
+    trackName: string;
+    source: string;
+  } | null>(null);
   
   // ========== PERFORMANCE SETTINGS ==========
   const [crewDetectionEnabled, setCrewDetectionEnabled] = useState(true);
@@ -1599,16 +1611,27 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
         const trackUnlocked = newTracks.length > currentTracks.length;
         const unlockedTrackName = trackUnlocked ? getTrackNameFromUrl(newTracks[newTracks.length - 1]) : '';
+        const unlockedTrackUrl = trackUnlocked ? newTracks[newTracks.length - 1] : '';
 
-        const message = usePhotoLocation
-          ? trackUnlocked
-            ? "🎵 NEW TRACK UNLOCKED! 🎵\n\n" + unlockedTrackName + "\n\n📍 GPS Photo Drop Placed!\n+" + repEarned + " REP (GPS Bonus!)\nNew Rank: " + newRank
-            : "📍 GPS Photo Drop Placed!\n\n+" + repEarned + " REP (GPS Bonus!)\nNew Rank: " + newRank
-          : trackUnlocked
-            ? "🎵 NEW TRACK UNLOCKED! 🎵\n\n" + unlockedTrackName + "\n\n📸 Photo Drop Placed!\n+" + repEarned + " REP\nNew Rank: " + newRank
-            : "📸 Photo Drop Placed!\n\n+" + repEarned + " REP\nNew Rank: " + newRank;
+        if (trackUnlocked) {
+          // Show full-screen celebration modal
+          setSongUnlockModal({
+            isOpen: true,
+            trackUrl: unlockedTrackUrl,
+            trackName: unlockedTrackName,
+            source: 'GPS PHOTO DROP'
+          });
+        }
 
-        alert(message);
+        const trackUnlockedMessage = trackUnlocked 
+          ? `🎵 NEW TRACK UNLOCKED! 🎵\n\n${unlockedTrackName}`
+          : null;
+
+        setRepNotification({
+          show: true,
+          amount: repEarned,
+          message: trackUnlockedMessage || `📸 Photo Drop Placed! +${repEarned} REP`
+        });
 
         // Center map on the drop location
         if (mapRef.current) {
@@ -1692,6 +1715,17 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
         const trackUnlocked = newTracks.length > currentTracks.length;
         const unlockedTrackName = trackUnlocked ? getTrackNameFromUrl(newTracks[newTracks.length - 1]) : '';
+        const unlockedTrackUrl = trackUnlocked ? newTracks[newTracks.length - 1] : '';
+
+        if (trackUnlocked) {
+          // Show full-screen celebration modal
+          setSongUnlockModal({
+            isOpen: true,
+            trackUrl: unlockedTrackUrl,
+            trackName: unlockedTrackName,
+            source: 'MARKER DROP'
+          });
+        }
 
         const notificationMessage = trackUnlocked
           ? `🎵 ${unlockedTrackName} Unlocked! 🎵\n${selectedMarkerType} marker placed!`
@@ -2601,6 +2635,17 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           onClose={() => setRepNotification(null)}
         />
 
+        {/* 🎵 Song Unlock Modal - Full screen celebration when unlocking tracks */}
+        {songUnlockModal && (
+          <SongUnlockModal
+            trackUrl={songUnlockModal.trackUrl}
+            trackName={songUnlockModal.trackName}
+            isOpen={songUnlockModal.isOpen}
+            onClose={() => setSongUnlockModal(null)}
+            unlockSource={songUnlockModal.source}
+          />
+        )}
+
       {/* Top-Left Logo - Changes color based on day/night */}
       <div style={{
         position: 'fixed',
@@ -3206,23 +3251,33 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               key={drop.id || drop.firestoreId}
               position={[drop.lat, drop.lng]}
               icon={musicIcon}
-            >
-              <Popup>
-                <MusicDropPopup
-                  drop={drop}
-                  user={user}
-                  onLikeUpdate={(dropId: string, newLikes: string[]) => {
-                    setDrops(prev =>
-                      prev.map((d: any) =>
-                        d.firestoreId === dropId ? { ...d, likes: newLikes } : d
-                      )
-                    );
-                  }}
-                />
-              </Popup>
-            </Marker>
+              eventHandlers={{
+                click: () => {
+                  setSelectedMusicDrop(drop);
+                  if (mapRef.current) {
+                    mapRef.current.closePopup();
+                  }
+                }
+              }}
+            />
           );
         })}
+
+        {/* Full-Screen Music Drop Modal */}
+        {selectedMusicDrop && (
+          <MusicDropPopup
+            drop={selectedMusicDrop}
+            user={user}
+            onLikeUpdate={(dropId: string, newLikes: string[]) => {
+              setDrops(prev =>
+                prev.map((d: any) =>
+                  d.firestoreId === dropId ? { ...d, likes: newLikes } : d
+                )
+              );
+            }}
+            onClose={() => setSelectedMusicDrop(null)}
+          />
+        )}
 
         {/* Marker drops (no photo, no track) */}
         {drops.filter(drop => !drop.photoUrl && !drop.trackUrl).map((drop) => {

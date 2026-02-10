@@ -35,7 +35,14 @@ export const getMapLink = (lat: number, lng: number): string => {
   return `https://www.google.com/maps?q=${lat},${lng}`;
 };
 
-// Track utilities
+// Track utilities - Spotify
+const SPOTIFY_TRACK_NAMES: Record<string, string> = {
+  '5sICkBXVmaCQk5aISGR3x1': 'Dr Dre - The Next Episode',
+  '0GjEhVFGZW8afUYGChu3Rr': 'Snoop Dogg - Drop It Like It\'s Hot',
+  '4cOdK2wGLETKBW3PvgPWqT': 'Eminem - Lose Yourself',
+  '7l1Me2K9rTz9b8p8s4jjJ2': '50 Cent - In Da Club',
+};
+
 export const getTrackNameFromUrl = (url: string): string => {
   if (url === 'blackout-classic.mp3') return 'Blackout (Default)';
   if (url.includes('soundcloud.com')) {
@@ -45,14 +52,33 @@ export const getTrackNameFromUrl = (url: string): string => {
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');
   }
+  if (url.includes('open.spotify.com/track/')) {
+    const match = url.match(/track\/([a-zA-Z0-9]+)/);
+    if (match && SPOTIFY_TRACK_NAMES[match[1]]) {
+      return SPOTIFY_TRACK_NAMES[match[1]];
+    }
+  }
   return 'Unknown Track';
 };
 
 export const getTrackPlatform = (url: string): string => {
   if (url.includes('soundcloud.com')) return 'SoundCloud';
+  if (url.includes('spotify.com')) return 'Spotify';
   if (url.includes('bandcamp.com')) return 'Bandcamp';
   if (url.includes('youtube.com')) return 'YouTube';
   return 'External';
+};
+
+export const isSpotifyUrl = (url: string): boolean => {
+  return url.includes('open.spotify.com/track/');
+};
+
+export const getSpotifyEmbedUrl = (url: string): string => {
+  const match = url.match(/spotify\.com\/track\/([a-zA-Z0-9]+)/);
+  if (match) {
+    return `https://open.spotify.com/embed/track/${match[1]}?utm_source=generator&theme=0`;
+  }
+  return '';
 };
 
 // Drop type detection
