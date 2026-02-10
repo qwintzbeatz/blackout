@@ -62,6 +62,13 @@ declare global {
   }
 }
 
+// Mobile device detection
+const isMobileDevice = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+         window.innerWidth < 768;
+};
+
 // Custom hook for SoundCloud functionality
 const useSoundCloud = (): SoundCloudManager => {
   const widgetsRef = useRef<Record<string, SoundCloudWidget>>({});
@@ -87,6 +94,9 @@ const useSoundCloud = (): SoundCloudManager => {
     }
 
     setIsLoading(true);
+    
+    // Mobile-specific timeout
+    const MOBILE_TIMEOUT = isMobileDevice() ? 15000 : 5000; // 15 seconds for mobile, 5 for desktop
     
     // Create a new promise for initialization
     initPromiseRef.current = new Promise((resolve) => {
@@ -116,7 +126,7 @@ const useSoundCloud = (): SoundCloudManager => {
           }
         }, 100);
 
-        // Timeout after 5 seconds
+        // Extended timeout for mobile networks
         setTimeout(() => {
           clearInterval(checkInterval);
           if (!window.SC || !window.SC.Widget) {
@@ -125,7 +135,7 @@ const useSoundCloud = (): SoundCloudManager => {
             initPromiseRef.current = null;
             resolve(false);
           }
-        }, 5000);
+        }, MOBILE_TIMEOUT);
       };
       
       script.onerror = () => {

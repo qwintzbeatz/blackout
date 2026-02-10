@@ -34,16 +34,42 @@ export const getSoundCloudArtwork = (trackUrl: string): string => {
 export const getSoundCloudEmbedUrl = (trackUrl: string): string => {
   const params = new URLSearchParams({
     url: trackUrl,
-    color: 'ff5500',
     auto_play: 'false',
     hide_related: 'true',
     show_comments: 'false',
-    show_user: 'false',
+    show_user: 'true',
     show_reposts: 'false',
     show_teaser: 'false',
-    visual: 'true'
+    visual: 'false',
+    buying: 'false',
+    sharing: 'false',
+    download: 'false',
+    show_playcount: 'false',
+    color: 'ff5500'
   });
   return `https://w.soundcloud.com/player/?${params.toString()}`;
+};
+
+// Get track metadata using oEmbed (no authentication required)
+export const getTrackMetadata = async (trackUrl: string): Promise<{ title: string; artwork?: string } | null> => {
+  try {
+    const oEmbedUrl = `https://soundcloud.com/oembed.json?url=${encodeURIComponent(trackUrl)}&format=json`;
+    const response = await fetch(oEmbedUrl);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch metadata: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    return {
+      title: data.title || 'Unknown Track',
+      artwork: data.thumbnail_url
+    };
+  } catch (error) {
+    console.error('Error fetching track metadata:', error);
+    return null;
+  }
 };
 
 // Helper for fallback gradient colors

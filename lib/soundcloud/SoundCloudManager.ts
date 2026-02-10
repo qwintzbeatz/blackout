@@ -54,13 +54,13 @@ export class SoundCloudManager {
       const widget = new window.SC.Widget(iframe);
       this.widgets.set(iframeId, widget);
 
-      widget.bind(window.SC.Widget.Events.READY, () => {
+      widget.bind('ready', () => {
         widget.setVolume(Math.round((options.volume || 0.5) * 100));
         if (options.autoplay) widget.play();
       });
 
-      widget.bind(window.SC.Widget.Events.FINISH, options.onFinish || (() => {}));
-      widget.bind(window.SC.Widget.Events.ERROR, options.onError || ((e: any) => 
+      widget.bind('finish', options.onFinish || (() => {}));
+      widget.bind('error', options.onError || ((e: any) => 
         console.error('SoundCloud error:', e)
       ));
 
@@ -76,11 +76,11 @@ export class SoundCloudManager {
     if (widget) {
       try {
         if (typeof widget.unbind === 'function' && window.SC) {
-          widget.unbind(window.SC.Widget.Events.READY);
-          widget.unbind(window.SC.Widget.Events.PLAY);
-          widget.unbind(window.SC.Widget.Events.PAUSE);
-          widget.unbind(window.SC.Widget.Events.FINISH);
-          widget.unbind(window.SC.Widget.Events.ERROR);
+          widget.unbind('ready');
+          widget.unbind('play');
+          widget.unbind('pause');
+          widget.unbind('finish');
+          widget.unbind('error');
         }
         if (typeof widget.destroy === 'function') {
           widget.destroy();
@@ -151,21 +151,3 @@ export class SoundCloudManager {
   }
 }
 
-declare global {
-  interface Window {
-    SC: {
-      Widget: new (iframe: HTMLIFrameElement) => any & {
-        Events: {
-          READY: string;
-          PLAY: string;
-          PLAY_PROGRESS: string;
-          PAUSE: string;
-          FINISH: string;
-          ERROR: string;
-          CLICK_DOWNLOAD: string;
-          CLICK_BUY: string;
-        };
-      };
-    };
-  }
-}

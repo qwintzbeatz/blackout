@@ -34,10 +34,20 @@ html, body {
 }
 
 /* Override for SoundCloud iframe to ensure mobile touch works */
-iframe[id*="soundcloud"] {
+iframe[src*="soundcloud.com"],
+iframe[src*="w.soundcloud.com"],
+iframe[title="SoundCloud Player"] {
   touch-action: auto !important;
   -webkit-transform: translateZ(0);
   transform: translateZ(0);
+  -webkit-touch-callout: default;
+  -webkit-user-select: none;
+  pointer-events: auto !important;
+}
+
+/* Remove manipulation from other elements but keep for SoundCloud */
+*:not(iframe):not([src*="soundcloud.com"]):not([src*="w.soundcloud.com"]) {
+  touch-action: manipulation;
 }
 
 /* App container for fixed positioning */

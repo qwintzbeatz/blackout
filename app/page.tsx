@@ -58,7 +58,7 @@ import { useFirebaseAuth } from '@/hooks/useFirebaseAuth';
 import { useMarkers } from '@/hooks/useMarkers';
 import { PerformanceSettingsPanel } from '@/src/components/ui/PerformanceSettingsPanel';
 import { CrewId } from '@/constants/markers';
-import SoundCloudPlayer from '@/components/music/SoundCloudPlayer';
+import SpotifyPlayer from '@/components/music/SpotifyPlayer';
 import { CREWS } from '@/data/crews';
 import { useGPSTracker } from '@/hooks/useGPSTracker';
 import { EnhancedErrorBoundary } from '@/src/components/ui/EnhancedErrorBoundary';
@@ -68,7 +68,14 @@ import ErrorTest from '@/components/ui/ErrorTest';
 import ProfileSetupSticker from '@/components/ProfileSetupSticker';
 import { SurfaceGraffitiSelector } from '@/components/ui/SurfaceGraffitiSelector';
 import { RepNotification } from '@/components/ui/RepNotification';
-import { HIPHOP_TRACKS } from '@/constants/tracks';
+import { SPOTIFY_TRACKS, UNLOCKABLE_TRACKS, DEFAULT_TRACK, isSpotifyUrl, getTrackName, getSpotifyTrackName } from '@/constants/all_tracks';
+
+// Helper to get a random starting track
+const getRandomStartTrack = () => {
+  const randomIndex = Math.floor(Math.random() * SPOTIFY_TRACKS.length);
+  // Return as array with single track for consistency
+  return [SPOTIFY_TRACKS[randomIndex]];
+};
 import { MarkerName, MarkerDescription, Gender, MARKER_COLORS, MARKER_NAMES, MARKER_DESCRIPTIONS } from '@/constants/markers';
 import { SurfaceType, GraffitiType } from '@/types';
 import { 
@@ -97,7 +104,7 @@ import {
 } from '@/types';
 
 // 🔧 PERFORMANCE: Enable SoundCloud for music playback functionality
-const ENABLE_SOUNDCLOUD = true;
+const ENABLE_SOUNDCLOUD = false;
 
 // PERFORMANCE OPTIMIZATIONS:
 // - Component splitting: CrewChatPanel, MusicPlayer, ProfilePanel extracted
@@ -182,10 +189,10 @@ const calculateLevel = (rep: number): number => {
   return Math.floor(rep / 100) + 1;
 };
 
-// Helper function to unlock a random track
+// Helper function to unlock a random track (Spotify only)
 const unlockRandomTrack = (currentUnlocked: string[]): string[] => {
-  // Get tracks that haven't been unlocked yet
-  const availableTracks = HIPHOP_TRACKS.filter(track =>
+  // Get Spotify tracks that haven't been unlocked yet
+  const availableTracks = SPOTIFY_TRACKS.filter(track =>
     !currentUnlocked.includes(track)
   );
 
@@ -200,6 +207,10 @@ const unlockRandomTrack = (currentUnlocked: string[]): string[] => {
 // Helper function to get track name from URL
 const getTrackNameFromUrl = (url: string): string => {
   if (url === 'blackout-classic.mp3') return 'Blackout (Default)';
+  if (url.includes('open.spotify.com/')) {
+    // Use the getTrackName function from all_tracks
+    return getTrackName(url);
+  }
   if (url.includes('soundcloud.com')) {
     // Extract track name from SoundCloud URL
     const segments = url.split('/');
@@ -278,7 +289,7 @@ const generateAvatarUrl = (userId: string, username: string, gender?: Gender): s
   
   switch (avatarStyle) {
     case 'adventurer': // Male (boyish)
-      url = `https://api.dicebear.com/7.x/adventurer/svg?seed=${seed}&backgroundColor=${selectedColor}`;
+      url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}`;
       // Optional: Add some male-specific options
       break;
       
@@ -288,12 +299,12 @@ const generateAvatarUrl = (userId: string, username: string, gender?: Gender): s
       break;
       
     case 'bottts': // Other (alien/robot)
-      url = `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}&backgroundColor=${selectedColor}`;
+      url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}`;
       // Add some robot/alien features
       break;
       
     case 'identicon': // Prefer not to say (android/geometric)
-      url = `https://api.dicebear.com/7.x/identicon/svg?seed=${seed}&backgroundColor=${selectedColor}`;
+      url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}`;
       // Geometric/android style
       break;
       
@@ -479,11 +490,12 @@ const HomeComponent = () => {
   const [selectedSurface, setSelectedSurface] = useState<SurfaceType>('wall');
   const [selectedGraffitiType, setSelectedGraffitiType] = useState<GraffitiType>('tag');
 
-  // Audio player states
+  // Audio player states - Spotify only
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.5);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
-  const [unlockedTracks, setUnlockedTracks] = useState<string[]>(['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1']);
+  const [showSpotifyWidget, setShowSpotifyWidget] = useState(false);
+  const [unlockedTracks, setUnlockedTracks] = useState<string[]>(getRandomStartTrack());
   
   // REP Notification state
   const [repNotification, setRepNotification] = useState<{ 
@@ -961,7 +973,7 @@ const {
         rank: 'TOY',
         totalMarkers: 0,
         favoriteColor: selectedMarkerColor,
-        unlockedTracks: ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'],
+        unlockedTracks: getRandomStartTrack(),
         createdAt: new Date(),
         lastActive: new Date(),
         crewId: crewId,
@@ -1003,8 +1015,7 @@ const {
       
       // 🎵 START MUSIC DURING PROFILE SETUP
       // Set up the default track for new users
-      const defaultTrack = 'https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1';
-      setUnlockedTracks([defaultTrack]);
+      setUnlockedTracks(getRandomStartTrack());
       setCurrentTrackIndex(0);
       setIsPlaying(true);
       
@@ -1079,7 +1090,7 @@ const {
     
     try {
       const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
+        await updateDoc(userRef, {
         favoriteColor: color,
         lastActive: Timestamp.now()
       });
@@ -1136,7 +1147,9 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       const favoriteColor = data.favoriteColor || '#10b981';
       setSelectedMarkerColor(favoriteColor);
 
-      const userUnlockedTracks = data.unlockedTracks || ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'];
+      const userUnlockedTracks = data.unlockedTracks && data.unlockedTracks.length > 0 
+  ? data.unlockedTracks 
+  : getRandomStartTrack();
       setUnlockedTracks(userUnlockedTracks);
 
       const userProfileData: UserProfile = {
@@ -1254,6 +1267,14 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       setUnlockedTracks(userProfile.unlockedTracks);
     }
   }, [userProfile]);
+
+  // 🎵 Also sync when userProfile is updated with new tracks
+  useEffect(() => {
+    if (userProfile?.unlockedTracks && userProfile.unlockedTracks.length > 0) {
+      console.log('🔄 Syncing unlockedTracks from userProfile:', userProfile.unlockedTracks);
+      setUnlockedTracks(userProfile.unlockedTracks);
+    }
+  }, [userProfile?.unlockedTracks]);
 
   
 
@@ -1415,8 +1436,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       const newLevel = calculateLevel(newRep);
       
       const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
-        rep: newRep,
+        await updateDoc(userRef, {
+          rep: newRep,
         rank: newRank,
         level: newLevel,
         totalMarkers: userProfile.totalMarkers + 1,
@@ -1544,7 +1565,9 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         const newRank = calculateRank(newRep);
         const newLevel = calculateLevel(newRep);
 
-        const currentTracks = userProfile.unlockedTracks || ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'];
+        const currentTracks = userProfile.unlockedTracks && userProfile.unlockedTracks.length > 0 
+          ? userProfile.unlockedTracks 
+          : getRandomStartTrack();
         const newTracks = unlockRandomTrack(currentTracks);
 
         const userRef = doc(db, 'users', user.uid);
@@ -1566,6 +1589,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           photosTaken: (prev.photosTaken || 0) + 1
         } : prev);
 
+        console.log('📸 PHOTO DROP: Saved newTracks to state:', newTracks);
         setUnlockedTracks(newTracks);
 
         setDrops(prev => [{ ...newDrop, firestoreId: dropId, id: `drop-${dropId}` }, ...prev]);
@@ -1642,7 +1666,9 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         const newRank = calculateRank(newRep);
         const newLevel = calculateLevel(newRep);
 
-        const currentTracks = userProfile.unlockedTracks || ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'];
+        const currentTracks = userProfile.unlockedTracks && userProfile.unlockedTracks.length > 0 
+          ? userProfile.unlockedTracks 
+          : getRandomStartTrack();
         const newTracks = unlockRandomTrack(currentTracks);
 
         const userRef = doc(db, 'users', user.uid);
@@ -1661,6 +1687,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           unlockedTracks: newTracks
         } : null);
 
+        console.log('📍 MARKER DROP: Saved newTracks to state:', newTracks);
         setUnlockedTracks(newTracks);
 
         const trackUnlocked = newTracks.length > currentTracks.length;
@@ -1714,6 +1741,9 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       const newTracks = tracks.filter((t) => t !== trackToDrop);
 
       const userRef = doc(db, 'users', user.uid);
+      setUserProfile((prev) => prev ? { ...prev, unlockedTracks: newTracks } : null);
+        // Update local state IMMEDIATELY for instant UI feedback
+      console.log('🎵 Updated local userProfile with new tracks:', newTracks);
       await updateDoc(userRef, {
         unlockedTracks: newTracks,
         lastActive: Timestamp.now(),
@@ -1823,7 +1853,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         
         if (markerToDelete.userId === user?.uid && userProfile && user) {
           const userRef = doc(db, 'users', user.uid);
-          await updateDoc(userRef, {
+        await updateDoc(userRef, {
             totalMarkers: userProfile.totalMarkers - 1
           });
           
@@ -2060,7 +2090,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                 🎵 {getCurrentTrackName()}
               </div>
               <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '4px' }}>
-                Track {currentTrackIndex + 1} of {unlockedTracks.length} unlocked
+                Track ${currentTrackIndex + 1} of ${(userProfile?.unlockedTracks || unlockedTracks).length} unlocked
               </div>
               <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
                 {isPlaying ? '● Now Playing' : 'Paused'}
@@ -3795,8 +3825,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       {/* ========== DUAL CONTROL PANELS ========== */}
 <div style={{
             position: 'absolute' as const,
-            top: 80,
-            left: 0,
+            top: 0,
+            left: 10,
             display: 'flex',
             gap: '15px',
             zIndex: 1200,
@@ -4049,7 +4079,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                         }
                         
                         const userRef = doc(db, 'users', user.uid);
-                        await updateDoc(userRef, {
+        await updateDoc(userRef, {
                           crewId: crewId,
                           crewName: finalCrewName,
                           isSolo: false
@@ -4144,7 +4174,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                       }
                       
                       const userRef = doc(db, 'users', user.uid);
-                      await updateDoc(userRef, {
+        await updateDoc(userRef, {
                         crewId: null,
                         crewName: null,
                         isSolo: true
@@ -4372,12 +4402,12 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     await Promise.all(deletePromises);
                     
                     const userRef = doc(db, 'users', user.uid);
-                    await updateDoc(userRef, {
+        await updateDoc(userRef, {
                       totalMarkers: 0,
                       rep: 0,
                       rank: 'TOY',
                       level: 1,
-                      unlockedTracks: ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1']
+                      unlockedTracks: getRandomStartTrack()
                     });
                     
                     setUserProfile(prev => prev ? {
@@ -4386,11 +4416,11 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                       rep: 0,
                       rank: 'TOY',
                       level: 1,
-                      unlockedTracks: ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1']
+                      unlockedTracks: getRandomStartTrack()
                     } : null);
                     
                     // Also reset local unlocked tracks state
-                    setUnlockedTracks(['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1']);
+                    setUnlockedTracks(getRandomStartTrack());
                     setCurrentTrackIndex(0);
                     
                     // Stop music
@@ -5265,7 +5295,14 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
 {/* Music Panel - Always rendered, dynamic z-index */}
             <div
-              key={`music-panel-${unlockedTracks.length}`}
+              key={`music-panel-${userProfile?.unlockedTracks?.length || unlockedTracks.length}`}
+              ref={(el) => {
+                // Force re-render when userProfile tracks change
+                if (el && userProfile?.unlockedTracks) {
+                  const tracks = userProfile.unlockedTracks;
+                  console.log('🎵 Music Panel rendering with tracks:', tracks);
+                }
+              }}
               style={{
                 ...panelStyle,
                 border: '1px solid #333',
@@ -5334,7 +5371,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                 {/* Unlocked Tracks List */}
                 <div style={{ flex: 1, overflowY: 'auto', marginBottom: '15px' }}>
                   <div style={{ fontSize: '14px', color: '#cbd5e1', marginBottom: '10px', fontWeight: 'bold' }}>
-                    🎵 Your Collection ({unlockedTracks.length} tracks)
+                    🎵 Your Collection
                   </div>
 
                   {unlockedTracks.length === 0 ? (
@@ -5355,7 +5392,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {unlockedTracks.map((track, index) => {
+                      {(Array.isArray(userProfile?.unlockedTracks) ? userProfile.unlockedTracks : (Array.isArray(unlockedTracks) ? unlockedTracks : [])).map((track, index) => {
                         const trackName = getTrackNameFromUrl(track);
                         const isCurrentlyPlaying = index === currentTrackIndex;
 
@@ -5367,6 +5404,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                                 togglePlay();
                               } else {
                                 setCurrentTrackIndex(index);
+                                setShowSpotifyWidget(true);
                                 setIsPlaying(true);
                               }
                             }}
@@ -5412,7 +5450,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                                 color: '#ff6b6b',
                                 marginTop: '2px'
                               }}>
-                                SoundCloud
+                                Spotify
                               </div>
                             </div>
                             <div style={{
@@ -5428,88 +5466,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   )}
                 </div>
 
-                {/* Music Controls */}
-                {unlockedTracks.length > 0 && (
-                  <div style={{
-                    marginTop: '15px',
-                    paddingTop: '15px',
-                    borderTop: '1px solid rgba(138, 43, 226, 0.3)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '12px'
-                  }}>
-                    {/* Playback Controls */}
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px'
-                    }}>
-                      <button
-                        onClick={playPreviousTrack}
-                        style={{
-                          background: 'rgba(138, 43, 226, 0.2)',
-                          border: '1px solid rgba(138, 43, 226, 0.3)',
-                          color: '#8a2be2',
-                          width: '36px',
-                          height: '36px',
-                          borderRadius: '50%',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          transition: 'all 0.2s ease'
-                        }}
-                      >
-                        ⏮️
-                      </button>
 
-                      <button
-                        onClick={togglePlay}
-                        style={{
-                          background: 'rgba(138, 43, 226, 0.2)',
-                          border: '1px solid rgba(138, 43, 226, 0.3)',
-                          color: '#8a2be2',
-                          width: '48px',
-                          height: '48px',
-                          borderRadius: '50%',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          transition: 'all 0.2s ease'
-                        }}
-                      >
-                        {isPlaying ? '⏸️' : '▶️'}
-                      </button>
-
-                      <button
-                        onClick={playNextTrack}
-                        style={{
-                          background: 'rgba(138, 43, 226, 0.2)',
-                          border: '1px solid rgba(138, 43, 226, 0.3)',
-                          color: '#8a2be2',
-                          width: '36px',
-                          height: '36px',
-                          borderRadius: '50%',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          transition: 'all 0.2s ease'
-                        }}
-                      >
-                        ⏭️
-                      </button>
-                    </div>
-
-
-
-                  </div>
-                )}
               </div>
       </div>
 
@@ -5541,8 +5498,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           <div style={{
             ...panelStyle,
             position: 'absolute',
-            top: 80,
-            left: 0,
+            top: 0,
+            left: 10,
             border: '1px solid #8b5cf6',
             animation: 'slideInLeft 0.3s ease-out',
             minWidth: '350px',
@@ -5631,7 +5588,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           filter: `drop-shadow(0 0 25px rgba(255, 255, 255, 1))`,
           animation: 'whiteGlowPulse 3s ease-in-out infinite',
           pointerEvents: 'none',
-          zIndex: 0,
+          zIndex: 1,
         }} />
         
         {/* Crew Color Glow Layer - For selected button */}
@@ -5846,7 +5803,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       {/* Secondary Controls - Under Online Button */}
       <div style={{
         position: 'fixed',
-        bottom: '68px', // Positioned above the main nav bar
+        bottom: '150px', // Positioned above the main nav bar
         left: '0px', // Aligned with the Online button
         display: 'flex',
         flexDirection: 'row',
@@ -6097,18 +6054,51 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       `}
       </style>
 
-      {/* ========== COMPACT LAZY-LOAD SOUNDCLOUD WIDGET ========== */}
-      {/* Compact bar that expands to full widget */}
-      {unlockedTracks.length > 0 && (
-        <SoundCloudPlayer
-          trackUrl={unlockedTracks[currentTrackIndex]}
+      {/* ========== SPOTIFY WIDGET ========== */}
+      {showSpotifyWidget && isSpotifyUrl(unlockedTracks[currentTrackIndex]) ? (
+        <SpotifyPlayer
+          spotifyUrl={unlockedTracks[currentTrackIndex]}
           trackName={getCurrentTrackName()}
-          isPlaying={isPlaying}
-          onTrackEnd={playNextTrack}
-          onPlayPause={setIsPlaying}
-          onError={(err) => console.error('SoundCloud error:', err)}
-          isMobile={isMobile}
+          onClose={() => {
+            setShowSpotifyWidget(false);
+          }}
         />
+      ) : (
+        /* Fallback message for non-Spotify tracks */
+        <div style={{
+          position: 'fixed',
+          bottom: '68px',
+          left: '0',
+          right: '0',
+          backgroundColor: 'rgba(20, 20, 30, 0.98)',
+          borderTop: '1px solid rgba(138, 43, 226, 0.4)',
+          zIndex: 1101,
+          padding: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '8px',
+            backgroundColor: 'rgba(138, 43, 226, 0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#8a2be2',
+          }}>
+            🎵
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '14px', fontWeight: '600', color: '#fff' }}>
+              {getCurrentTrackName()}
+            </div>
+            <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+              Add Spotify tracks in settings for playback
+            </div>
+          </div>
+        </div>
       )}
     </div>
     </StoryManagerProvider>

@@ -1,403 +1,363 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import useSoundCloudPlayer from '@/hooks/useSoundCloudPlayer';
+
+const PlayIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M8 5v14l11-7z"/>
+  </svg>
+);
+
+const PauseIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M18 6L6 18M6 6l12 12"/>
+  </svg>
+);
+
+const VolumeIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+  </svg>
+);
+
+const VolumeMutedIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+    <line x1="23" y1="9" x2="17" y2="15"/>
+    <line x1="17" y1="9" x2="23" y2="15"/>
+  </svg>
+);
+
+const ErrorIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="12" y1="8" x2="12" y2="12"/>
+    <line x1="12" y1="16" x2="12.01" y2="16"/>
+  </svg>
+);
 
 interface SoundCloudPlayerProps {
   trackUrl: string;
-  isPlaying: boolean;
-  onTrackEnd: () => void;
-  onPlayPause: (isPlaying: boolean) => void;
-  onError?: (error: Error) => void;
-  isMobile: boolean;
   trackName?: string;
+  initialVolume?: number;
+  onClose?: () => void;
 }
 
-type PlayerState = 'compact' | 'expanded';
+function formatTime(seconds: number): string {
+  if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
 
-// Global flag to track if API is loaded
-let isAPILoaded = false;
-let apiLoadPromise: Promise<void> | null = null;
-
-const loadSoundCloudAPI = (): Promise<void> => {
-  if (isAPILoaded) return Promise.resolve();
-  if (apiLoadPromise) return apiLoadPromise;
-  
-  apiLoadPromise = new Promise((resolve, reject) => {
-    if (window.SC && window.SC.Widget) {
-      isAPILoaded = true;
-      resolve();
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://w.soundcloud.com/player/api.js';
-    script.async = true;
-    script.onload = () => {
-      console.log('SoundCloud API loaded');
-      isAPILoaded = true;
-      resolve();
-    };
-    script.onerror = () => {
-      console.error('Failed to load SoundCloud API');
-      reject(new Error('Failed to load SoundCloud API'));
-    };
-    document.body.appendChild(script);
-  });
-
-  return apiLoadPromise;
-};
-
-const SoundCloudPlayer: React.FC<SoundCloudPlayerProps> = ({
+export default function SoundCloudPlayer({
   trackUrl,
-  isPlaying,
-  onTrackEnd,
-  onPlayPause,
-  onError,
-  isMobile,
-  trackName
-}) => {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const widgetRef = useRef<any>(null);
-  const [playerState, setPlayerState] = useState<PlayerState>('compact');
-  const [isWidgetReady, setIsWidgetReady] = useState(false);
-  const [hasStarted, setHasStarted] = useState(false);
-  const autoMinimizeTimerRef = useRef<NodeJS.Timeout | null>(null);
+  trackName = 'SoundCloud Track',
+  initialVolume = 0.7,
+  onClose,
+}: SoundCloudPlayerProps) {
+  const { state, actions } = useSoundCloudPlayer();
+  const [localVolume, setLocalVolume] = useState(initialVolume);
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const volumeRef = useRef(initialVolume);
 
-  // Get display name from URL
-  const getDisplayName = useCallback(() => {
-    if (trackName && trackName !== 'Track') return trackName;
-    try {
-      const url = new URL(trackUrl);
-      const pathParts = url.pathname.split('/').filter(Boolean);
-      if (pathParts.length >= 2) {
-        return pathParts[pathParts.length - 1].replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      }
-    } catch (e) {
-      // Invalid URL
-    }
-    return 'SoundCloud Track';
-  }, [trackUrl, trackName]);
-
-  // Load API on mount
+  // Load track when URL changes
   useEffect(() => {
-    loadSoundCloudAPI().catch(err => {
-      console.error('Failed to preload SoundCloud API:', err);
-      onError?.(err);
-    });
-  }, [onError]);
-
-  // Initialize widget when iframe is available
-  useEffect(() => {
-    if (!iframeRef.current || !isAPILoaded) return;
-
-    const initWidget = () => {
-      if (!iframeRef.current) return;
-      try {
-        widgetRef.current = new window.SC.Widget(iframeRef.current);
-        
-        widgetRef.current.bind(window.SC.Widget.Events.READY, () => {
-          console.log('SoundCloud widget ready');
-          setIsWidgetReady(true);
-          
-          // Bind to events
-          widgetRef.current.bind(window.SC.Widget.Events.FINISH, () => {
-            console.log('Track finished');
-            onTrackEnd();
-          });
-
-          widgetRef.current.bind(window.SC.Widget.Events.PLAY, () => {
-            console.log('Track playing');
-            onPlayPause(true);
-          });
-
-          widgetRef.current.bind(window.SC.Widget.Events.PAUSE, () => {
-            console.log('Track paused');
-            onPlayPause(false);
-          });
-
-          widgetRef.current.bind(window.SC.Widget.Events.ERROR, (e: any) => {
-            console.error('SoundCloud error:', e);
-            onError?.(new Error('SoundCloud playback error'));
-          });
-        });
-      } catch (err) {
-        console.error('Error initializing widget:', err);
-        onError?.(err as Error);
-      }
-    };
-
-    // Small delay to ensure iframe is fully loaded
-    const timer = setTimeout(initWidget, 100);
-    return () => clearTimeout(timer);
-  }, [onTrackEnd, onPlayPause, onError]);
-
-  // Handle play/pause commands from parent
-  useEffect(() => {
-    if (!widgetRef.current || !isWidgetReady) return;
-
-    widgetRef.current.isPaused((paused: boolean) => {
-      if (isPlaying && paused) {
-        widgetRef.current.play();
-      } else if (!isPlaying && !paused) {
-        widgetRef.current.pause();
-      }
-    });
-  }, [isPlaying, isWidgetReady]);
-
-  // Handle first play - this is the key for mobile!
-  const handlePlay = useCallback(async () => {
-    if (!isWidgetReady) {
-      console.log('Widget not ready yet');
-      return;
+    if (trackUrl) {
+      actions.loadTrack(trackUrl);
     }
+  }, [trackUrl, actions]);
 
-    try {
-      // Direct play call - this should work on mobile after user interaction
-      widgetRef.current.play();
-      setHasStarted(true);
-      setPlayerState('expanded');
-      
-      // Auto-minimize after 5 seconds
-      if (autoMinimizeTimerRef.current) {
-        clearTimeout(autoMinimizeTimerRef.current);
-      }
-      autoMinimizeTimerRef.current = setTimeout(() => {
-        setPlayerState('compact');
-      }, 5000);
-    } catch (err) {
-      console.error('Error playing:', err);
-      onError?.(err as Error);
+  // Update volume when it changes
+  useEffect(() => {
+    actions.setVolume(initialVolume);
+    volumeRef.current = initialVolume;
+    setLocalVolume(initialVolume);
+  }, [initialVolume, actions]);
+
+  const handlePlayPause = useCallback(async () => {
+    if (state.error) {
+      actions.clearError();
+      await actions.loadTrack(trackUrl);
     }
-  }, [isWidgetReady, onError]);
+    await actions.togglePlay();
+  }, [actions, state.error, trackUrl]);
 
-  // Toggle expand/minimize
-  const toggleExpand = useCallback(() => {
-    if (playerState === 'expanded') {
-      setPlayerState('compact');
-      if (autoMinimizeTimerRef.current) {
-        clearTimeout(autoMinimizeTimerRef.current);
-      }
+  const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const volume = parseFloat(e.target.value);
+    setLocalVolume(volume);
+    volumeRef.current = volume;
+    actions.setVolume(volume);
+  }, [actions]);
+
+  const toggleMute = useCallback(() => {
+    if (localVolume > 0) {
+      handleVolumeChange({ target: { value: '0' } } as React.ChangeEvent<HTMLInputElement>);
     } else {
-      setPlayerState('expanded');
-      if (autoMinimizeTimerRef.current) {
-        clearTimeout(autoMinimizeTimerRef.current);
-      }
-      autoMinimizeTimerRef.current = setTimeout(() => {
-        setPlayerState('compact');
-      }, 5000);
+      handleVolumeChange({ target: { value: volumeRef.current.toString() } } as React.ChangeEvent<HTMLInputElement>);
     }
-  }, [playerState]);
+  }, [localVolume, handleVolumeChange]);
 
-  // Cleanup
-  useEffect(() => {
-    return () => {
-      if (autoMinimizeTimerRef.current) {
-        clearTimeout(autoMinimizeTimerRef.current);
-      }
-    };
-  }, []);
+  const handleClose = useCallback(() => {
+    actions.pause();
+    onClose?.();
+  }, [actions, onClose]);
 
-  // Generate iframe URL - NO auto_play, we control it via API
-  const getIframeUrl = useCallback(() => {
-    const params = new URLSearchParams({
-      url: trackUrl,
-      color: 'ff5500',
-      auto_play: 'false', // WE control this
-      hide_related: 'true',
-      show_comments: 'false',
-      show_user: 'true',
-      show_reposts: 'false',
-      show_teaser: 'false',
-      visual: 'true',
-      sharing: 'true',
-      buying: 'false',
-      download: 'false',
-      show_playcount: 'true',
-      show_artwork: 'true',
-      show_playlist: 'false'
-    });
-    return `https://w.soundcloud.com/player/?${params.toString()}`;
-  }, [trackUrl]);
+  const isMuted = localVolume === 0;
 
-  // Compact view
-  if (playerState === 'compact') {
+  // Error state with retry button
+  if (state.error) {
     return (
-      <>
-        {/* Hidden iframe for widget (always mounted) */}
-        <div style={{
-          position: 'fixed',
-          bottom: '-1000px',
-          left: '0',
-          width: '1px',
-          height: '1px',
-          overflow: 'hidden',
-          opacity: 0
-        }}>
-          <iframe
-            ref={iframeRef}
-            src={getIframeUrl()}
-            width="100%"
-            height="100%"
-            frameBorder="no"
-            scrolling="no"
-            allow="autoplay"
-            style={{ border: 'none' }}
-            title="SoundCloud Widget"
-          />
-        </div>
-
-        {/* Compact bar */}
-        <div
-          onClick={!hasStarted ? handlePlay : toggleExpand}
-          style={{
-            position: 'fixed',
-            bottom: '68px',
-            left: '0',
-            right: '0',
-            height: '64px',
-            backgroundColor: 'rgba(0, 0, 0, 0.95)',
-            borderTop: '1px solid rgba(138, 43, 226, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            padding: isMobile ? '8px 12px' : '10px 20px',
-            gap: '12px',
-            cursor: 'pointer',
-            zIndex: 1101,
-            boxShadow: '0 -4px 20px rgba(0,0,0,0.5)'
-          }}
-        >
-          {/* Icon */}
-          <div style={{
-            width: '48px',
-            height: '48px',
-            backgroundColor: 'rgba(138, 43, 226, 0.2)',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '24px',
-            flexShrink: 0
-          }}>
-            {!isWidgetReady ? '⏳' : !hasStarted ? '🎵' : isPlaying ? '▶️' : '⏸️'}
-          </div>
-
-          {/* Track Info */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              fontSize: '14px',
-              fontWeight: 'bold',
-              color: '#8a2be2',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis'
-            }}>
-              {getDisplayName()}
-            </div>
-            <div style={{
-              fontSize: '12px',
-              color: !isWidgetReady ? '#94a3b8' : !hasStarted ? '#94a3b8' : isPlaying ? '#10b981' : '#94a3b8',
-              marginTop: '2px'
-            }}>
-              {!isWidgetReady ? 'Loading player...' : !hasStarted ? 'Tap to play' : isPlaying ? 'Now Playing' : 'Paused'}
-            </div>
-          </div>
-
-          {/* Action Button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!hasStarted) {
-                handlePlay();
-              } else {
-                toggleExpand();
-              }
-            }}
-            disabled={!isWidgetReady}
-            style={{
-              background: !isWidgetReady ? 'rgba(100, 100, 100, 0.2)' : 'rgba(138, 43, 226, 0.2)',
-              border: '1px solid rgba(138, 43, 226, 0.4)',
-              color: !isWidgetReady ? '#666' : '#8a2be2',
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              fontSize: '18px',
-              cursor: !isWidgetReady ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0
-            }}
-          >
-            {!isWidgetReady ? '⏳' : !hasStarted ? '▶️' : '▲'}
-          </button>
-        </div>
-      </>
-    );
-  }
-
-  // Expanded view
-  return (
-    <div
-      style={{
+      <div style={{
         position: 'fixed',
         bottom: '68px',
         left: '0',
         right: '0',
-        height: isMobile ? '300px' : '400px',
-        backgroundColor: 'rgba(0, 0, 0, 0.95)',
-        borderTop: '1px solid rgba(138, 43, 226, 0.3)',
+        backgroundColor: 'rgba(20, 20, 30, 0.98)',
+        borderTop: '1px solid rgba(138, 43, 226, 0.4)',
         zIndex: 1101,
-        display: 'flex',
-        flexDirection: 'column',
-        boxShadow: '0 -4px 20px rgba(0,0,0,0.5)'
-      }}
-    >
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '8px 12px',
-        borderBottom: '1px solid rgba(138, 43, 226, 0.2)',
-        backgroundColor: 'rgba(0, 0, 0, 0.8)'
+        padding: '16px',
       }}>
-        <div style={{
-          fontSize: '14px',
-          fontWeight: 'bold',
-          color: '#8a2be2'
-        }}>
-          🎵 {getDisplayName()}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '8px',
+            backgroundColor: 'rgba(239, 68, 68, 0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#ef4444',
+            flexShrink: 0,
+          }}>
+            <ErrorIcon />
+          </div>
+          
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '14px', fontWeight: '600', color: '#ef4444', marginBottom: '2px' }}>
+              Playback Error
+            </div>
+            <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+              {state.error}
+            </div>
+          </div>
+
+          <button
+            onClick={handlePlayPause}
+            style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(138, 43, 226, 0.3)',
+              border: '1px solid rgba(138, 43, 226, 0.5)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            <PlayIcon />
+          </button>
+
+          {onClose && (
+            <button onClick={handleClose} style={{
+              width: '36px', height: '36px', borderRadius: '8px',
+              backgroundColor: 'transparent', border: 'none', color: '#64748b',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <CloseIcon />
+            </button>
+          )}
         </div>
-        <button
-          onClick={toggleExpand}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#8a2be2',
-            fontSize: '20px',
-            cursor: 'pointer',
-            padding: '4px 8px'
-          }}
-        >
-          ▼
-        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      position: 'fixed',
+      bottom: '68px',
+      left: '0',
+      right: '0',
+      backgroundColor: 'rgba(20, 20, 30, 0.98)',
+      borderTop: '1px solid rgba(138, 43, 226, 0.3)',
+      zIndex: 1101,
+      backdropFilter: 'blur(10px)',
+    }}>
+      {/* Progress bar */}
+      <div style={{ height: '3px', backgroundColor: 'rgba(138, 43, 226, 0.2)' }}>
+        <div style={{
+          height: '100%',
+          width: `${state.duration ? (state.currentTime / state.duration) * 100 : 0}%`,
+          backgroundColor: '#8a2be2',
+          transition: 'width 0.1s linear',
+        }} />
       </div>
 
-      {/* Visible widget */}
-      <div style={{ flex: 1 }}>
-        <iframe
-          src={getIframeUrl()}
-          width="100%"
-          height="100%"
-          frameBorder="no"
-          scrolling="no"
-          allow="autoplay"
-          style={{ border: 'none' }}
-          title="SoundCloud Player"
-        />
+      <div style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', gap: '12px' }}>
+        {/* Album art */}
+        <div style={{
+          width: '44px',
+          height: '44px',
+          borderRadius: '8px',
+          backgroundColor: 'rgba(138, 43, 226, 0.2)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          flexShrink: 0,
+        }}>
+          {state.track?.artwork ? (
+            <img src={state.track.artwork} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <span style={{ fontSize: '20px' }}>🎵</span>
+          )}
+        </div>
+
+        {/* Track info */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: '14px',
+            fontWeight: '600',
+            color: '#fff',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
+            {state.track?.title || trackName}
+          </div>
+          <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+            {state.track?.artist || 'Loading...'}
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Volume button */}
+          <button
+            onClick={() => setShowVolumeSlider(!showVolumeSlider)}
+            style={{
+              width: '36px', height: '36px', borderRadius: '8px',
+              backgroundColor: 'transparent', border: 'none', color: '#94a3b8',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            {isMuted ? <VolumeMutedIcon /> : <VolumeIcon />}
+          </button>
+
+          {/* Play/Pause button */}
+          <button
+            onClick={handlePlayPause}
+            disabled={state.isLoading && !state.error}
+            style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(138, 43, 226, 0.3)',
+              border: '1px solid rgba(138, 43, 226, 0.5)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: state.isLoading ? 'not-allowed' : 'pointer',
+              opacity: state.isLoading ? 0.6 : 1,
+            }}
+          >
+            {state.isLoading ? (
+              <div style={{
+                width: '20px', height: '20px', border: '2px solid transparent',
+                borderTopColor: '#fff', borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+              }} />
+            ) : state.isPlaying ? <PauseIcon /> : <PlayIcon />}
+          </button>
+
+          {/* Close button */}
+          {onClose && (
+            <button onClick={handleClose} style={{
+              width: '36px', height: '36px', borderRadius: '8px',
+              backgroundColor: 'transparent', border: 'none', color: '#64748b',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <CloseIcon />
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Volume slider */}
+      {showVolumeSlider && (
+        <div style={{
+          position: 'absolute',
+          bottom: '100%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: 'rgba(20, 20, 30, 0.98)',
+          border: '1px solid rgba(138, 43, 226, 0.3)',
+          borderRadius: '12px',
+          padding: '12px',
+          marginBottom: '8px',
+          width: '160px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button onClick={toggleMute} style={{
+              background: 'none', border: 'none', color: '#94a3b8',
+              cursor: 'pointer', padding: '4px',
+            }}>
+              {isMuted ? <VolumeMutedIcon /> : <VolumeIcon />}
+            </button>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={localVolume}
+              onChange={handleVolumeChange}
+              style={{
+                flex: 1,
+                height: '4px',
+                borderRadius: '2px',
+                appearance: 'none',
+                background: `linear-gradient(to right, #8a2be2 ${localVolume * 100}%, rgba(138, 43, 226, 0.3) ${localVolume * 100}%)`,
+                cursor: 'pointer',
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Time display */}
+      <div style={{
+        position: 'absolute',
+        right: '16px',
+        bottom: '60px',
+        fontSize: '10px',
+        color: '#64748b',
+      }}>
+        {formatTime(state.currentTime)} / {formatTime(state.duration)}
+      </div>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        input[type="range"]::-webkit-slider-thumb {
+          appearance: none;
+          width: 14px; height: 14px; border-radius: 50%;
+          background: #8a2be2; cursor: pointer;
+        }
+        input[type="range"]::-moz-range-thumb {
+          width: 14px; height: 14px; border-radius: 50%;
+          background: #8a2be2; cursor: pointer; border: none;
+        }
+      `}</style>
     </div>
   );
-};
-
-export default SoundCloudPlayer;
+}
