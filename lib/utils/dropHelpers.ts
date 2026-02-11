@@ -81,6 +81,27 @@ export const getSpotifyEmbedUrl = (url: string): string => {
   return '';
 };
 
+export const getSoundCloudEmbedUrl = (trackUrl: string): string => {
+  const params = new URLSearchParams({
+    url: trackUrl,
+    color: 'ff5500',
+    auto_play: 'false',
+    hide_related: 'true',
+    show_comments: 'false',
+    show_user: 'false',
+    show_reposts: 'false',
+    show_teaser: 'false',
+    visual: 'false',
+    sharing: 'false',
+    buying: 'false',
+    download: 'false',
+    show_playcount: 'false',
+    show_artwork: 'false',
+    show_playlist: 'false'
+  });
+  return `https://w.soundcloud.com/player/?${params.toString()}`;
+};
+
 // Drop type detection
 export type DropType = 'marker' | 'photo' | 'music' | 'generic';
 

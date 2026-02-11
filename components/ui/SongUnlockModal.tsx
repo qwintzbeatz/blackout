@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { isSpotifyUrl, getSpotifyEmbedUrl } from "@/lib/utils/dropHelpers";
+import { isSpotifyUrl, getSpotifyEmbedUrl, getSoundCloudEmbedUrl } from "@/lib/utils/dropHelpers";
 
 interface SongUnlockModalProps {
   trackUrl: string;
@@ -50,6 +50,7 @@ export default function SongUnlockModal({
   const [animate, setAnimate] = useState(false);
 
   const isSpotify = isSpotifyUrl(trackUrl || "");
+  const isSoundCloud = trackUrl?.includes('soundcloud.com') || false;
 
   useEffect(() => {
     if (isOpen) {
@@ -57,15 +58,17 @@ export default function SongUnlockModal({
       setTimeout(() => setAnimate(true), 50);
       if (isSpotify && trackUrl) {
         setEmbedUrl(getSpotifyEmbedUrl(trackUrl));
+      } else if (isSoundCloud && trackUrl) {
+        setEmbedUrl(getSoundCloudEmbedUrl(trackUrl));
       }
     } else {
       setAnimate(false);
       setTimeout(() => setShow(false), 400);
     }
-  }, [isOpen, isSpotify, trackUrl]);
+  }, [isOpen, isSpotify, isSoundCloud, trackUrl]);
 
   const handlePlayPause = () => {
-    if (isSpotify && iframeRef.current?.contentWindow) {
+    if (iframeRef.current?.contentWindow) {
       iframeRef.current.contentWindow.postMessage(
         { command: isPlaying ? "pause" : "play" },
         "*"
@@ -307,14 +310,14 @@ export default function SongUnlockModal({
           )}
         </div>
 
-        {/* Spotify Embed Preview */}
-        {isSpotify ? (
+        {/* Embed Preview - Spotify or SoundCloud */}
+        {embedUrl ? (
           <div
             style={{
               margin: "0 20px 20px",
               borderRadius: "16px",
               overflow: "hidden",
-              background: "#191414",
+              background: isSpotify ? "#191414" : "linear-gradient(135deg, #191414 0%, #0f0f23 100%)",
               boxShadow: "0 8px 24px rgba(0, 0, 0, 0.3)",
             }}
           >
@@ -322,11 +325,11 @@ export default function SongUnlockModal({
               ref={iframeRef}
               src={embedUrl}
               width="100%"
-              height="80"
-              style={{ border: "none" }}
+              height={isSpotify ? "80" : "100"}
+              style={{ border: "none", borderRadius: "16px" }}
               allow="autoplay; clipboard-write; encrypted-media; picture-in-picture"
               allowFullScreen
-              title="Spotify Preview"
+              title={isSpotify ? "Spotify Preview" : "SoundCloud Preview"}
             />
           </div>
         ) : (
@@ -346,7 +349,7 @@ export default function SongUnlockModal({
                 margin: "0 0 12px 0",
               }}
             >
-              Preview not available for this track
+              Preview not available
             </p>
             <button
               onClick={() => window.open(trackUrl, "_blank")}
@@ -361,7 +364,7 @@ export default function SongUnlockModal({
                 cursor: "pointer",
               }}
             >
-              Open in Spotify
+              {isSoundCloud ? "🔊 Open in SoundCloud" : "🎵 Open in App"}
             </button>
           </div>
         )}

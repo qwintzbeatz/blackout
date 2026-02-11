@@ -59,6 +59,7 @@ import { useMarkers } from '@/hooks/useMarkers';
 import { PerformanceSettingsPanel } from '@/src/components/ui/PerformanceSettingsPanel';
 import { CrewId } from '@/constants/markers';
 import SpotifyPlayer from '@/components/music/SpotifyPlayer';
+import SoundCloudPlayer from '@/components/music/SoundCloudPlayer';
 import { CREWS } from '@/data/crews';
 import { useGPSTracker } from '@/hooks/useGPSTracker';
 import { EnhancedErrorBoundary } from '@/src/components/ui/EnhancedErrorBoundary';
@@ -70,6 +71,7 @@ import { SurfaceGraffitiSelector } from '@/components/ui/SurfaceGraffitiSelector
 import { RepNotification } from '@/components/ui/RepNotification';
 import SongUnlockModal from '@/components/ui/SongUnlockModal';
 import { SPOTIFY_TRACKS, UNLOCKABLE_TRACKS, DEFAULT_TRACK, isSpotifyUrl, getTrackName, getSpotifyTrackName } from '@/constants/all_tracks';
+import { HIPHOP_TRACKS } from '@/constants/tracks';
 
 // Helper to get a random starting track
 const getRandomStartTrack = () => {
@@ -190,19 +192,55 @@ const calculateLevel = (rep: number): number => {
   return Math.floor(rep / 100) + 1;
 };
 
-// Helper function to unlock a random track (Spotify only)
-const unlockRandomTrack = (currentUnlocked: string[]): string[] => {
-  // Get Spotify tracks that haven't been unlocked yet
-  const availableTracks = SPOTIFY_TRACKS.filter(track =>
+// Helper function to unlock a random track (both Spotify AND SoundCloud)
+// Returns both the updated unlocked tracks AND the newly unlocked track info
+const unlockRandomTrack = (currentUnlocked: string[]): { newTracks: string[], newlyUnlocked: { url: string; name: string; source: 'Spotify' | 'SoundCloud' } | null } => {
+  // Combine Spotify and SoundCloud tracks
+  const ALL_TRACKS = [...SPOTIFY_TRACKS, ...HIPHOP_TRACKS];
+  
+  // Get tracks that haven't been unlocked yet
+  const availableTracks = ALL_TRACKS.filter(track =>
     !currentUnlocked.includes(track)
   );
 
-  if (availableTracks.length === 0) return currentUnlocked;
+  if (availableTracks.length === 0) return { newTracks: currentUnlocked, newlyUnlocked: null };
 
   // Pick random track
   const randomTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)];
+  const isSpotify = randomTrack.includes('open.spotify.com');
+  
+  return {
+    newTracks: [...currentUnlocked, randomTrack],
+    newlyUnlocked: {
+      url: randomTrack,
+      name: getTrackNameFromUrl(randomTrack),
+      source: isSpotify ? 'Spotify' : 'SoundCloud'
+    }
+  };
+};
 
-  return [...currentUnlocked, randomTrack];
+// Helper function to detect track source
+const getTrackSource = (url: string): 'Spotify' | 'SoundCloud' => {
+  if (url.includes('open.spotify.com')) return 'Spotify';
+  return 'SoundCloud';
+};
+
+// Helper function to get theme color based on track source
+const getTrackThemeColor = (url: string): { primary: string; secondary: string; gradient: string } => {
+  const source = getTrackSource(url);
+  if (source === 'Spotify') {
+    return {
+      primary: '#1DB954',      // Spotify green
+      secondary: '#1ed760',     // Lighter green
+      gradient: 'linear-gradient(135deg, #1DB954, #1ed760)'
+    };
+  } else {
+    return {
+      primary: '#ff5500',      // SoundCloud orange
+      secondary: '#ff7b00',    // Lighter orange
+      gradient: 'linear-gradient(135deg, #ff5500, #ff7b00)'
+    };
+  }
 };
 
 // Helper function to get track name from URL
@@ -578,6 +616,13 @@ const HomeComponent = () => {
     trackUrl: string;
     trackName: string;
     source: string;
+  } | null>(null);
+  
+  // 🆕 Recently unlocked track state - displayed prominently in music panel
+  const [recentlyUnlocked, setRecentlyUnlocked] = useState<{
+    url: string;
+    name: string;
+    source: 'Spotify' | 'SoundCloud';
   } | null>(null);
   
   // ========== PERFORMANCE SETTINGS ==========
@@ -1583,7 +1628,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         const currentTracks = userProfile.unlockedTracks && userProfile.unlockedTracks.length > 0 
           ? userProfile.unlockedTracks 
           : getRandomStartTrack();
-        const newTracks = unlockRandomTrack(currentTracks);
+        const unlockResult = unlockRandomTrack(currentTracks);
+        const newTracks = unlockResult.newTracks;
 
         const userRef = doc(db, 'users', user.uid);
         await updateDoc(userRef, {
@@ -1623,6 +1669,14 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             trackUrl: unlockedTrackUrl,
             trackName: unlockedTrackName,
             source: 'GPS PHOTO DROP'
+          });
+          
+          // 🆕 Set recently unlocked track for music panel display
+          const isSpotifyTrack = unlockedTrackUrl.includes('open.spotify.com');
+          setRecentlyUnlocked({
+            url: unlockedTrackUrl,
+            name: unlockedTrackName,
+            source: isSpotifyTrack ? 'Spotify' : 'SoundCloud'
           });
         }
 
@@ -1695,7 +1749,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         const currentTracks = userProfile.unlockedTracks && userProfile.unlockedTracks.length > 0 
           ? userProfile.unlockedTracks 
           : getRandomStartTrack();
-        const newTracks = unlockRandomTrack(currentTracks);
+        const unlockResult = unlockRandomTrack(currentTracks);
+        const newTracks = unlockResult.newTracks;
 
         const userRef = doc(db, 'users', user.uid);
         await updateDoc(userRef, {
@@ -1727,6 +1782,14 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             trackUrl: unlockedTrackUrl,
             trackName: unlockedTrackName,
             source: 'MARKER DROP'
+          });
+          
+          // 🆕 Set recently unlocked track for music panel display
+          const isSpotifyTrack = unlockedTrackUrl.includes('open.spotify.com');
+          setRecentlyUnlocked({
+            url: unlockedTrackUrl,
+            name: unlockedTrackName,
+            source: isSpotifyTrack ? 'Spotify' : 'SoundCloud'
           });
         }
 
@@ -6147,51 +6210,27 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       `}
       </style>
 
-      {/* ========== SPOTIFY WIDGET ========== */}
-      {showSpotifyWidget && isSpotifyUrl(unlockedTracks[currentTrackIndex]) ? (
-        <SpotifyPlayer
-          spotifyUrl={unlockedTracks[currentTrackIndex]}
-          trackName={getCurrentTrackName()}
-          onClose={() => {
-            setShowSpotifyWidget(false);
-          }}
-        />
-      ) : (
-        /* Fallback message for non-Spotify tracks */
-        <div style={{
-          position: 'fixed',
-          bottom: '68px',
-          left: '0',
-          right: '0',
-          backgroundColor: 'rgba(20, 20, 30, 0.98)',
-          borderTop: '1px solid rgba(138, 43, 226, 0.4)',
-          zIndex: 1101,
-          padding: '16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px'
-        }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '8px',
-            backgroundColor: 'rgba(138, 43, 226, 0.2)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#8a2be2',
-          }}>
-            🎵
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '14px', fontWeight: '600', color: '#fff' }}>
-              {getCurrentTrackName()}
-            </div>
-            <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-              Add Spotify tracks in settings for playback
-            </div>
-          </div>
-        </div>
+      {/* ========== UNIFIED MUSIC PLAYER - Shows Spotify or SoundCloud based on track ========== */}
+      {showSpotifyWidget && unlockedTracks.length > 0 && (
+        <>
+          {isSpotifyUrl(unlockedTracks[currentTrackIndex]) ? (
+            <SpotifyPlayer
+              spotifyUrl={unlockedTracks[currentTrackIndex]}
+              trackName={getCurrentTrackName()}
+              onClose={() => {
+                setShowSpotifyWidget(false);
+              }}
+            />
+          ) : (
+            <SoundCloudPlayer
+              trackUrl={unlockedTracks[currentTrackIndex]}
+              trackName={getCurrentTrackName()}
+              onClose={() => {
+                setShowSpotifyWidget(false);
+              }}
+            />
+          )}
+        </>
       )}
     </div>
     </StoryManagerProvider>

@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Drop } from "@/lib/types/blackout";
 import { User as FirebaseUser } from "firebase/auth";
-import { getTrackNameFromUrl, getTrackPlatform, isSpotifyUrl, getSpotifyEmbedUrl } from "@/lib/utils/dropHelpers";
+import { getTrackNameFromUrl, getTrackPlatform, isSpotifyUrl, getSpotifyEmbedUrl, getSoundCloudEmbedUrl } from "@/lib/utils/dropHelpers";
 
 interface MusicDropPopupProps {
   drop: Drop;
@@ -21,15 +21,18 @@ const MusicDropPopup: React.FC<MusicDropPopupProps> = ({ drop, user, onLikeUpdat
   const iframeRef = useRef<HTMLIFrameElement>(null);
   
   const isSpotify = isSpotifyUrl(drop.trackUrl || "");
+  const isSoundCloud = drop.trackUrl?.includes('soundcloud.com') || false;
   const trackPlatform = getTrackPlatform(drop.trackUrl || "");
   const trackName = getTrackNameFromUrl(drop.trackUrl || "");
-  const accentColor = isSpotify ? "#1DB954" : "#ff5500";
+  const accentColor = isSpotify ? "#1DB954" : isSoundCloud ? "#ff5500" : "#ff5500";
 
   useEffect(() => {
     if (isSpotify && drop.trackUrl) {
       setEmbedUrl(getSpotifyEmbedUrl(drop.trackUrl));
+    } else if (isSoundCloud && drop.trackUrl) {
+      setEmbedUrl(getSoundCloudEmbedUrl(drop.trackUrl));
     }
-  }, [isSpotify, drop.trackUrl]);
+  }, [isSpotify, isSoundCloud, drop.trackUrl]);
 
   useEffect(() => {
     if (drop.likes && user) {
@@ -47,7 +50,7 @@ const MusicDropPopup: React.FC<MusicDropPopupProps> = ({ drop, user, onLikeUpdat
   };
 
   const handlePlayPause = () => {
-    if (isSpotify && iframeRef.current?.contentWindow) {
+    if (iframeRef.current?.contentWindow) {
       iframeRef.current.contentWindow.postMessage({ command: isPlaying ? "pause" : "play" }, "*");
     }
     setIsPlaying(!isPlaying);
@@ -160,9 +163,18 @@ const MusicDropPopup: React.FC<MusicDropPopupProps> = ({ drop, user, onLikeUpdat
                 <div style={{ fontSize: "16px", fontWeight: "700", color: "#fff" }}>{trackName}</div>
               </div>
             </div>
-          ) : isSpotify && embedUrl ? (
-            <div style={{ width: "100%", borderRadius: "12px", overflow: "hidden", background: "#191414" }}>
-              <iframe ref={iframeRef} src={embedUrl} width="100%" height="80" style={{ border: "none" }} allow="autoplay; clipboard-write; encrypted-media; picture-in-picture" allowFullScreen title="Spotify Player" />
+          ) : embedUrl ? (
+            <div style={{ width: "100%", borderRadius: "12px", overflow: "hidden", background: isSpotify ? "#191414" : "linear-gradient(135deg, #191414 0%, #0f0f23 100%)" }}>
+              <iframe 
+                ref={iframeRef} 
+                src={embedUrl} 
+                width="100%" 
+                height={isSpotify ? "80" : "100"} 
+                style={{ border: "none", borderRadius: "12px" }} 
+                allow="autoplay; clipboard-write; encrypted-media; picture-in-picture" 
+                allowFullScreen 
+                title={isSpotify ? "Spotify Player" : "SoundCloud Player"} 
+              />
             </div>
           ) : (
             <div style={{ width: "100%", height: "120px", background: "linear-gradient(135deg, " + accentColor + "20 0%, rgba(138, 43, 226, 0.1) 100%)", borderRadius: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
