@@ -80,6 +80,13 @@ export interface Drop {
   color?: string;
   repEarned?: number;
   markerType?: string;
+  // Photo metadata for GPS-tagged photos
+  photoMetadata?: {
+    hasLocation: boolean;
+    originalLat?: number;
+    originalLng?: number;
+    timestamp: Date;
+  };
 }
 
 // User Profile type

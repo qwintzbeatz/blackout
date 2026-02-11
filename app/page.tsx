@@ -569,6 +569,9 @@ const HomeComponent = () => {
   // 🆕 Selected Music Drop for full-screen modal
   const [selectedMusicDrop, setSelectedMusicDrop] = useState<Drop | null>(null);
   
+  // 🆕 Selected Photo Drop for full-screen modal
+  const [selectedPhotoDrop, setSelectedPhotoDrop] = useState<Drop | null>(null);
+  
   // 🆕 Song Unlock Modal state
   const [songUnlockModal, setSongUnlockModal] = useState<{
     isOpen: boolean;
@@ -3151,7 +3154,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           />
         )}
 
-        {/* Drops with photos */}
+        {/* Drops with photos - Now opens full screen modal */}
         {drops.filter(drop => drop.photoUrl).map((drop) => {
           const dropIcon = typeof window !== 'undefined' ?
             new (require('leaflet').DivIcon)({
@@ -3204,10 +3207,44 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               key={drop.id || drop.firestoreId}
               position={[drop.lat, drop.lng]}
               icon={dropIcon}
+              eventHandlers={{
+                click: () => {
+                  setSelectedPhotoDrop(drop);
+                  if (mapRef.current) {
+                    mapRef.current.closePopup();
+                  }
+                }
+              }}
+            />
+          );
+        })}
+
+        {/* Full-Screen Photo Drop Modal */}
+        {selectedPhotoDrop && (
+          <>
+            {/* Backdrop */}
+            <div
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                backdropFilter: 'blur(8px)',
+                zIndex: 1999,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              onClick={() => setSelectedPhotoDrop(null)}
             >
-              <Popup>
+              {/* Popup content */}
+              <div
+                onClick={(e) => e.stopPropagation()}
+              >
                 <PhotoDropPopup
-                  drop={drop}
+                  drop={selectedPhotoDrop}
                   user={user}
                   onLikeUpdate={(dropId, newLikes) => {
                     setDrops(prev =>
@@ -3216,11 +3253,12 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                       )
                     );
                   }}
+                  onClose={() => setSelectedPhotoDrop(null)}
                 />
-              </Popup>
-            </Marker>
-          );
-        })}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Music drops (trackUrl, no photo) */}
         {drops.filter(drop => drop.trackUrl && !drop.photoUrl).map((drop) => {

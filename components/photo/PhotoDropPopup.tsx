@@ -9,12 +9,14 @@ interface PhotoDropPopupProps {
   drop: Drop;
   user: FirebaseUser | null;
   onLikeUpdate: (dropId: string, newLikes: string[]) => void;
+  onClose?: () => void;
 }
 
 const PhotoDropPopup: React.FC<PhotoDropPopupProps> = ({
   drop,
   user,
-  onLikeUpdate
+  onLikeUpdate,
+  onClose
 }) => {
   const [isLiked, setIsLiked] = useState(drop.likes?.includes(user?.uid || '') || false);
   const [likeCount, setLikeCount] = useState(drop.likes?.length || 0);
@@ -83,16 +85,16 @@ const PhotoDropPopup: React.FC<PhotoDropPopupProps> = ({
 
   return (
     <div style={{
-      minWidth: '280px',
-      maxWidth: '350px',
-      fontSize: '12px',
-      lineHeight: '1.4',
-      color: '#333',
-      textAlign: 'left',
-      backgroundColor: 'white',
-      borderRadius: '8px',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-      overflow: 'hidden'
+      backgroundColor: 'rgba(0, 0, 0, 0.95)',
+      color: 'white',
+      padding: '20px',
+      borderRadius: '15px',
+      boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+      minWidth: '300px',
+      maxWidth: '400px',
+      maxHeight: '80vh',
+      overflowY: 'auto',
+      border: '2px solid #ef4444'
     }}>
       {/* GPS Location Badge - Top of Card */}
       {hasGPSLocation && (
@@ -127,85 +129,32 @@ const PhotoDropPopup: React.FC<PhotoDropPopupProps> = ({
         display: 'flex',
         alignItems: 'center',
         gap: '10px',
-        marginBottom: '10px',
-        padding: '12px 12px 8px 12px'
+        marginBottom: '15px'
       }}>
-        <div style={{ position: 'relative' }}>
-          <img
-            src={drop.userProfilePic || generateAvatarUrl(drop.createdBy, drop.username)}
-            alt={drop.username}
-            style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '50%',
-              border: `2px solid ${hasGPSLocation ? '#10b981' : '#ef4444'}`,
-              objectFit: 'cover'
-            }}
-          />
-          {hasGPSLocation && (
-            <div style={{
-              position: 'absolute',
-              top: '-4px',
-              right: '-4px',
-              backgroundColor: '#10b981',
-              color: 'white',
-              borderRadius: '50%',
-              width: '16px',
-              height: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '10px',
-              border: '2px solid white'
-            }}>
-              📍
-            </div>
-          )}
-        </div>
+        <img
+          src={drop.userProfilePic || generateAvatarUrl(drop.createdBy, drop.username)}
+          alt={drop.username}
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '50%',
+            border: `2px solid ${hasGPSLocation ? '#10b981' : '#ef4444'}`,
+            objectFit: 'cover'
+          }}
+        />
         <div style={{ flex: 1 }}>
           <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '6px',
-            marginBottom: '2px'
+            fontWeight: 'bold', 
+            fontSize: '14px',
+            color: 'white'
           }}>
-            <div style={{ 
-              fontWeight: 'bold', 
-              fontSize: '13px',
-              color: hasGPSLocation ? '#10b981' : '#1f2937'
-            }}>
-              {drop.username}
-            </div>
-            {hasGPSLocation && (
-              <span style={{
-                fontSize: '10px',
-                backgroundColor: '#d1fae5',
-                color: '#065f46',
-                padding: '2px 6px',
-                borderRadius: '10px',
-                fontWeight: 'bold'
-              }}>
-                GPS PHOTOGRAPHER
-              </span>
-            )}
+            {drop.username}
           </div>
           <div style={{ 
             fontSize: '11px', 
-            color: '#6b7280',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
+            color: '#cbd5e1'
           }}>
-            <span>{getTimeAgo(drop.timestamp)}</span>
-            {drop.photoMetadata?.timestamp && (
-              <span style={{ 
-                fontSize: '10px',
-                color: '#9ca3af',
-                fontStyle: 'italic'
-              }}>
-                📅 {getPhotoTakenDate()}
-              </span>
-            )}
+            {getTimeAgo(drop.timestamp)}
           </div>
         </div>
       </div>
