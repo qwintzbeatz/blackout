@@ -14,15 +14,23 @@ import { CrewId } from '@/lib/types/story';
 interface CrewChatPanelProps { 
   crewId: CrewId | null, 
   onClose: () => void,
-  userProfile: UserProfile | null 
+  userProfile: UserProfile | null,
+  markMessagesAsRead: () => Promise<void> // Added prop
 }
 
-export default function CrewChatPanel({ crewId, onClose, userProfile }: CrewChatPanelProps) {
+export default function CrewChatPanel({ crewId, onClose, userProfile, markMessagesAsRead }: CrewChatPanelProps) {
   const [messages, setMessages] = useState<CrewChatMessage[]>([]);
   const [text, setText] = useState('');
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
+
+  // Call markMessagesAsRead when the component mounts (chat is opened)
+  useEffect(() => {
+    if (crewId && userProfile && markMessagesAsRead) {
+      markMessagesAsRead();
+    }
+  }, [crewId, userProfile, markMessagesAsRead]);
 
   // Get current user from auth
   useEffect(() => {
@@ -49,9 +57,9 @@ export default function CrewChatPanel({ crewId, onClose, userProfile }: CrewChat
           messagesData.push({
             id: childSnapshot.key || Date.now().toString(),
             text: data.text || '',
-            uid: data.uid || '',
-            username: data.username || 'Anonymous',
-            avatar: data.avatar || generateAvatarUrl(data.uid || 'unknown', data.username || 'User', data.gender, 60),
+            senderUid: data.senderUid || '',
+            senderName: data.senderName || 'Anonymous',
+            avatar: data.avatar || generateAvatarUrl(data.senderUid || 'unknown', data.senderName || 'User', data.gender, 60),
             timestamp: data.timestamp || Date.now()
           });
         });
@@ -86,8 +94,8 @@ export default function CrewChatPanel({ crewId, onClose, userProfile }: CrewChat
     const messagesRef = ref(realtimeDb, `crew-chat/${crewId}`);
     const messageData = {
       text: text.trim(),
-      uid: currentUser.uid,
-      username: userProfile.username || 'Anonymous',
+      senderUid: currentUser.uid,
+      senderName: userProfile.username || 'Anonymous',
       avatar: userProfile.profilePicUrl || generateAvatarUrl(currentUser.uid, userProfile.username || 'User', userProfile.gender, 60),
       timestamp: Date.now()
     };
@@ -122,7 +130,7 @@ export default function CrewChatPanel({ crewId, onClose, userProfile }: CrewChat
     }
 
     // Check if current user is message owner or has admin rights
-    if (messageToDelete.uid !== currentUser.uid) {
+    if (messageToDelete.senderUid !== currentUser.uid) {
       alert('You can only delete your own messages.');
       return;
     }
@@ -249,9 +257,9 @@ export default function CrewChatPanel({ crewId, onClose, userProfile }: CrewChat
         ) : (
           <>
             {messages.map(msg => {
-              const isOwnMessage = msg.uid === currentUser?.uid;
+              const isOwnMessage = msg.senderUid === currentUser?.uid;
               const isDeleting = deletingMessageId === msg.id;
-              const profilePicUrl = msg.avatar || generateAvatarUrl(msg.uid, msg.username, undefined, 60);
+              const profilePicUrl = msg.avatar || generateAvatarUrl(msg.senderUid, msg.senderName, undefined, 60);
               
               return (
                 <div 
@@ -289,7 +297,7 @@ export default function CrewChatPanel({ crewId, onClose, userProfile }: CrewChat
                   }}>
                     <img
                       src={profilePicUrl}
-                      alt={msg.username}
+                      alt={msg.senderName}
                       style={{
                         width: '40px',
                         height: '40px',
@@ -301,7 +309,7 @@ export default function CrewChatPanel({ crewId, onClose, userProfile }: CrewChat
                       onError={(e) => {
                         // Fallback if image fails to load
                         const target = e.target as HTMLImageElement;
-                        target.src = generateAvatarUrl(msg.uid, msg.username, undefined, 60);
+                        target.src = generateAvatarUrl(msg.senderUid, msg.senderName, undefined, 60);
                       }}
                     />
                     <span style={{
@@ -313,7 +321,7 @@ export default function CrewChatPanel({ crewId, onClose, userProfile }: CrewChat
                       whiteSpace: 'nowrap',
                       textAlign: 'center'
                     }}>
-                      {msg.username}
+                      {msg.senderName}
                     </span>
                   </div>
                   

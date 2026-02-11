@@ -1,12 +1,17 @@
 // components/story/StoryPanel.tsx
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStoryManager } from './StoryManager';
 import { CrewId } from '@/lib/types/story';
 
-const StoryPanel: React.FC = () => {
+const StoryPanel: React.FC<{ markStoryContentAsViewed: () => Promise<void> }> = ({ markStoryContentAsViewed }) => {
   const { storyProgress, activeMission, availableMissions, completedMissions, crewTrust, getCrewTrustLevel, getStoryCompletion, startMission, completeMission, abandonMission } = useStoryManager();
   const [selectedTab, setSelectedTab] = useState<'story' | 'missions' | 'crew'>('story');
+
+  // Call markStoryContentAsViewed when the panel mounts
+  useEffect(() => {
+    markStoryContentAsViewed();
+  }, [markStoryContentAsViewed]); 
 
   const panelStyle = { backgroundColor: 'rgba(0, 0, 0, 0.85)', color: '#e0e0e0', padding: '16px', borderRadius: '8px', width: '400px', maxHeight: '80vh', overflowY: 'auto' as const, zIndex: 1200 };
   const crewColors: Record<CrewId, string> = { bqc: '#000000', sps: '#10b981', lzt: '#4dabf7', dgc: '#f97316' };

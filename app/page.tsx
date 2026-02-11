@@ -4,6 +4,8 @@ import { StoryManagerProvider } from '@/components/story/StoryManager';
 import StoryPanel from '@/components/story/StoryPanel';
 import { useMissionTriggers } from '@/hooks/useMissionTriggers';
 import { useTimeOfDay } from '@/hooks/useTimeOfDay';
+import useCrewChatUnreadTracker from '@/hooks/useCrewChatUnreadTracker';
+import useStoryNotificationTracker from '@/hooks/useStoryNotificationTracker';
 
 import { 
   doc, 
@@ -27,6 +29,8 @@ import {
   getDownloadURL 
 } from 'firebase/storage';
 import { auth, db, realtimeDb, storage } from '@/lib/firebase/config';
+import { sendNpcChatMessage } from '@/lib/firebase/npcChat'; // New import
+import { characters } from '@/data/characters'; // New import
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -103,8 +107,9 @@ import {
   NearbyCrewMember,
   CrewChatMessage,
   DirectMessage,
-  DirectChat
-} from '@/types';
+  DirectChat,
+  CrewChatUnreadStatus
+} from '@/lib/types/blackout';
 
 // 🔧 PERFORMANCE: Enable SoundCloud for music playback functionality
 const ENABLE_SOUNDCLOUD = false;
@@ -511,6 +516,13 @@ const HomeComponent = () => {
   const [loadingMarkers, setLoadingMarkers] = useState(false);
   const [isLoadingMarkers, setIsLoadingMarkers] = useState(false);
   
+  // NPC Welcome Notification State
+  const [npcWelcomeNotification, setNpcWelcomeNotification] = useState<{
+    show: boolean;
+    leaderName: string;
+    message: string;
+  } | null>(null);
+  
   // User profile states
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [showProfileSetup, setShowProfileSetup] = useState(false);
@@ -706,6 +718,11 @@ const {
     sunPosition,
     theme 
   } = useTimeOfDay();
+
+  // 🆕 CREW CHAT UNREAD TRACKER HOOK
+  const { hasUnreadMessages, unreadCount, markCrewChatAsRead } = useCrewChatUnreadTracker();
+  // 🆕 STORY NOTIFICATION TRACKER HOOK
+  const { hasNewStoryContent, activeMissionCount, markStoryContentAsViewed } = useStoryNotificationTracker();
 
   // Derive GPS status from state
   const gpsStatus = gpsLoading ? 'acquiring' : gpsError ? 'error' : isTracking ? 'tracking' : 'idle';
@@ -1048,7 +1065,8 @@ const {
         photosTaken: 0,
         collaborations: 0,
         blackoutEventsInvestigated: 0,
-        kaiTiakiEvaluationsReceived: 0
+        kaiTiakiEvaluationsReceived: 0,
+        hasReceivedCrewWelcomeMessage: false // Initialize new field
       };
       
       const userRef = doc(db, 'users', user.uid);
@@ -1239,7 +1257,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         photosTaken: data.photosTaken || 0,
         collaborations: data.collaborations || 0,
         blackoutEventsInvestigated: data.blackoutEventsInvestigated || 0,
-        kaiTiakiEvaluationsReceived: data.kaiTiakiEvaluationsReceived || 0
+        kaiTiakiEvaluationsReceived: data.kaiTiakiEvaluationsReceived || 0,
+        hasReceivedCrewWelcomeMessage: data.hasReceivedCrewWelcomeMessage || false // Initialize new field
       };
       
       // Set profile first, then start data loading
@@ -1527,14 +1546,70 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         message: message,
         breakdown: repResult.breakdown
       });
-      
-      return docRef.id;
-    } catch (error) {
-      console.error('Error saving marker to Firestore:', error);
-      return null;
-    }
-  };
 
+      // Check if user just placed their first drop and send welcome message if needed
+      if (userProfile.crewId && !userProfile.hasReceivedCrewWelcomeMessage) {
+        const crewLeaderName = CREWS.find(c => c.id === userProfile.crewId)?.leader;
+        const leaderCharacter = characters.find(char => char.name.includes(crewLeaderName || ''));
+
+        if (leaderCharacter) {
+          const greetingMessage = 
+            `${leaderCharacter.name.replace('👑 ', '')}: Awesome first tag, ${userProfile.username}! Keep it up. This city won't tag itself. 🎨`;
+          
+          setNpcWelcomeNotification({
+            show: true,
+            leaderName: leaderCharacter.name.replace('👑 ', ''),
+            message: greetingMessage,
+          });
+
+          // Update user profile in Firestore to mark message as sent
+          const userRef = doc(db, 'users', user.uid);
+          await updateDoc(userRef, {
+            hasReceivedCrewWelcomeMessage: true,
+            lastActive: Timestamp.now()
+          });
+
+                      // Update local userProfile state
+                      setUserProfile(prev => prev ? {
+                        ...prev,
+                        hasReceivedCrewWelcomeMessage: true
+                      } : null);
+                    }
+                  }
+          
+                  // Check for mission completion: "First Tags" (act1_intro) after 3rd drop
+                  const newTotalMarkers = (userProfile.totalMarkers || 0) + 1;
+                  if (newTotalMarkers === 3 && userProfile.activeMissions?.includes('act1_intro')) {
+                    const storyRef = doc(db, 'story', user.uid);
+                    await updateDoc(storyRef, {
+                      activeMissions: (userProfile.activeMissions || []).filter(id => id !== 'act1_intro'),
+                      completedMissions: [...(userProfile.completedMissions || []), 'act1_intro'],
+                      storyProgress: (userProfile.storyProgress || 0) + 1, // Increment story progress
+                      lastUpdated: Timestamp.now()
+                    });
+          
+                    // Update local userProfile state for active/completed missions and story progress
+                    setUserProfile(prev => prev ? {
+                      ...prev,
+                      activeMissions: prev.activeMissions?.filter(id => id !== 'act1_intro') || [],
+                      completedMissions: [...(prev.completedMissions || []), 'act1_intro'],
+                      storyProgress: (prev.storyProgress || 0) + 1,
+                    } : null);
+          
+                    // Optional: Show a notification for mission completion
+                    setRepNotification({
+                      show: true,
+                      amount: 0, // No direct REP from mission completion here, handled by mission rewards
+                      message: 'MISSION COMPLETE: First Tags! 🎉',
+                    });
+                  }
+                
+                return docRef.id;
+              } catch (error) {
+                console.error('Error saving marker to Firestore:', error);
+                return null;
+              }
+            };
   // UPDATED: Handle photo selection with GPS extraction and ImgBB upload
   const handlePhotoSelect = useCallback(async (photoData: { 
     url: string; 
@@ -1694,6 +1769,63 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         if (mapRef.current) {
           mapRef.current.setView([dropLat, dropLng], 17);
         }
+
+        // Check if user just placed their first drop and send welcome message if needed
+        if (userProfile.crewId && !userProfile.hasReceivedCrewWelcomeMessage) {
+          const crewLeaderName = CREWS.find(c => c.id === userProfile.crewId)?.leader;
+          const leaderCharacter = characters.find(char => char.name.includes(crewLeaderName || ''));
+
+          if (leaderCharacter) {
+            const greetingMessage = 
+              `${leaderCharacter.name.replace('👑 ', '')}: Your photo drops are lighting up the city, ${userProfile.username}! Keep snapping and making history. 📸`;
+            
+            setNpcWelcomeNotification({
+              show: true,
+              leaderName: leaderCharacter.name.replace('👑 ', ''),
+              message: greetingMessage,
+            });
+
+            // Update user profile in Firestore to mark message as sent
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, {
+              hasReceivedCrewWelcomeMessage: true,
+              lastActive: Timestamp.now()
+            });
+
+            // Update local userProfile state
+            setUserProfile(prev => prev ? {
+              ...prev,
+              hasReceivedCrewWelcomeMessage: true
+            } : null);
+          }
+        }
+
+        // Check for mission completion: "First Tags" (act1_intro) after 3rd drop
+        const newTotalMarkers = (userProfile.totalMarkers || 0) + 1;
+        if (newTotalMarkers === 3 && userProfile.activeMissions?.includes('act1_intro')) {
+          const storyRef = doc(db, 'story', user.uid);
+          await updateDoc(storyRef, {
+            activeMissions: (userProfile.activeMissions || []).filter(id => id !== 'act1_intro'),
+            completedMissions: [...(userProfile.completedMissions || []), 'act1_intro'],
+            storyProgress: (userProfile.storyProgress || 0) + 1, // Increment story progress
+            lastUpdated: Timestamp.now()
+          });
+
+          // Update local userProfile state for active/completed missions and story progress
+          setUserProfile(prev => prev ? {
+            ...prev,
+            activeMissions: prev.activeMissions?.filter(id => id !== 'act1_intro') || [],
+            completedMissions: [...(prev.completedMissions || []), 'act1_intro'],
+            storyProgress: (prev.storyProgress || 0) + 1,
+          } : null);
+
+          // Optional: Show a notification for mission completion
+          setRepNotification({
+            show: true,
+            amount: 0, // No direct REP from mission completion here, handled by mission rewards
+            message: 'MISSION COMPLETE: First Tags! 🎉',
+          });
+        }
       } else {
         throw new Error('Failed to save drop');
       }
@@ -1842,7 +1974,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
       const userRef = doc(db, 'users', user.uid);
       setUserProfile((prev) => prev ? { ...prev, unlockedTracks: newTracks } : null);
-        // Update local state IMMEDIATELY for instant UI feedback
+      // Update local state IMMEDIATELY for instant UI feedback
       console.log('🎵 Updated local userProfile with new tracks:', newTracks);
       await updateDoc(userRef, {
         unlockedTracks: newTracks,
@@ -1860,6 +1992,63 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         amount: 0,
         message: `Music drop placed! You gave away "${getTrackNameFromUrl(trackToDrop)}". ${newTracks.length === 0 ? "You have no songs left." : `${newTracks.length} track(s) remaining.`}`,
       });
+
+      // Check if user just placed their first drop and send welcome message if needed
+      if (userProfile.crewId && !userProfile.hasReceivedCrewWelcomeMessage) {
+        const crewLeaderName = CREWS.find(c => c.id === userProfile.crewId)?.leader;
+        const leaderCharacter = characters.find(char => char.name.includes(crewLeaderName || ''));
+
+        if (leaderCharacter) {
+          const greetingMessage = 
+            `${leaderCharacter.name.replace('👑 ', '')}: Your beats are dropping hard, ${userProfile.username}! Keep the soundtrack fresh and the streets vibrant. 🎶`;
+          
+          setNpcWelcomeNotification({
+            show: true,
+            leaderName: leaderCharacter.name.replace('👑 ', ''),
+            message: greetingMessage,
+          });
+
+          // Update user profile in Firestore to mark message as sent
+          const userRef = doc(db, 'users', user.uid);
+          await updateDoc(userRef, {
+            hasReceivedCrewWelcomeMessage: true,
+            lastActive: Timestamp.now()
+          });
+
+          // Update local userProfile state
+          setUserProfile(prev => prev ? {
+            ...prev,
+            hasReceivedCrewWelcomeMessage: true
+          } : null);
+        }
+      }
+
+      // Check for mission completion: "First Tags" (act1_intro) after 3rd drop
+      const newTotalMarkers = (userProfile.totalMarkers || 0) + 1;
+      if (newTotalMarkers === 3 && userProfile.activeMissions?.includes('act1_intro')) {
+        const storyRef = doc(db, 'story', user.uid);
+        await updateDoc(storyRef, {
+          activeMissions: (userProfile.activeMissions || []).filter(id => id !== 'act1_intro'),
+          completedMissions: [...(userProfile.completedMissions || []), 'act1_intro'],
+          storyProgress: (userProfile.storyProgress || 0) + 1, // Increment story progress
+          lastUpdated: Timestamp.now()
+        });
+
+        // Update local userProfile state for active/completed missions and story progress
+        setUserProfile(prev => prev ? {
+          ...prev,
+          activeMissions: prev.activeMissions?.filter(id => id !== 'act1_intro') || [],
+          completedMissions: [...(prev.completedMissions || []), 'act1_intro'],
+          storyProgress: (prev.storyProgress || 0) + 1,
+        } : null);
+
+        // Optional: Show a notification for mission completion
+        setRepNotification({
+          show: true,
+          amount: 0, // No direct REP from mission completion here, handled by mission rewards
+          message: 'MISSION COMPLETE: First Tags! 🎉',
+        });
+      }
 
       await loadDrops();
       setShowDropTypeModal(false);
@@ -2710,6 +2899,65 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             onClose={() => setSongUnlockModal(null)}
             unlockSource={songUnlockModal.source}
           />
+        )}
+
+        {/* NPC Welcome Notification */}
+        {npcWelcomeNotification?.show && (
+          <div style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 10000,
+            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+            border: '2px solid #10b981',
+            borderRadius: '15px',
+            padding: '30px',
+            maxWidth: '400px',
+            width: '90%',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+            textAlign: 'center',
+            color: '#e0e0e0',
+            animation: 'popIn 0.3s ease-out'
+          }}>
+            <h3 style={{
+              fontSize: '24px',
+              color: '#10b981',
+              marginBottom: '10px'
+            }}>
+              Welcome to the Crew!
+            </h3>
+            <p style={{
+              fontSize: '16px',
+              marginBottom: '20px'
+            }}>
+              <strong style={{ color: '#4dabf7' }}>{npcWelcomeNotification.leaderName}:</strong> {npcWelcomeNotification.message}
+            </p>
+            <button
+              onClick={() => setNpcWelcomeNotification(null)}
+              style={{
+                backgroundColor: '#10b981',
+                color: 'white',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.opacity = '0.9'}
+              onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
+            >
+              Got it!
+            </button>
+            <style>{`
+              @keyframes popIn {
+                from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+                to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+              }
+            `}</style>
+          </div>
         )}
 
       {/* Top-Left Logo - Changes color based on day/night */}
@@ -5644,8 +5892,12 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         {showCrewChat && userProfile?.crewId && user && (
           <CrewChatPanel 
             crewId={userProfile.crewId} 
-            onClose={() => setShowCrewChat(false)}
+            onClose={() => {
+              setShowCrewChat(false);
+              markCrewChatAsRead(); // Mark as read when closing
+            }}
             userProfile={userProfile}
+            markMessagesAsRead={markCrewChatAsRead} // Pass down the function
           />
         )}
 
@@ -5701,7 +5953,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               </button>
             </div>
             <div style={{ maxHeight: 'calc(80vh - 60px)', overflowY: 'auto' }}>
-              <StoryPanel />
+              <StoryPanel markStoryContentAsViewed={markStoryContentAsViewed} />
             </div>
           </div>
         )}
@@ -5951,6 +6203,28 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             }}
             aria-label="Crew Chat"
           >
+            {/* Unread Message Badge */}
+            {hasUnreadMessages && !showCrewChat && unreadCount > 0 && (
+              <div style={{
+                position: 'absolute',
+                top: '5px',
+                right: '5px',
+                backgroundColor: '#ef4444', // Red for notification
+                color: 'white',
+                borderRadius: '50%',
+                width: '20px',
+                height: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                zIndex: 4, // Above other elements
+                boxShadow: '0 0 5px rgba(239, 68, 68, 0.7)'
+              }}>
+                {unreadCount}
+              </div>
+            )}
             {/* Empty button - icon/text should be in SVG */}
           </button>
         </div>
@@ -5990,9 +6264,30 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             borderRadius: '8px',
             transition: 'all 0.3s ease',
             minWidth: '60px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            position: 'relative' // Added for badge positioning
           }}
         >
+          {/* Unread Story Notification Badge */}
+          {hasNewStoryContent && !showStoryPanel && (
+            <div style={{
+              position: 'absolute',
+              top: '2px',
+              right: '2px',
+              backgroundColor: '#ef4444', // Red for notification
+              color: 'white',
+              borderRadius: '50%',
+              width: '12px',
+              height: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '8px',
+              fontWeight: 'bold',
+              zIndex: 1,
+              boxShadow: '0 0 5px rgba(239, 68, 68, 0.7)'
+            }} />
+          )}
           <div style={{
             fontSize: '20px',
             transform: showStoryPanel ? 'scale(1.1)' : 'scale(1)'
