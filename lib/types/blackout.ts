@@ -1,6 +1,7 @@
 // lib/types/blackout.ts
 
 import { CrewId } from './story';
+import { Timestamp } from 'firebase/firestore';
 
 // Base marker types
 export type MarkerName = 'Pole' | 'Sign' | 'E.Box' | 'Fence' | 'Wall' | 'Shutter' | 'Sewer' | 'Rooftop' | 'Ground' | 'Train' | 'Bridge' | 'Traffic Light' | 'Truck' | 'Van' | 'Post Box' | 'Speed Camera' | 'ATM Machine' | 'Bus Stop';
@@ -123,6 +124,9 @@ export interface UserProfile {
   nextRank?: string;
   repToNextRank?: number;
   rankProgressPercentage?: number;
+  crewLastReadTimestamps?: Record<CrewId, Timestamp>; // New field for tracking unread chat messages
+  hasReceivedCrewWelcomeMessage?: boolean; // New field for tracking if player received initial crew welcome
+  lastViewedStoryTimestamp?: Timestamp; // New field for tracking when user last viewed story content
 }
 
 // Top Player type
@@ -223,8 +227,8 @@ export interface CrewData {
 export interface CrewChatMessage {
   id: string;
   text: string;
-  uid: string;
-  username: string;
+  senderUid: string;
+  senderName: string;
   avatar?: string;
   timestamp: number;
 }
