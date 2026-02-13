@@ -176,7 +176,7 @@ export default function CrewChatPanel({ crewId, onClose, userProfile, markMessag
     <div style={{
       ...panelStyle,
       position: 'absolute',
-      top: '80px',
+      top: '0px',
       left: '0px',
       width: 'min(400px, 110vw)', // More responsive
       maxHeight: 'calc(100vh - 180px)', // Account for bottom nav

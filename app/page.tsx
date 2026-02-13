@@ -408,7 +408,7 @@ const usePerformanceMonitor = () => {
     if (renderCount.current > 50) {
       console.warn('High render count detected. Check for infinite loops.');
     }
-  });
+  }, []);
   
   const logPerformance = useCallback((operation: string, startTime: number) => {
     const duration = performance.now() - startTime;
@@ -6233,7 +6233,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       {/* Secondary Controls - Under Online Button */}
       <div style={{
         position: 'fixed',
-        bottom: '150px', // Positioned above the main nav bar
+        bottom: '80px', // Positioned above the main nav bar
         left: '0px', // Aligned with the Online button
         display: 'flex',
         flexDirection: 'row',
