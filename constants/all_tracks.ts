@@ -22,7 +22,7 @@ export const SPOTIFY_TRACKS = [
 'https://open.spotify.com/track/38WyDtxZhxm63jiythwemE', // Lorde - Ribs
 'https://open.spotify.com/track/5mUiad5pDU1wFvIbtKgJKB', // SIX60 - Don’t Forget Your Roots
 'https://open.spotify.com/track/5V46sbFSgli7y5Kl1shed0', // Corrella - How Will I Know
-'https://open.spotify.com/track/27bYzUlo34pVueQgpX5o2V', // Lomez Brown - Sweet Lover
+'https://open.spotify.com/track/27bYzUlo34pVueQgpD1d5V', // Lomez Brown - Sweet Lover
 'https://open.spotify.com/track/6UGJKTfIzk6WqjTgBeQg5O', // L.A.B. - Controller
 'https://open.spotify.com/track/1HqW8SFxqhHgy2m5m13v7C', // Brutha Rodz, Wiz Tokelau - Heart of a Lion
 'https://open.spotify.com/track/6HwcP1XamKZwjAmcdBN2Pk', // Fia - Love Me
@@ -51,7 +51,7 @@ export const SPOTIFY_TRACKS = [
 'https://open.spotify.com/track/5Ov3TERXJhFfuHcTpJR0iV', // Hori Shaw, Te Wehi - Ready To Ride
 'https://open.spotify.com/track/6mSnSuOhgHHohqeBw76jRV', // salvia palth - i was all over her
 'https://open.spotify.com/track/2OcX0meMxqyTlWIhBMwNW0', // Ladi6 - Like Water
-'https://open.spotify.com/track/4WEAdAPGiyR1QWzFZRWZJk', // SIX60 - Sundown
+'https://open.spotify.com/track/3fpYUnUFAj9gFCGvJg4kaE', // SIX60 - Sundown
 'https://open.spotify.com/track/4Tad6g9EPE3gv5RjOzRcJF', // Te Wehi - I’ll Be Your Home
 'https://open.spotify.com/track/6K8VQ84MqhsoakN5MjrnVR', // Lorde - Supercut
 'https://open.spotify.com/track/6n3BI97XQvybJjfh0SAgA2', // Myshaan - Carry My Heart
@@ -252,7 +252,7 @@ export const SPOTIFY_TRACKS = [
 'https://open.spotify.com/track/2YQBDu12e3EH8BRIn5FrNF', // David Dallas, Ruby Frost - The Gate
 'https://open.spotify.com/track/21Dy4XZQifam4lMjFk3VCu', // David Dallas - Big Time
 'https://open.spotify.com/track/7vhSPNvA48PAmrLxfF80HH', // Tiki Taane - Always on My Mind
-'https://open.spotify.com/track/1oZ4Z8K1l3DpjGK5r7N70C', // Tiki Taane, Savage, Scribe, Flowz, Mareko, Ricky Paul Muzik, Tyna - Top 5 NZ
+'https://open.spotify.com/track/2i8s0XiKcSNBkGfiSns6wc', // Aaradhna - Down Time
 'https://open.spotify.com/track/6jJ9N79SgVYM7cQtdnCjmK', // Tiki Taane - Top 5 NZ - Tiki Taane Remix
 'https://open.spotify.com/track/3vhK3V0hYOfc2tpana6odd', // Tiki Taane - Tangaroa
 'https://open.spotify.com/track/5OZg0ujCC9p4uM1Cvo0anO', // Tiki Taane - Our Favourite Target
@@ -340,7 +340,7 @@ export const getTrackName = (url: string): string => {
 'https://open.spotify.com/track/38WyDtxZhxm63jiythwemE': 'Lorde - Ribs',
 'https://open.spotify.com/track/5mUiad5pDU1wFvIbtKgJKB': 'SIX60 - Dont Forget Your Roots',
 'https://open.spotify.com/track/5V46sbFSgli7y5Kl1shed0': 'Corrella - How Will I Know',
-'https://open.spotify.com/track/27bYzUlo34pVueQgpX5o2V': 'Lomez Brown - Sweet Lover',
+'https://open.spotify.com/track/27bYzUlo34pVueQgpD1d5V': 'Lomez Brown - Sweet Lover',
 'https://open.spotify.com/track/6UGJKTfIzk6WqjTgBeQg5O': 'L.A.B. - Controller',
 'https://open.spotify.com/track/1HqW8SFxqhHgy2m5m13v7C': 'Brutha Rodz, Wiz Tokelau - Heart of a Lion',
 'https://open.spotify.com/track/6HwcP1XamKZwjAmcdBN2Pk': 'Fia - Love Me',
@@ -369,7 +369,7 @@ export const getTrackName = (url: string): string => {
 'https://open.spotify.com/track/5Ov3TERXJhFfuHcTpJR0iV': 'Hori Shaw, Te Wehi - Ready To Ride',
 'https://open.spotify.com/track/6mSnSuOhgHHohqeBw76jRV': 'salvia palth - i was all over her',
 'https://open.spotify.com/track/2OcX0meMxqyTlWIhBMwNW0': 'Ladi6 - Like Water',
-'https://open.spotify.com/track/4WEAdAPGiyR1QWzFZRWZJk': 'SIX60 - Sundown',
+'https://open.spotify.com/track/3fpYUnUFAj9gFCGvJg4kaE': 'SIX60 - Sundown',
 'https://open.spotify.com/track/4Tad6g9EPE3gv5RjOzRcJF': 'Te Wehi - Ill Be Your Home',
 'https://open.spotify.com/track/6K8VQ84MqhsoakN5MjrnVR': 'Lorde - Supercut',
 'https://open.spotify.com/track/6n3BI97XQvybJjfh0SAgA2': 'Myshaan - Carry My Heart',
@@ -570,7 +570,7 @@ export const getTrackName = (url: string): string => {
 'https://open.spotify.com/track/2YQBDu12e3EH8BRIn5FrNF': 'David Dallas, Ruby Frost - The Gate',
 'https://open.spotify.com/track/21Dy4XZQifam4lMjFk3VCu': 'David Dallas - Big Time',
 'https://open.spotify.com/track/7vhSPNvA48PAmrLxfF80HH': 'Tiki Taane - Always on My Mind',
-'https://open.spotify.com/track/1oZ4Z8K1l3DpjGK5r7N70C': 'Tiki Taane, Savage, Scribe, Flowz, Mareko, Ricky Paul Muzik, Tyna - Top 5 NZ',
+'https://open.spotify.com/track/2i8s0XiKcSNBkGfiSns6wc': 'Aaradhna - Down Time',
 'https://open.spotify.com/track/6jJ9N79SgVYM7cQtdnCjmK': 'Tiki Taane - Top 5 NZ - Tiki Taane Remix',
 'https://open.spotify.com/track/3vhK3V0hYOfc2tpana6odd': 'Tiki Taane - Tangaroa',
 'https://open.spotify.com/track/5OZg0ujCC9p4uM1Cvo0anO': 'Tiki Taane - Our Favourite Target',
