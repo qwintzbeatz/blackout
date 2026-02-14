@@ -76,30 +76,15 @@ export const isSpotifyUrl = (url: string): boolean => {
 export const getSpotifyEmbedUrl = (url: string): string => {
   const match = url.match(/spotify\.com\/track\/([a-zA-Z0-9]+)/);
   if (match) {
+    // Using embed/track for video preview capability
     return `https://open.spotify.com/embed/track/${match[1]}?utm_source=generator&theme=0`;
   }
   return '';
 };
 
 export const getSoundCloudEmbedUrl = (trackUrl: string): string => {
-  const params = new URLSearchParams({
-    url: trackUrl,
-    color: 'ff5500',
-    auto_play: 'false',
-    hide_related: 'true',
-    show_comments: 'false',
-    show_user: 'false',
-    show_reposts: 'false',
-    show_teaser: 'false',
-    visual: 'false',
-    sharing: 'false',
-    buying: 'false',
-    download: 'false',
-    show_playcount: 'false',
-    show_artwork: 'false',
-    show_playlist: 'false'
-  });
-  return `https://w.soundcloud.com/player/?${params.toString()}`;
+  // Enable visual=true to show the visual player with artwork/video
+  return `https://w.soundcloud.com/player/?url=${encodeURIComponent(trackUrl)}&color=ff5500&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=true`;
 };
 
 // Drop type detection
