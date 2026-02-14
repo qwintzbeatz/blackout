@@ -5851,10 +5851,10 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                               </div>
                               <div style={{
                                 fontSize: '11px',
-                                color: '#ff6b6b',
+                                color: track.includes('soundcloud.com') ? '#ff6b6b' : '#1DB954',
                                 marginTop: '2px'
                               }}>
-                                Spotify
+                                {track.includes('soundcloud.com') ? 'SoundCloud' : 'Spotify'}
                               </div>
                             </div>
                             <div style={{

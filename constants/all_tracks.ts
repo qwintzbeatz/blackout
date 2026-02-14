@@ -50,7 +50,7 @@ export const SPOTIFY_TRACKS = [
 'https://open.spotify.com/track/0gCNs3jCCDhObAK0MRghtv', // Drax Project, SIX60 - Catching Feelings (feat. SIX60)
 'https://open.spotify.com/track/5Ov3TERXJhFfuHcTpJR0iV', // Hori Shaw, Te Wehi - Ready To Ride
 'https://open.spotify.com/track/6mSnSuOhgHHohqeBw76jRV', // salvia palth - i was all over her
-'https://open.spotify.com/track/2OcX0meMxqyTlWIhBMwNW0', // Ladi6 - Like Water
+'https://open.spotify.com/track/2OcX0meMpiyTlWIhBMwNW0', // Ladi6 - Like Water
 'https://open.spotify.com/track/3fpYUnUFAj9gFCGvJg4kaE', // SIX60 - Sundown
 'https://open.spotify.com/track/4Tad6g9EPE3gv5RjOzRcJF', // Te Wehi - I’ll Be Your Home
 'https://open.spotify.com/track/6K8VQ84MqhsoakN5MjrnVR', // Lorde - Supercut
@@ -205,7 +205,7 @@ export const SPOTIFY_TRACKS = [
 'https://open.spotify.com/track/71kprAUc0WVlvnGP02gtGG', // 4 Corners, Maia Rata - By My Side
 'https://open.spotify.com/track/4ptVUCmdM7XSIF1Lo8hfRl', // 4 Corners - On the Downlow
 'https://open.spotify.com/track/085tMFFMAfbBi1S1oDxYXJ', // 4 Corners - Listen
-'https://open.spotify.com/track/3kOm5B6Ckeym17Hj7hdVns', // Ladi6 - Like Water
+//'https://open.spotify.com/track/2OcX0meMpiyTlWIhBMwNW0', // Ladi6 - Like Water
 'https://open.spotify.com/track/2Nfk4aQvmdeUBYFIw34Cdp', // Ladi6 - Diamonds
 'https://open.spotify.com/track/4DCg327It5l63EIxtT3vKm', // Ladi6 - Whāia Te Māramatanga / Walk Right Up
 'https://open.spotify.com/track/5phT8k8l1Zb3v6JDBUx13E', // Ladi6 - Ikarus
@@ -305,6 +305,92 @@ export const SPOTIFY_TRACKS = [
 'https://open.spotify.com/track/35ke39HpKQJ7FnNKNvavfy', // Nesian Mystik - No. 1
 'https://open.spotify.com/track/1zpvKGVCi21IOlHKz5yBUS', // Nesian Mystik - It's Almost
 'https://open.spotify.com/track/1thuihFn4otki3zxZMiQPZ', // Nesian Mystik - Hectic
+'https://open.spotify.com/track/3AKBSQJsLP92O7GdjK8Il7', // Anika Moa - Youthful
+'https://open.spotify.com/track/4oLPOQXMNDeDGf1c1pRSgK', // Anika Moa - Falling in Love Again
+'https://open.spotify.com/track/2jGPbhUgF0xa1HtmbjFeNe', // Anika Moa - Mother
+'https://open.spotify.com/track/1bXo8AUjZFsXpPz1by2lcG', // Maisey Rika - Tangaroa Whakamautai
+'https://open.spotify.com/track/02U0h81LPopyHpEdOUDZm3', // Maisey Rika, Tama Waipara - Haumanu
+'https://open.spotify.com/track/7afTnAThClw4YZWRW4AlmO', // Maisey Rika, Anika Moa - Ruaimoko
+'https://open.spotify.com/track/4O42hzBL79gB1GEm1RymoS', // Maisey Rika - Ohomairangi
+'https://open.spotify.com/track/0348kh3xHYWPSrgIgHyZSR', // Maisey Rika - Te Aroha
+'https://open.spotify.com/track/6jVFD421Tx5sMI3JyVqiMh', // Maisey Rika - Reconnect
+'https://open.spotify.com/track/61wYZfeRZGgf5M4wRmRvtY', // Maisey Rika - Letting Go
+'https://open.spotify.com/track/5rlghSaW1py8SXvGUxniC7', // Maisey Rika - Children of Romania
+'https://open.spotify.com/track/5yQ5VsEsI3XsqSDgZLo2XF', // Te Wehi - Unaware
+'https://open.spotify.com/track/5bcI3wQpXxQw4PUpinpeSJ', // Herbs - Dragons & Demons
+'https://open.spotify.com/track/2Ohkq2xdLHkOnrNRV4tztg', // Sweet & Irie, HORSEMEN FAMILY - Feels Like Magic
+'https://open.spotify.com/track/1n98zPWINRiuWCvRaChRd4', // Katchafire - Who You With
+'https://open.spotify.com/track/0JeSu23K0BW2g1Bm568C4c', // Katchafire - 100
+'https://open.spotify.com/track/7u4pe8R8Ti1RMVTh7036Hi', // Katchafire - Collie Herb Man
+'https://open.spotify.com/track/0mnBhXXnKQoCCXKF5L45ad', // Katchafire - Seriously
+'https://open.spotify.com/track/02yYxxU7lRPeoWuWN0bPuw', // Katchafire - Get Away
+'https://open.spotify.com/track/0Yu8oEJnPiIa7F5JTQfJjO', // Uru Whetu, Te Aroha, Torere - Taku Raumiri
+'https://open.spotify.com/track/6hiOaip4EtElxvjjkHiuL1', // Kora - Politician
+'https://open.spotify.com/track/53HYJLPX6InfqIsDt3BdLH', // 1814 - Jah Rastafari
+'https://open.spotify.com/track/2uuxnBjbWGbIq1fNS4yJfg', // 1814 - Picture On The Wall
+'https://open.spotify.com/track/01hdQfU8xCXA8aW59GnyWG', // House of Shem - Thinking About You
+'https://open.spotify.com/track/6HDZr2mm9iPL6dvBZt8zjB', // House of Shem - Anything You Ask For
+'https://open.spotify.com/track/1ikaWxcEqv5pyaDuJWcKcZ', // Ardijah - Silly Love Songs
+'https://open.spotify.com/track/5yz64s7TvgfOtqYTXLt5MK', // Ardijah - Love So Right
+'https://open.spotify.com/track/0aRiRbMBJ4boE3hhhtlOsB', // Adeaze - Getting Stronger
+'https://open.spotify.com/track/61uQYPlrQ9BGusRmLKoEDE', // Adeaze - A Life with You
+'https://open.spotify.com/track/0khkwt5FCMHDObLbGZkcjo', // Adeaze - How Deep Is Your Love
+'https://open.spotify.com/track/6hfi8kVyz46X7qMEQXyk7m', // Whenua Patuwai - Holding on to You
+'https://open.spotify.com/track/0Yry76Q4s4eWFbVeUqtPKb', // P-Money, Scribe - Remember?
+'https://open.spotify.com/track/3mnLllWwZ6c4DLIs3fKOoH', // P-Money, Scribe - Scribe 2001
+'https://open.spotify.com/track/2SO5DZTOi0Fxvyo9QHH7QD', // P-Money, 4 Corners, Scribe - Synchronize Thoughts
+'https://open.spotify.com/track/4rr67zXmEYf9ykLigeEsbv', // Crowded House - Don't Dream It's Over
+'https://open.spotify.com/track/6EooyE6kbrbosNjhCZDQ4i', // Katchafire - Seriously
+'https://open.spotify.com/track/3mTm7dnT1M7pivXKKuTs4m', // Blindspott - Phlex
+'https://open.spotify.com/track/2XqKlm86ZLP7NRD0vz9BNP', // Fast Crew - Suburbia Streets
+'https://open.spotify.com/track/07OHMnw4BIHiw0ml7FeqUj', // Fast Crew - I Got
+'https://open.spotify.com/track/3YjErTCMvJOrwEfXJ9gjCt', // Dei Hamo - We Gon Ride
+'https://open.spotify.com/track/3gJr1bJPUD9SgPZXesduSV', // Brooke Fraser - Arithmetic
+'https://open.spotify.com/track/0erUKbzlyZS4rcW6oaYaW5', // Brooke Fraser - Lifeline
+'https://open.spotify.com/track/41YkLqy2HVkMcNuH3Mh5Wa', // Tomorrow People - Souljah Feeling - feat. Chad Chambers
+'https://open.spotify.com/track/0PwoAyaHGmY9BGCVdsNeK4', // Nesian Mystik - Brothaz
+'https://open.spotify.com/track/2m57yduhfsJu0COFEdxCqA', // Ché-Fu - Hold Tight
+'https://open.spotify.com/track/7jjewQIrmp0NIddDnhh618', // David Grace & Injustice - Rua Kenana
+'https://open.spotify.com/track/51AXsgpHP8R1QWzFZRWZJk', // Nesian Mystik - For the People
+'https://open.spotify.com/track/6IwTZB5S5s2nAlfd8WpLFx', // Ché-Fu - Fade Away
+'https://open.spotify.com/track/7dt8NIkwXx7ZMJFmMDpbhb', // Ché-Fu - Misty Frequencies
+'https://open.spotify.com/track/2HB74eXrsfT1gVc8e4Wpcy', // Nesian Mystik - It's On
+'https://open.spotify.com/track/4ioAzfrxs8zqadm2woDNJW', // Ché-Fu - Waka
+'https://open.spotify.com/track/3Lw3CevoovMWjPXX6KHSH8', // Nesian Mystik, Che Fu, Kimbra, Cydel - Mr Mista
+'https://open.spotify.com/track/1DPMqbabMHKm8bN04arwK8', // King Kapisi - Screems from Da Old Plantation
+'https://open.spotify.com/track/1tF5oLj3khkYMa65szhPBB', // Brutha Rodz, Wiz Tokelau - Heart of a Lion
+'https://open.spotify.com/track/3oQOOLQIsWTASuMUUASkjL', // Herbs - E Papa
+'https://open.spotify.com/track/5kO0uAi5avZIr1EicKDOQS', // Beau Monga - Ruketekete Te Mamae
+'https://open.spotify.com/track/5laP2pd9pT6O6rfW8oq2zB', // Nesian Mystik - Robbin' Hood Heroes
+'https://open.spotify.com/track/0i2IECuBvAxHJqJDZDe5Pf', // Swiss - Blue Bayou
+'https://open.spotify.com/track/1pLwrsptvDxGwVV68IzAoG', // Patea Maori Club - Ngoi Ngoi
+'https://open.spotify.com/track/23jHR6RPxvK2w8XHQwrOJb', // Stan Walker - Take It Easy
+'https://open.spotify.com/track/16hJc4glcVv47bTpRayEA9', // Corrella - Chur Māori
+'https://open.spotify.com/track/2NxGngqV89UZXiiA6eQjjC', // Herbs - Long Ago
+'https://open.spotify.com/track/2eLHscUKEegz4VqiE5yZDq', // Makaira Berry, Hamiora Tuari, Mere Arihi Pipi-Takoko, Pere Wihongi - Tōrea
+'https://open.spotify.com/track/0VJJvi21HgLmeNs6umHVn8', // Maimoa, Awatea Wihongi, Hoeata Blake-Maxwell, Kia Kaaterama Pou, Makaira Berry, Mereana Teka, Meto Tagivale Schmidt-Peke, PERE, Puawai Taiapa, Raniera Blake, Tawaroa Kawana, Te Awhina Kaiwai-Wanikau - We Are Human
+'https://open.spotify.com/track/34jDGAa38HErcEfObppqmt', // Sammy Johnson, Tree - Don’t Say Goodbye
+'https://open.spotify.com/track/0H57GbB73BEJJfKZqr6w6z', // Pieter T - My Baby
+'https://open.spotify.com/track/0bPiFpdr5fkv9HamPMxwQB', // Mareko, J Williams - Them Eyes
+'https://open.spotify.com/track/2ZExm0dQH14MsEQAqPgUAR', // Deceptikonz, P-Money - Fallen Angels
+'https://open.spotify.com/track/736LgeulkCipMHCNHp3OKa', // J.Williams - Ghetto Flower
+'https://open.spotify.com/track/5BghMRrK03bJDO3oUB96J9', // Tomorrow People - Take It Away
+'https://open.spotify.com/track/5aOKHileSsefSMLlSjeMXc', // Renee Geyer - It Only Happens - (Duet With Doug Williams)
+'https://open.spotify.com/track/6U654FK2CjTyTDkAwYXIPE', // Survival - Rua Kenana
+'https://open.spotify.com/track/2WH2xszE7cQ0QLZ3BOT7v8', // Tama Renata - Theme from Once Were Warriors - Remastered
+'https://open.spotify.com/track/74Zh46Q8DTtVWggT9skJyS', // Southside of Bombay - What's the Time Mr. Wolf
+'https://open.spotify.com/track/7zPG72hArP7gme6SD1j5qm', // Tomorrow People, Chad Chambers, House of Shem - Souljah Feeling - House of Shem Remix
+'https://open.spotify.com/track/5uc1sYD4KtlM5FP05zg4rC', // Spawnbreezie - Fangai Lupe
+'https://open.spotify.com/track/40ILD2q1O9PzthBqoFcyh4', // Stan Walker - Purple Rain
+'https://open.spotify.com/track/0kqxnJKkxEMooySbkg5pBl', // Tama Waipara, Maisey Rika - East Coast Moon
+'https://open.spotify.com/track/7DEhSAhYZocA6P0fZowrRq', // Rebel Souljahz - Irie Beach Party
+'https://open.spotify.com/track/20KEox6z8x2p3C40VUKslV', // Dennis Marsh - Hangi Tonight
+'https://open.spotify.com/track/54dnHk3xYtCBjTFG44AYpN', // Dennis Marsh - Ten Guitars
+'https://open.spotify.com/track/6IgA90GcZVe1vya5gVT0EY', // Dennis Marsh - Oh Mum
+'https://open.spotify.com/track/0A6TdtuB5zBjFFLFV3IKFk', // Bic Runga - Drive
+'https://open.spotify.com/track/61US1T9Eq54jUoeMUcchQJ', // Elemeno P - Verona
+'https://open.spotify.com/track/6tXnRSvuNgOq4QcxpIN54r', // Crowded House - Weather With You
+'https://open.spotify.com/track/6dvG3cGg22zMBC4HpyjyRS', // Brooke Fraser - Better
 ];
 
 // Default track for new users
@@ -368,7 +454,7 @@ export const getTrackName = (url: string): string => {
 'https://open.spotify.com/track/0gCNs3jCCDhObAK0MRghtv': 'Drax Project, SIX60 - Catching Feelings (feat. SIX60)',
 'https://open.spotify.com/track/5Ov3TERXJhFfuHcTpJR0iV': 'Hori Shaw, Te Wehi - Ready To Ride',
 'https://open.spotify.com/track/6mSnSuOhgHHohqeBw76jRV': 'salvia palth - i was all over her',
-'https://open.spotify.com/track/2OcX0meMxqyTlWIhBMwNW0': 'Ladi6 - Like Water',
+//'https://open.spotify.com/track/2OcX0meMxqyTlWIhBMwNW0': 'Ladi6 - Like Water',
 'https://open.spotify.com/track/3fpYUnUFAj9gFCGvJg4kaE': 'SIX60 - Sundown',
 'https://open.spotify.com/track/4Tad6g9EPE3gv5RjOzRcJF': 'Te Wehi - Ill Be Your Home',
 'https://open.spotify.com/track/6K8VQ84MqhsoakN5MjrnVR': 'Lorde - Supercut',
@@ -523,7 +609,7 @@ export const getTrackName = (url: string): string => {
 'https://open.spotify.com/track/71kprAUc0WVlvnGP02gtGG': '4 Corners, Maia Rata - By My Side',
 'https://open.spotify.com/track/4ptVUCmdM7XSIF1Lo8hfRl': '4 Corners - On the Downlow',
 'https://open.spotify.com/track/085tMFFMAfbBi1S1oDxYXJ': '4 Corners - Listen',
-'https://open.spotify.com/track/3kOm5B6Ckeym17Hj7hdVns': 'Ladi6 - Like Water',
+'https://open.spotify.com/track/2OcX0meMpiyTlWIhBMwNW0': 'Ladi6 - Like Water',
 'https://open.spotify.com/track/2Nfk4aQvmdeUBYFIw34Cdp': 'Ladi6 - Diamonds',
 'https://open.spotify.com/track/4DCg327It5l63EIxtT3vKm': 'Ladi6 - Whāia Te Māramatanga / Walk Right Up',
 'https://open.spotify.com/track/5phT8k8l1Zb3v6JDBUx13E': 'Ladi6 - Ikarus',
@@ -623,6 +709,79 @@ export const getTrackName = (url: string): string => {
 'https://open.spotify.com/track/35ke39HpKQJ7FnNKNvavfy': 'Nesian Mystik - No. 1',
 'https://open.spotify.com/track/1zpvKGVCi21IOlHKz5yBUS': 'Nesian Mystik - Its Almost',
 'https://open.spotify.com/track/1thuihFn4otki3zxZMiQPZ': 'Nesian Mystik - Hectic',
+'https://open.spotify.com/track/3AKBSQJsLP92O7GdjK8Il7': 'Anika Moa - Youthful',
+'https://open.spotify.com/track/4oLPOQXMNDeDGf1c1pRSgK': 'Anika Moa - Falling in Love Again',
+'https://open.spotify.com/track/2jGPbhUgF0xa1HtmbjFeNe': 'Anika Moa - Mother',
+'https://open.spotify.com/track/1bXo8AUjZFsXpPz1by2lcG': 'Maisey Rika - Tangaroa Whakamautai',
+'https://open.spotify.com/track/02U0h81LPopyHpEdOUDZm3': 'Maisey Rika, Tama Waipara - Haumanu',
+'https://open.spotify.com/track/7afTnAThClw4YZWRW4AlmO': 'Maisey Rika, Anika Moa - Ruaimoko',
+'https://open.spotify.com/track/4O42hzBL79gB1GEm1RymoS': 'Maisey Rika - Ohomairangi',
+'https://open.spotify.com/track/0348kh3xHYWPSrgIgHyZSR': 'Maisey Rika - Te Aroha',
+'https://open.spotify.com/track/6jVFD421Tx5sMI3JyVqiMh': 'Maisey Rika - Reconnect',
+'https://open.spotify.com/track/61wYZfeRZGgf5M4wRmRvtY': 'Maisey Rika - Letting Go',
+'https://open.spotify.com/track/5rlghSaW1py8SXvGUxniC7': 'Maisey Rika - Children of Romania',
+'https://open.spotify.com/track/5bcI3wQpXxQw4PUpinpeSJ': 'Herbs - Dragons & Demons',
+'https://open.spotify.com/track/2Ohkq2xdLHkOnrNRV4tztg': 'Sweet & Irie, HORSEMEN FAMILY - Feels Like Magic',
+'https://open.spotify.com/track/1n98zPWINRiuWCvRaChRd4': 'Katchafire - Who You With',
+'https://open.spotify.com/track/0mnBhXXnKQoCCXKF5L45ad': 'Katchafire - Seriously',
+'https://open.spotify.com/track/0Yu8oEJnPiIa7F5JTQfJjO': 'Uru Whetu, Te Aroha, Torere - Taku Raumiri',
+'https://open.spotify.com/track/2uuxnBjbWGbIq1fNS4yJfg': '1814 - Picture On The Wall',
+'https://open.spotify.com/track/01hdQfU8xCXA8aW59GnyWG': 'House of Shem - Thinking About You',
+'https://open.spotify.com/track/6HDZr2mm9iPL6dvBZt8zjB': 'House of Shem - Anything You Ask For',
+'https://open.spotify.com/track/1ikaWxcEqv5pyaDuJWcKcZ': 'Ardijah - Silly Love Songs',
+'https://open.spotify.com/track/5yz64s7TvgfOtqYTXLt5MK': 'Ardijah - Love So Right',
+'https://open.spotify.com/track/61uQYPlrQ9BGusRmLKoEDE': 'Adeaze - A Life with You',
+'https://open.spotify.com/track/0khkwt5FCMHDObLbGZkcjo': 'Adeaze - How Deep Is Your Love',
+'https://open.spotify.com/track/6hfi8kVyz46X7qMEQXyk7m': 'Whenua Patuwai - Holding on to You',
+'https://open.spotify.com/track/0Yry76Q4s4eWFbVeUqtPKb': 'P-Money, Scribe - Remember?',
+'https://open.spotify.com/track/3mnLllWwZ6c4DLIs3fKOoH': 'P-Money, Scribe - Scribe 2001',
+'https://open.spotify.com/track/2SO5DZTOi0Fxvyo9QHH7QD': 'P-Money, 4 Corners, Scribe - Synchronize Thoughts',
+'https://open.spotify.com/track/4rr67zXmEYf9ykLigeEsbv': 'Crowded House - Don\'t Dream It\'s Over',
+'https://open.spotify.com/track/6EooyE6kbrbosNjhCZDQ4i': 'Katchafire - Seriously',
+'https://open.spotify.com/track/3mTm7dnT1M7pivXKKuTs4m': 'Blindspott - Phlex',
+'https://open.spotify.com/track/2XqKlm86ZLP7NRD0vz9BNP': 'Fast Crew - Suburbia Streets',
+'https://open.spotify.com/track/07OHMnw4BIHiw0ml7FeqUj': 'Fast Crew - I Got',
+'https://open.spotify.com/track/3gJr1bJPUD9SgPZXesduSV': 'Brooke Fraser - Arithmetic',
+'https://open.spotify.com/track/0erUKbzlyZS4rcW6oaYaW5': 'Brooke Fraser - Lifeline',
+'https://open.spotify.com/track/41YkLqy2HVkMcNuH3Mh5Wa': 'Tomorrow People - Souljah Feeling - feat. Chad Chambers',
+'https://open.spotify.com/track/2m57yduhfsJu0COFEdxCqA': 'Ché-Fu - Hold Tight',
+'https://open.spotify.com/track/7jjewQIrmp0NIddDnhh618': 'David Grace & Injustice - Rua Kenana',
+'https://open.spotify.com/track/2HB74eXrsfT1gVc8e4Wpcy': 'Nesian Mystik - It\'s On',
+'https://open.spotify.com/track/4ioAzfrxs8zqadm2woDNJW': 'Ché-Fu - Waka',
+'https://open.spotify.com/track/3Lw3CevoovMWjPXX6KHSH8': 'Nesian Mystik, Che Fu, Kimbra, Cydel - Mr Mista',
+'https://open.spotify.com/track/1DPMqbabMHKm8bN04arwK8': 'King Kapisi - Screems from Da Old Plantation',
+'https://open.spotify.com/track/1tF5oLj3khkYMa65szhPBB': 'Brutha Rodz, Wiz Tokelau - Heart of a Lion',
+'https://open.spotify.com/track/3oQOOLQIsWTASuMUUASkjL': 'Herbs - E Papa',
+'https://open.spotify.com/track/5kO0uAi5avZIr1EicKDOQS': 'Beau Monga - Ruketekete Te Mamae',
+'https://open.spotify.com/track/5laP2pd9pT6O6rfW8oq2zB': 'Nesian Mystik - Robbin\' Hood Heroes',
+'https://open.spotify.com/track/0i2IECuBvAxHJqJDZDe5Pf': 'Swiss - Blue Bayou',
+'https://open.spotify.com/track/1pLwrsptvDxGwVV68IzAoG': 'Patea Maori Club - Ngoi Ngoi',
+'https://open.spotify.com/track/16hJc4glcVv47bTpRayEA9': 'Corrella - Chur Māori',
+'https://open.spotify.com/track/2NxGngqV89UZXiiA6eQjjC': 'Herbs - Long Ago',
+'https://open.spotify.com/track/2eLHscUKEegz4VqiE5yZDq': 'Makaira Berry, Hamiora Tuari, Mere Arihi Pipi-Takoko, Pere Wihongi - Tōrea',
+'https://open.spotify.com/track/0VJJvi21HgLmeNs6umHVn8': 'Maimoa, Awatea Wihongi, Hoeata Blake-Maxwell, Kia Kaaterama Pou, Makaira Berry, Mereana Teka, Meto Tagivale Schmidt-Peke, PERE, Puawai Taiapa, Raniera Blake, Tawaroa Kawana, Te Awhina Kaiwai-Wanikau - We Are Human',
+'https://open.spotify.com/track/34jDGAa38HErcEfObppqmt': 'Sammy Johnson, Tree - Don’t Say Goodbye',
+'https://open.spotify.com/track/0H57GbB73BEJJfKZqr6w6z': 'Pieter T - My Baby',
+'https://open.spotify.com/track/0bPiFpdr5fkv9HamPMxwQB': 'Mareko, J Williams - Them Eyes',
+'https://open.spotify.com/track/2ZExm0dQH14MsEQAqPgUAR': 'Deceptikonz, P-Money - Fallen Angels',
+'https://open.spotify.com/track/736LgeulkCipMHCNHp3OKa': 'J.Williams - Ghetto Flower',
+'https://open.spotify.com/track/5BghMRrK03bJDO3oUB96J9': 'Tomorrow People - Take It Away',
+'https://open.spotify.com/track/5aOKHileSsefSMLlSjeMXc': 'Renee Geyer - It Only Happens - (Duet With Doug Williams)',
+'https://open.spotify.com/track/6U654FK2CjTyTDkAwYXIPE': 'Survival - Rua Kenana',
+'https://open.spotify.com/track/2WH2xszE7cQ0QLZ3BOT7v8': 'Tama Renata - Theme from Once Were Warriors - Remastered',
+'https://open.spotify.com/track/74Zh46Q8DTtVWggT9skJyS': 'Southside of Bombay - What\'s the Time Mr. Wolf',
+'https://open.spotify.com/track/7zPG72hArP7gme6SD1j5qm': 'Tomorrow People, Chad Chambers, House of Shem - Souljah Feeling - House of Shem Remix',
+'https://open.spotify.com/track/5uc1sYD4KtlM5FP05zg4rC': 'Spawnbreezie - Fangai Lupe',
+'https://open.spotify.com/track/40ILD2q1O9PzthBqoFcyh4': 'Stan Walker - Purple Rain',
+'https://open.spotify.com/track/0kqxnJKkxEMooySbkg5pBl': 'Tama Waipara, Maisey Rika - East Coast Moon',
+'https://open.spotify.com/track/7DEhSAhYZocA6P0fZowrRq': 'Rebel Souljahz - Irie Beach Party',
+'https://open.spotify.com/track/20KEox6z8x2p3C40VUKslV': 'Dennis Marsh - Hangi Tonight',
+'https://open.spotify.com/track/54dnHk3xYtCBjTFG44AYpN': 'Dennis Marsh - Ten Guitars',
+'https://open.spotify.com/track/6IgA90GcZVe1vya5gVT0EY': 'Dennis Marsh - Oh Mum',
+'https://open.spotify.com/track/0A6TdtuB5zBjFFLFV3IKFk': 'Bic Runga - Drive',
+'https://open.spotify.com/track/61US1T9Eq54jUoeMUcchQJ': 'Elemeno P - Verona',
+'https://open.spotify.com/track/6tXnRSvuNgOq4QcxpIN54r': 'Crowded House - Weather With You',
+'https://open.spotify.com/track/6dvG3cGg22zMBC4HpyjyRS': 'Brooke Fraser - Better'
 
   };
   
