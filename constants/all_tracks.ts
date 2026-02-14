@@ -112,7 +112,7 @@ export const SPOTIFY_TRACKS = [
 'https://open.spotify.com/track/36CZ5EJujXLCPFjoBy8a5y', // David Dallas - O.T.T
 'https://open.spotify.com/track/2zBYsFzd8gM4CfDRmsCZ59', // David Dallas - Ain't None Left
 'https://open.spotify.com/track/0tkEKBrgdMZXjZylYRoN7H', // MELODOWNZ - Infinite
-'https://open.spotify.com/track/4ohC67TQuhtpWYNtcUgrYZ', // Mazbou Q - Now I'm Whole
+'https://open.spotify.com/track/1wob4zdM0UtZlo8Q5XF5bi', // LilXSkiEmo - Faith In Us
 'https://open.spotify.com/track/4H3PAXVo7CJWQj30ndGKSn', // Diggy Dupé - Cool Like Dat
 'https://open.spotify.com/track/5woPu1EbjrUxdisOcQL7uo', // RAIZA BIZA - Wassup
 'https://open.spotify.com/track/1uU0DyE1cDkzMyjteX3lpx', // Diggy Dupé - DO IT ALL
@@ -430,7 +430,7 @@ export const getTrackName = (url: string): string => {
 'https://open.spotify.com/track/36CZ5EJujXLCPFjoBy8a5y': 'David Dallas - O.T.T',
 'https://open.spotify.com/track/2zBYsFzd8gM4CfDRmsCZ59': 'David Dallas - Aint None Left',
 'https://open.spotify.com/track/0tkEKBrgdMZXjZylYRoN7H': 'MELODOWNZ - Infinite',
-'https://open.spotify.com/track/4ohC67TQuhtpWYNtcUgrYZ': 'Mazbou Q - Now Im Whole',
+'https://open.spotify.com/track/1wob4zdM0UtZlo8Q5XF5bi': 'LilXSkiEmo - Faith In Us',
 'https://open.spotify.com/track/4H3PAXVo7CJWQj30ndGKSn': 'Diggy Dupé - Cool Like Dat',
 'https://open.spotify.com/track/5woPu1EbjrUxdisOcQL7uo': 'RAIZA BIZA - Wassup',
 'https://open.spotify.com/track/1uU0DyE1cDkzMyjteX3lpx': 'Diggy Dupé - DO IT ALL',
