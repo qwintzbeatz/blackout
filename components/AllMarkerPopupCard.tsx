@@ -3,6 +3,7 @@ import React, { useState, useCallback } from 'react';
 import { LikeButton } from './LikeButton';
 import { CommentSection } from './CommentSection';
 import { likeDrop, unlikeDrop, getCommentsForDrop, addCommentToDrop } from '@/lib/firebase/drops';
+import { getTimeAgo } from '@/lib/utils/dropHelpers';
 
 interface AllMarkerPopupCardProps {
   marker: any;
@@ -22,20 +23,6 @@ export const AllMarkerPopupCard: React.FC<AllMarkerPopupCardProps> = ({
   const [isCommenting, setIsCommenting] = useState(false);
   const [comments, setComments] = useState<any[]>(marker.comments || []);
   
-  // Calculate time ago
-  const getTimeAgo = (date: Date) => {
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-    
-    if (diffDays > 0) return `${diffDays}d ago`;
-    if (diffHours > 0) return `${diffHours}h ago`;
-    if (diffMins > 0) return `${diffMins}m ago`;
-    return 'Just now';
-  };
-
   // Get the actual firestore ID for the marker
   const getMarkerId = useCallback(() => {
     return marker.firestoreId || marker.id || marker.dropId;

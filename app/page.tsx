@@ -6,6 +6,8 @@ import { useMissionTriggers } from '@/hooks/useMissionTriggers';
 import { useTimeOfDay } from '@/hooks/useTimeOfDay';
 import useCrewChatUnreadTracker from '@/hooks/useCrewChatUnreadTracker';
 import useStoryNotificationTracker from '@/hooks/useStoryNotificationTracker';
+import useLoadingManager from '@/hooks/useLoadingManager';
+import useSafeOperation from '@/hooks/useSafeOperation';
 
 import { 
   doc, 
@@ -23,13 +25,7 @@ import {
   limit,
   serverTimestamp as firestoreServerTimestamp 
 } from 'firebase/firestore';
-import { 
-  ref as storageRef, 
-  uploadBytes, 
-  getDownloadURL 
-} from 'firebase/storage';
-import { auth, db, realtimeDb, storage } from '@/lib/firebase/config';
-import { sendNpcChatMessage } from '@/lib/firebase/npcChat'; // New import
+import { auth, db } from '@/lib/firebase/config';
 import { characters } from '@/data/characters'; // New import
 import { 
   signInWithEmailAndPassword, 
@@ -38,7 +34,6 @@ import {
   onAuthStateChanged,
   User as FirebaseUser
 } from 'firebase/auth';
-import { ref, push, onValue, query as rtdbQuery, orderByChild, limitToLast, off, set, remove, get, serverTimestamp } from 'firebase/database';
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import React from 'react';
@@ -93,7 +88,10 @@ import {
   SURFACE_TO_MARKER_NAME,
   GRAFFITI_TO_MARKER_DESCRIPTION
 } from '@/utils/typeMapping';
-import { calculateRep, RepResult } from '@/utils/repCalculator';
+import { calculateRep, RepResult, calculateEnhancedRank, getRankColor, getRankProgress } from '@/utils/repCalculator';
+import { calculateDistance as calculateDistanceHelper, getTrackNameFromUrl as getTrackNameFromUrlHelper, getTrackSource, getTrackThemeColor } from '@/lib/utils/dropHelpers';
+import { generateAvatarUrl as generateAvatarUrlHelper } from '@/lib/utils/avatarGenerator';
+import { getTrackName as getTrackNameHelper } from '@/constants/all_tracks';
 import { NEW_ZEALAND_LOCATIONS, NZ_BOUNDS, NZ_CENTER, NZ_DEFAULT_ZOOM, GPS_DEFAULT_ZOOM } from '@/constants/locations';
 import { detectDevicePerformance, panelStyle } from '@/utils';
 import {
@@ -119,22 +117,6 @@ const ENABLE_SOUNDCLOUD = false;
 // - State management: useMemo, useCallback, React.memo implemented
 // - Memory cleanup: Proper event listener cleanup in useEffect
 // - Bundle reduction: Separated concerns into modular components
-
-// Helper function to calculate distance between two coordinates in meters
-const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-  const R = 6371e3; // Earth's radius in meters
-  const φ1 = lat1 * Math.PI / 180;
-  const φ2 = lat2 * Math.PI / 180;
-  const Δφ = (lat2 - lat1) * Math.PI / 180;
-  const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return R * c;
-};
 
 // Advanced REP Calculation Functions
 const calculateRepForMarker = (
@@ -188,9 +170,8 @@ const calculateRepForMarker = (
 };
 
 const calculateRank = (rep: number): string => {
-  if (rep >= 300) return 'WRITER';
-  if (rep >= 100) return 'VANDAL';
-  return 'TOY';
+  // Use the enhanced rank calculation from repCalculator
+  return calculateEnhancedRank(rep);
 };
 
 const calculateLevel = (rep: number): number => {
@@ -222,30 +203,6 @@ const unlockRandomTrack = (currentUnlocked: string[]): { newTracks: string[], ne
       source: isSpotify ? 'Spotify' : 'SoundCloud'
     }
   };
-};
-
-// Helper function to detect track source
-const getTrackSource = (url: string): 'Spotify' | 'SoundCloud' => {
-  if (url.includes('open.spotify.com')) return 'Spotify';
-  return 'SoundCloud';
-};
-
-// Helper function to get theme color based on track source
-const getTrackThemeColor = (url: string): { primary: string; secondary: string; gradient: string } => {
-  const source = getTrackSource(url);
-  if (source === 'Spotify') {
-    return {
-      primary: '#1DB954',      // Spotify green
-      secondary: '#1ed760',     // Lighter green
-      gradient: 'linear-gradient(135deg, #1DB954, #1ed760)'
-    };
-  } else {
-    return {
-      primary: '#ff5500',      // SoundCloud orange
-      secondary: '#ff7b00',    // Lighter orange
-      gradient: 'linear-gradient(135deg, #ff5500, #ff7b00)'
-    };
-  }
 };
 
 // Helper function to get track name from URL
@@ -418,45 +375,6 @@ const usePerformanceMonitor = () => {
   }, []);
   
   return { logPerformance };
-};
-
-// Custom hook for loading state management
-const useLoadingManager = () => {
-  const [loadingStates, setLoadingStates] = useState({
-    markers: false,
-    profile: false,
-    drops: false,
-    topPlayers: false,
-    gps: false,
-    auth: true
-  });
-  
-  const setLoading = useCallback((key: keyof typeof loadingStates, value: boolean) => {
-    setLoadingStates(prev => ({ ...prev, [key]: value }));
-  }, []);
-  
-  const isLoading = useMemo(() => {
-    return Object.values(loadingStates).some(state => state);
-  }, [loadingStates]);
-  
-  return { loadingStates, setLoading, isLoading };
-};
-
-// Custom hook for safe operations with error handling (simplified)
-const useSafeOperation = () => {
-  const safeOperation = useCallback(async (
-    operation: () => Promise<any>,
-    fallback?: any
-  ): Promise<any> => {
-    try {
-      return await operation();
-    } catch (error) {
-      console.error('Operation failed:', error);
-      return fallback;
-    }
-  }, []);
-  
-  return { safeOperation };
 };
 
 // Memoized Marker Component
@@ -637,6 +555,38 @@ const HomeComponent = () => {
     source: 'Spotify' | 'SoundCloud';
   } | null>(null);
   
+  // ========== PROFILE PICTURE UPLOAD ==========
+  const handleProfilePicUpload = async (file: File) => {
+    if (!user || !userProfile) {
+      alert('Please sign in first!');
+      return;
+    }
+
+    try {
+      // Upload to ImgBB
+      const profilePicUrl = await uploadImageToImgBB(file);
+      
+      // Update Firestore
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        profilePicUrl: profilePicUrl,
+        lastActive: Timestamp.now()
+      });
+      
+      // Update local state
+      setUserProfile(prev => prev ? {
+        ...prev,
+        profilePicUrl: profilePicUrl
+      } : null);
+      
+      alert('✅ Profile picture updated successfully!');
+      
+    } catch (error) {
+      console.error('Error uploading profile picture:', error);
+      alert('Failed to upload profile picture. Please try again.');
+    }
+  };
+
   // ========== PERFORMANCE SETTINGS ==========
   const [crewDetectionEnabled, setCrewDetectionEnabled] = useState(true);
   const [markerQuality, setMarkerQuality] = useState<'low' | 'medium' | 'high'>('medium');
@@ -1392,7 +1342,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       
       topPlayers.forEach((player) => {
         if (otherMemberIds.includes(player.uid) && player.position) {
-          const distance = calculateDistance(
+          const distance = calculateDistanceHelper(
             gpsPosition[0],
             gpsPosition[1],
             player.position[0],
@@ -1865,9 +1815,9 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         userId: user.uid,
         username: userProfile.username,
         userProfilePic: userProfile.profilePicUrl,
-        // New surface and graffiti type fields
-        surface: selectedSurface,
-        graffitiType: selectedGraffitiType,
+        // New surface and graffiti type fields - cast to match UserMarker type
+        surface: selectedSurface as SurfaceType,
+        graffitiType: selectedGraffitiType as GraffitiType,
       };
 
       const markerId = await saveMarkerToFirestore(markerData);
@@ -2088,7 +2038,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       return;
     }
 
-    const distanceFromGPS = calculateDistance(
+    const distanceFromGPS = calculateDistanceHelper(
       gpsPosition[0],
       gpsPosition[1],
       lat,
@@ -4927,7 +4877,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               </button>
             </div>
 
-            {/* Upload Section */}
+            {/* Upload Section - Profile Picture */}
             <div style={{
               marginBottom: '20px',
               padding: '15px',
@@ -4936,11 +4886,12 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               border: '1px solid rgba(59, 130, 246, 0.3)'
             }}>
               <div style={{ fontSize: '16px', color: '#4dabf7', fontWeight: 'bold', marginBottom: '10px' }}>
-                📤 Upload New Photo
+                📤 upload you own profilepic
               </div>
               <input
                 type="file"
                 accept="image/*"
+                id="profilepic-upload"
                 style={{
                   width: '100%',
                   padding: '10px',
@@ -4953,12 +4904,20 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) {
-                    alert(`Photo "${file.name}" selected (upload coming soon)`);
+                    // Trigger the upload
+                    handleProfilePicUpload(file);
                   }
                 }}
               />
               <button
-                onClick={() => alert('Photo upload functionality coming soon!')}
+                onClick={() => {
+                  const input = document.getElementById('profilepic-upload') as HTMLInputElement;
+                  if (input?.files?.[0]) {
+                    handleProfilePicUpload(input.files[0]);
+                  } else {
+                    alert('Please select an image first!');
+                  }
+                }}
                 style={{
                   background: 'linear-gradient(135deg, #4dabf7, #3b82f6)',
                   color: 'white',
@@ -4970,7 +4929,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   fontWeight: 'bold'
                 }}
               >
-                📲 Upload to Cloud
+                📲 Update Profile Pic
               </button>
             </div>
 

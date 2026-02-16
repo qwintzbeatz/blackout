@@ -1,3 +1,20 @@
+// Helper function to calculate bounds from markers
+import { UserMarker } from '@/lib/types/blackout';
+
+export const calculateBoundsFromMarkers = (markers: UserMarker[]): [[number, number], [number, number]] | null => {
+  if (markers.length === 0) return null;
+  
+  const lats = markers.map(m => m.position[0]);
+  const lngs = markers.map(m => m.position[1]);
+  
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  
+  return [[minLat, minLng], [maxLat, maxLng]];
+};
+
 // Helper function to calculate distance between two coordinates in meters
 export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
   const R = 6371e3; // Earth's radius in meters
@@ -201,4 +218,3 @@ export const getRankInfo = (rep: number) => {
     progress: Math.max(0, Math.min(100, progress))
   };
 };
-

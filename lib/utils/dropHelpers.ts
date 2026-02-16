@@ -6,6 +6,22 @@ import { Drop } from '@/lib/types/blackout';
 
 export { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
 
+// GPS distance calculation - Haversine formula
+export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const R = 6371e3; // Earth's radius in meters
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+};
+
 // Time formatting
 export const getTimeAgo = (timestamp: Date): string => {
   const now = new Date();
@@ -71,6 +87,30 @@ export const getTrackPlatform = (url: string): string => {
 
 export const isSpotifyUrl = (url: string): boolean => {
   return url.includes('open.spotify.com/track/');
+};
+
+// Helper function to detect track source
+export const getTrackSource = (url: string): 'Spotify' | 'SoundCloud' => {
+  if (url.includes('open.spotify.com')) return 'Spotify';
+  return 'SoundCloud';
+};
+
+// Helper function to get theme color based on track source
+export const getTrackThemeColor = (url: string): { primary: string; secondary: string; gradient: string } => {
+  const source = getTrackSource(url);
+  if (source === 'Spotify') {
+    return {
+      primary: '#1DB954',
+      secondary: '#1ed760',
+      gradient: 'linear-gradient(135deg, #1DB954, #1ed760)'
+    };
+  } else {
+    return {
+      primary: '#ff5500',
+      secondary: '#ff7b00',
+      gradient: 'linear-gradient(135deg, #ff5500, #ff7b00)'
+    };
+  }
 };
 
 export const getSpotifyEmbedUrl = (url: string): string => {

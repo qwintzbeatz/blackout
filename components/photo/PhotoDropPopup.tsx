@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Drop } from '@/lib/types/blackout';
 import { User as FirebaseUser } from 'firebase/auth';
 import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
+import { getTimeAgo, formatGPS, getCardinalDirection, getMapLink } from '@/lib/utils/dropHelpers';
 
 interface PhotoDropPopupProps {
   drop: Drop;
@@ -43,33 +44,6 @@ const PhotoDropPopup: React.FC<PhotoDropPopupProps> = ({
     } catch (error) {
       console.error('Error updating like:', error);
     }
-  };
-
-  const getTimeAgo = (timestamp: Date) => {
-    const now = new Date();
-    const diffMs = now.getTime() - timestamp.getTime();
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    if (diffDays > 0) return `${diffDays}d ago`;
-    if (diffHours > 0) return `${diffHours}h ago`;
-    if (diffMins > 0) return `${diffMins}m ago`;
-    return 'Just now';
-  };
-
-  const formatGPS = (lat: number, lng: number) => {
-    return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-  };
-
-  const getCardinalDirection = (lat: number, lng: number) => {
-    const latDir = lat >= 0 ? 'N' : 'S';
-    const lngDir = lng >= 0 ? 'E' : 'W';
-    return `${Math.abs(lat).toFixed(4)}°${latDir}, ${Math.abs(lng).toFixed(4)}°${lngDir}`;
-  };
-
-  const getMapLink = (lat: number, lng: number) => {
-    return `https://www.google.com/maps?q=${lat},${lng}`;
   };
 
   const getPhotoTakenDate = () => {

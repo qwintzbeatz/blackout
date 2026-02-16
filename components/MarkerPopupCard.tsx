@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase';
 import { UserMarker, Comment, Gender } from '@/types';
 import { User as FirebaseUser } from 'firebase/auth';
 import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
+import { getTimeAgo } from '@/lib/utils/dropHelpers';
 
 interface MarkerPopupCardProps {
   marker: UserMarker;
@@ -76,19 +77,6 @@ export default function MarkerPopupCard({
     } catch (error) {
       console.error('Error adding comment:', error);
     }
-  };
-  
-  const getTimeAgo = (timestamp: Date) => {
-    const now = new Date();
-    const diffMs = now.getTime() - timestamp.getTime();
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    if (diffDays > 0) return `${diffDays}d`;
-    if (diffHours > 0) return `${diffHours}h`;
-    if (diffMins > 0) return `${diffMins}m`;
-    return 'Just now';
   };
 
   return (

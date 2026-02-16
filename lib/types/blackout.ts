@@ -43,6 +43,11 @@ export interface Comment {
   userProfilePic?: string;
 }
 
+// Re-export surface and graffiti types from constants for consistency
+// Note: These are used throughout the app - import from constants for the actual config
+export type SurfaceType = 'pole' | 'sign' | 'ebox' | 'fence' | 'wall' | 'shutter' | 'sewer' | 'rooftop' | 'ground' | 'train' | 'bridge' | 'traffic_light' | 'truck' | 'van' | 'postbox' | 'speed_camera' | 'bus_stop';
+export type GraffitiType = 'tag' | 'throw_up' | 'piece_bombing' | 'burner_heater' | 'roller_blockbuster' | 'stencil_brand_stamp' | 'paste_up_poster' | 'sticker_slap' | 'etch_scribe_scratch' | 'extinguisher' | 'mural';
+
 // User Marker type
 export interface UserMarker {
   id: string;
@@ -60,6 +65,9 @@ export interface UserMarker {
   createdAt?: Date;
   likes?: string[];
   comments?: Comment[];
+  // New surface and graffiti type fields
+  surface?: SurfaceType;
+  graffitiType?: GraffitiType;
 }
 
 // Drop type
@@ -120,6 +128,9 @@ export interface UserProfile {
   collaborations?: number;
   blackoutEventsInvestigated?: number;
   kaiTiakiEvaluationsReceived?: number;
+  // Story mission fields
+  activeMissions?: string[];
+  completedMissions?: string[];
   // Rank progression fields
   nextRank?: string;
   repToNextRank?: number;
@@ -231,4 +242,26 @@ export interface CrewChatMessage {
   senderName: string;
   avatar?: string;
   timestamp: number;
+}
+
+// Direct Message type
+export interface DirectMessage {
+  id: string;
+  fromUid: string;
+  toUid: string;
+  text: string;
+  timestamp: number;
+  read: boolean;
+}
+
+// Direct Chat type
+export interface DirectChat {
+  participants: string[];
+  lastMessage?: string;
+  lastMessageTimestamp?: number;
+}
+
+// Crew Chat Unread Status type
+export interface CrewChatUnreadStatus {
+  [crewId: string]: number;
 }

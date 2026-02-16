@@ -37,7 +37,7 @@ import {
 import { ref, push, onValue, query as rtdbQuery, orderByChild, limitToLast, off, set, remove, get, serverTimestamp } from 'firebase/database';
 import { UserMarker, MarkerName, MarkerDescription } from '@/lib/utils/types';
 import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
-
+import { calculateEnhancedRank } from '@/lib/utils';
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import React from 'react';
 import dynamic from 'next/dynamic';
@@ -68,6 +68,8 @@ import BottomNavigation from '@/src/components/ui/BottomNavigation';
 import SVGBottomNavigation from '@/src/components/ui/SVGBottomNavigation';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import StatusPanel from '@/components/ui/StatusPanel';
+import { getTrackNameFromUrl, calculateDistance } from '@/lib/utils/dropHelpers';
+import { calculateRepForMarker } from '@/lib/utils';
 
 const HIPHOP_TRACKS = [
   "https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1",
@@ -376,22 +378,6 @@ const panelStyle = {
   position: 'relative' as const
 };
 
-// Helper function to calculate distance between two coordinates in meters
-const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-  const R = 6371e3; // Earth's radius in meters
-  const φ1 = lat1 * Math.PI / 180;
-  const φ2 = lat2 * Math.PI / 180;
-  const Δφ = (lat2 - lat1) * Math.PI / 180;
-  const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return R * c;
-};
-
 // 🔧 PERFORMANCE: Custom throttle function to prevent infinite loops
 const throttle = <T extends (...args: any[]) => any>(
   func: T,
@@ -421,41 +407,8 @@ const debounce = <T extends (...args: any[]) => any>(
   };
 };
 
-// REP Calculation Functions
-const calculateRepForMarker = (distanceFromCenter: number | null, markerDescription: MarkerDescription): number => {
-  let rep = 10; // Base REP for placing any marker
-  
-  if (distanceFromCenter && distanceFromCenter <= 50) {
-    rep += 5;
-  }
-  
-  switch (markerDescription) {
-    case 'Piece/Bombing':
-    case 'Burner/Heater':
-      rep += 15;
-      break;
-    case 'Throw-Up':
-    case 'Roller/Blockbuster':
-      rep += 10;
-      break;
-    case 'Stencil/Brand/Stamp':
-    case 'Paste-Up/Poster':
-      rep += 8;
-      break;
-    case 'Tag/Signature':
-      rep += 5;
-      break;
-    default:
-      rep += 3;
-  }
-  
-  return rep;
-};
-
 const calculateRank = (rep: number): string => {
-  if (rep >= 300) return 'WRITER';
-  if (rep >= 100) return 'VANDAL';
-  return 'TOY';
+  return calculateEnhancedRank(rep);
 };
 
 const calculateLevel = (rep: number): number => {
@@ -475,20 +428,6 @@ const unlockRandomTrack = (currentUnlocked: string[]): string[] => {
   const randomTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)];
 
   return [...currentUnlocked, randomTrack];
-};
-
-// Helper function to get track name from URL
-const getTrackNameFromUrl = (url: string): string => {
-  if (url === 'blackout-classic.mp3') return 'Blackout (Default)';
-  if (url.includes('soundcloud.com')) {
-    // Extract track name from SoundCloud URL
-    const segments = url.split('/');
-    const trackSegment = segments[segments.length - 1];
-    return trackSegment.split('-').map(word =>
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ');
-  }
-  return 'Unknown Track';
 };
 
 // Marker colors

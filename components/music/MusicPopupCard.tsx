@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Drop } from '@/lib/types/blackout';
 import { SoundCloudManager } from '@/lib/soundcloud/SoundCloudManager';
 import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
+import { getTimeAgo, getTrackNameFromUrl } from '@/lib/utils/dropHelpers';
 
 interface MusicPopupCardProps {
   drop: Drop;
@@ -37,19 +38,6 @@ const getSoundCloudEmbedData = (trackUrl: string, autoPlay: boolean = false) => 
     widgetUrl: `https://widget.sndcdn.com/${trackId}/sets/${trackId}`,
     artworkUrl: `https://i1.sndcdn.com/artworks-${trackId}-t500x500.jpg`
   };
-};
-
-// Function to get track name from URL
-const getTrackNameFromUrl = (url: string): string => {
-  if (url === 'blackout-classic.mp3') return 'Blackout (Default)';
-  if (url.includes('soundcloud.com')) {
-    const segments = url.split('/');
-    const trackSegment = segments[segments.length - 1];
-    return trackSegment.split('-').map(word =>
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ');
-  }
-  return 'Unknown Track';
 };
 
 export default function MusicPopupCard({
@@ -156,19 +144,6 @@ export default function MusicPopupCard({
         widget.toggle();
       }
     }
-  };
-
-  const getTimeAgo = (timestamp: Date) => {
-    const now = new Date();
-    const diffMs = now.getTime() - timestamp.getTime();
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    if (diffDays > 0) return `${diffDays}d`;
-    if (diffHours > 0) return `${diffHours}h`;
-    if (diffMins > 0) return `${diffMins}m`;
-    return 'Just now';
   };
 
   return (

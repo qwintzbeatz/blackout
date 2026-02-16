@@ -259,3 +259,91 @@ export function getSurfaceRepRanking(surface: SurfaceType): Array<{
 export function getQuickRep(surface: SurfaceType, graffitiType: GraffitiType): number {
   return calculateRep(surface, graffitiType).rep;
 }
+
+/**
+ * Enhanced Rank Calculation based on total REP
+ * More granular ranking system with additional criteria
+ */
+export function calculateEnhancedRank(rep: number): string {
+  // Master ranks (very rare)
+  if (rep >= 1000) return 'LEGEND';
+  if (rep >= 750) return 'MASTER';
+  if (rep >= 500) return 'PRO';
+  
+  // Standard ranks
+  if (rep >= 300) return 'WRITER';
+  if (rep >= 200) return 'VANDAL';
+  if (rep >= 100) return 'TAGGER';
+  if (rep >= 50) return 'TOY';
+  
+  // Beginner ranks
+  if (rep >= 25) return 'ROOKIE';
+  return 'NEWBIE';
+}
+
+/**
+ * Get rank color for display
+ */
+export function getRankColor(rank: string): string {
+  switch (rank) {
+    case 'LEGEND': return '#ffd700'; // Gold
+    case 'MASTER': return '#c0c0c0'; // Silver
+    case 'PRO': return '#cd7f32'; // Bronze
+    case 'WRITER': return '#ff6b6b'; // Red
+    case 'VANDAL': return '#feca57'; // Yellow
+    case 'TAGGER': return '#4dabf7'; // Blue
+    case 'TOY': return '#10b981'; // Green
+    case 'ROOKIE': return '#8b5cf6'; // Purple
+    case 'NEWBIE': return '#6b7280'; // Gray
+    default: return '#6b7280';
+  }
+}
+
+/**
+ * Get rank progress to next level
+ */
+export function getRankProgress(rep: number): {
+  currentRank: string;
+  nextRank: string | null;
+  progress: number;
+  repToNextLevel: number;
+} {
+  const ranks = [
+    { name: 'NEWBIE', min: 0 },
+    { name: 'ROOKIE', min: 50 },
+    { name: 'TOY', min: 100 },
+    { name: 'TAGGER', min: 200 },
+    { name: 'VANDAL', min: 300 },
+    { name: 'WRITER', min: 500 },
+    { name: 'PRO', min: 750 },
+    { name: 'MASTER', min: 1000 },
+    { name: 'LEGEND', min: 1500 }
+  ];
+  
+  let currentRank = ranks[0];
+  let nextRank: typeof ranks[0] | null = null;
+  
+  for (let i = 0; i < ranks.length; i++) {
+    if (rep >= ranks[i].min) {
+      currentRank = ranks[i];
+      nextRank = ranks[i + 1] || null;
+    }
+  }
+  
+  let progress = 0;
+  let repToNextLevel = 0;
+  
+  if (nextRank) {
+    const rankRange = nextRank.min - currentRank.min;
+    const repInRank = rep - currentRank.min;
+    progress = Math.min(100, Math.round((repInRank / rankRange) * 100));
+    repToNextLevel = nextRank.min - rep;
+  }
+  
+  return {
+    currentRank: currentRank.name,
+    nextRank: nextRank?.name || null,
+    progress,
+    repToNextLevel
+  };
+}
