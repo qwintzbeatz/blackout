@@ -2,16 +2,22 @@
 
 import React, { useState } from 'react';
 import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
+import { CrewId } from '@/constants/markers';
 
-interface CrewData {
-  id: string;
+// Re-export the Crew interface from data/crews
+export interface Crew {
+  id: CrewId;
   name: string;
+  fullName?: string;
+  description: string;
+  tagline?: string;
+  location: string;
+  leader: string;
+  leaderTitle?: string;
   colors: {
     primary: string;
-    secondary?: string;
+    secondary: string;
   };
-  description: string;
-  leader: string;
   bonus: string;
 }
 
@@ -24,9 +30,9 @@ interface ProfileSetupStickerProps {
     selectedCrew?: string;
   }) => Promise<void>;
   loading: boolean;
-  crews: CrewData[];
-  onCrewSelect: (crewId: string) => void;
-  selectedCrew: string;
+  crews: Crew[];
+  onCrewSelect: (crewId: CrewId | '') => void;
+  selectedCrew: CrewId | '';
   crewChoice: 'crew' | 'solo';
   onCrewChoiceChange: (choice: 'crew' | 'solo') => void;
 }
@@ -54,7 +60,7 @@ export const ProfileSetupSticker: React.FC<ProfileSetupStickerProps> = ({
         username, 
         gender, 
         crewChoice, 
-        selectedCrew: crewChoice === 'crew' ? selectedCrew : undefined 
+        selectedCrew: crewChoice === 'crew' && selectedCrew ? selectedCrew : undefined 
       });
     }
   };

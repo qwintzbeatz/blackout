@@ -35,6 +35,13 @@ import {
   User as FirebaseUser
 } from 'firebase/auth';
 
+// Import extracted components
+import LoginScreen from '@/components/auth/LoginScreen';
+import BottomNavigation from '@/components/navigation/BottomNavigation';
+import ProfileStats from '@/components/profile/ProfileStats';
+import DropTypeModal from '@/components/modals/DropTypeModal';
+import LegendPanel from '@/components/ui/LegendPanel';
+
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import React from 'react';
 import dynamic from 'next/dynamic';
@@ -55,8 +62,9 @@ import CrewChatPanel from '@/components/chat/CrewChatPanel';
 import { ProfilePanel } from '@/components/profile/ProfilePanel';
 import { useFirebaseAuth } from '@/hooks/useFirebaseAuth';
 import { useMarkers } from '@/hooks/useMarkers';
+import { useMusicPlayer, getRandomStartTrack } from '@/hooks/useMusicPlayer';
+import { useDropCreation } from '@/hooks/useDropCreation';
 import { PerformanceSettingsPanel } from '@/src/components/ui/PerformanceSettingsPanel';
-import { CrewId } from '@/constants/markers';
 import SpotifyPlayer from '@/components/music/SpotifyPlayer';
 import SoundCloudPlayer from '@/components/music/SoundCloudPlayer';
 import { CREWS } from '@/data/crews';
@@ -71,14 +79,8 @@ import { RepNotification } from '@/components/ui/RepNotification';
 import SongUnlockModal from '@/components/ui/SongUnlockModal';
 import { SPOTIFY_TRACKS, UNLOCKABLE_TRACKS, DEFAULT_TRACK, isSpotifyUrl, getTrackName, getSpotifyTrackName } from '@/constants/all_tracks';
 import { HIPHOP_TRACKS } from '@/constants/tracks';
-
-// Helper to get a random starting track
-const getRandomStartTrack = () => {
-  const randomIndex = Math.floor(Math.random() * SPOTIFY_TRACKS.length);
-  // Return as array with single track for consistency
-  return [SPOTIFY_TRACKS[randomIndex]];
-};
-import { MarkerName, MarkerDescription, Gender, MARKER_COLORS, MARKER_NAMES, MARKER_DESCRIPTIONS } from '@/constants/markers';
+import { fullScreenStyle, loadingSpinnerStyle, panelBaseStyle, buttonBaseStyle, primaryButtonStyle, secondaryButtonStyle, successButtonStyle, dangerButtonStyle, inputBaseStyle, flexCenterStyle, flexBetweenStyle, flexColumnStyle, titleTextStyle, subtitleTextStyle, colors, gradients } from './pageStyles';
+import { MarkerName, MarkerDescription, Gender, MARKER_COLORS, MARKER_NAMES, MARKER_DESCRIPTIONS, CrewId } from '@/constants/markers';
 import { SurfaceType, GraffitiType } from '@/types';
 import { 
   migrateMarkerNameToSurface, 
@@ -288,25 +290,21 @@ const generateAvatarUrl = (userId: string, username: string, gender?: Gender): s
   // Construct URL based on style
   let url = '';
   
-  switch (avatarStyle) {
+    switch (avatarStyle) {
     case 'adventurer': // Male (boyish)
-      url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}`;
-      // Optional: Add some male-specific options
+      url = `https://api.dicebear.com/7.x/adventurer/svg?seed=${seed}&backgroundColor=${selectedColor}`;
       break;
       
     case 'avataaars': // Female (girlish)
       url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}`;
-      // Optional: Add some female-specific options
       break;
       
     case 'bottts': // Other (alien/robot)
-      url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}`;
-      // Add some robot/alien features
+      url = `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}&backgroundColor=${selectedColor}`;
       break;
       
     case 'identicon': // Prefer not to say (android/geometric)
-      url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}`;
-      // Geometric/android style
+      url = `https://api.dicebear.com/7.x/identicon/svg?seed=${seed}&backgroundColor=${selectedColor}`;
       break;
       
     default: // open-peeps as fallback
@@ -1250,15 +1248,9 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       if (currentUser) {
         setLoadingUserProfile(true);
         try {
-          const hasProfile = await loadUserProfile(currentUser);
-          if (hasProfile) {
-            // Load all data
-            await Promise.all([
-              loadTopPlayers(),
-              loadAllMarkers(),
-              loadDrops()
-            ]);
-          }
+          // loadUserProfile already fetches top players, markers, and drops internally.
+          // We only call it once here to avoid double-loading data on login.
+          await loadUserProfile(currentUser);
         } catch (error) {
           console.error('Error during initialization:', error);
         } finally {
@@ -1815,9 +1807,9 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         userId: user.uid,
         username: userProfile.username,
         userProfilePic: userProfile.profilePicUrl,
-        // New surface and graffiti type fields - cast to match UserMarker type
-        surface: selectedSurface as SurfaceType,
-        graffitiType: selectedGraffitiType as GraffitiType,
+        // New surface and graffiti type fields - explicit type assertion for TypeScript
+        surface: selectedSurface,
+        graffitiType: selectedGraffitiType,
       };
 
       const markerId = await saveMarkerToFirestore(markerData);
@@ -2224,8 +2216,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
   if (loadingAuth) {
     return (
       <div style={{
-        height: '100vh',
-        width: '100vw',
+        ...fullScreenStyle,
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
@@ -2257,518 +2248,27 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
   // Login/Signup overlay
   if (!user) {
     return (
-      <div style={{
-        height: '100vh',
-        width: '100vw',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#0f172a',
-        backgroundImage: 'radial-gradient(circle at 10% 20%, rgba(255, 107, 107, 0.1) 0%, transparent 20%), radial-gradient(circle at 90% 80%, rgba(78, 205, 196, 0.1) 0%, transparent 20%)',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57, #ff9ff3)',
-          backgroundSize: '400% 400%',
-          animation: 'gradientBG 15s ease infinite',
-          opacity: 0.08,
-          zIndex: 1
-        }}></div>
-        
-        <div style={{
-          position: 'absolute',
-          top: 220,
-          right: 20,
-          backgroundColor: 'rgba(15, 23, 42, 0.9)',
-          padding: '15px 20px',
-          borderRadius: '15px',
-          boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
-          zIndex: 2,
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          minWidth: '280px',
-          maxWidth: '400px',
-          color: 'white'
-        }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '15px',
-            marginBottom: '15px'
-          }}>
-            <button
-              onClick={togglePlay}
-              style={{
-                width: '45px',
-                height: '45px',
-                borderRadius: '50%',
-                backgroundColor: isPlaying ? '#ef4444' : '#10b981',
-                border: 'none',
-                color: 'white',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '20px',
-                boxShadow: '0 6px 15px rgba(0,0,0,0.3)',
-                transition: 'all 0.3s ease'
-              }}
-              onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-              onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
-            >
-              {isPlaying ? '⏸️' : '▶️'}
-            </button>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'white' }}>
-                🎵 {getCurrentTrackName()}
-              </div>
-              <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '4px' }}>
-                Track ${currentTrackIndex + 1} of ${(userProfile?.unlockedTracks || unlockedTracks).length} unlocked
-              </div>
-              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
-                {isPlaying ? '● Now Playing' : 'Paused'}
-              </div>
-            </div>
-            <button
-              onClick={playNextTrack}
-              style={{
-                width: '35px',
-                height: '35px',
-                borderRadius: '50%',
-                backgroundColor: 'rgba(59, 130, 246, 0.2)',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
-                color: '#4dabf7',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '16px',
-                boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.transform = 'scale(1.1)';
-                e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.3)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.2)';
-              }}
-              title="Next Track"
-            >
-              ⏭️
-            </button>
-          </div>
-          
-          {/* Local audio player - No SoundCloud iframe on login screen */}
-          <div style={{ 
-            marginTop: '15px',
-            padding: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-            borderRadius: '8px',
-            gap: '15px'
-          }}>
-            <div style={{ fontSize: '32px' }}>🎵</div>
-            <div style={{ textAlign: 'left' }}>
-              <div style={{ fontSize: '14px', color: 'white', fontWeight: 'bold' }}>
-                Blackout Classic
-              </div>
-              <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                Local Audio • Looping
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style={{
-          backgroundColor: 'rgba(15, 23, 42, 0.9)',
-          padding: '40px',
-          borderRadius: '20px',
-          boxShadow: '0 25px 50px rgba(0,0,0,0.3)',
-          width: '100%',
-          maxWidth: '450px',
-          textAlign: 'center',
-          zIndex: 2,
-          position: 'relative',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          backdropFilter: 'blur(20px)',
-          margin: '20px'
-        }}>
-          
-          <div style={{
-            height: '30vh',
-            width: '80vw',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            backgroundImage: 'linear-gradient(rgba(15, 23, 42, 0.8), rgba(15, 23, 42, 0.9)), url(/BOBackground.jpg)',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            backgroundBlendMode: 'overlay',
-            position: 'relative',
-            overflow: 'hidden'
-          }}>
-            
-            <p style={{ 
-              color: '#cbd5e1', 
-              fontSize: '15px', 
-              marginTop: '10px',
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              padding: '12px',
-              borderRadius: '10px',
-              border: '1px solid rgba(255, 255, 255, 0.1)'
-            }}>
-              <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>Sign in</span> to access the ultimate graffiti GPS tracking experience with live music vibe
-            </p>
-          </div>
-
-          {showLogin ? (
-            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              <h2 style={{ fontSize: '22px', color: 'white', marginBottom: '5px', textAlign: 'left' }}>Sign In</h2>
-              
-              <input
-                type="email"
-                placeholder="📧 Email Address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                style={{
-                  padding: '14px 18px',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '10px',
-                  fontSize: '15px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  color: 'white',
-                  outline: 'none'
-                }}
-              />
-              
-              <input
-                type="password"
-                placeholder="🔒 Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                style={{
-                  padding: '14px 18px',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '10px',
-                  fontSize: '15px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  color: 'white',
-                  outline: 'none'
-                }}
-              />
-              
-              {authError && (
-                <div style={{
-                  backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                  color: '#fca5a5',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  border: '1px solid rgba(239, 68, 68, 0.3)'
-                }}>
-                  ⚠️ {authError}
-                </div>
-              )}
-              
-              <button
-                type="submit"
-                style={{
-                  background: 'linear-gradient(135deg, #4dabf7, #3b82f6)',
-                  color: 'white',
-                  border: 'none',
-                  padding: '16px',
-                  borderRadius: '10px',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  marginTop: '10px',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 8px 20px rgba(59, 130, 246, 0.3)'
-                }}
-                onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-              >
-                🚀 Sign In & Start Tagging
-              </button>
-              
-              <div style={{ display: 'flex', gap: '12px', marginTop: '15px' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowLogin(false);
-                    setShowSignup(true);
-                    setAuthError(null);
-                  }}
-                  style={{
-                    flex: 1,
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    color: '#cbd5e1',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease'
-                  }}
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'}
-                >
-                  Create Account
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowLogin(false);
-                    setEmail('');
-                    setPassword('');
-                    setAuthError(null);
-                  }}
-                  style={{
-                    flex: 1,
-                    backgroundColor: 'transparent',
-                    color: '#94a3b8',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease'
-                  }}
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          ) : showSignup ? (
-            <form onSubmit={handleSignup} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              <h2 style={{ fontSize: '22px', color: 'white', marginBottom: '5px', textAlign: 'left' }}>Create Account</h2>
-              
-              <input
-                type="email"
-                placeholder="📧 Email Address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                style={{
-                  padding: '14px 18px',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '10px',
-                  fontSize: '15px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  color: 'white',
-                  outline: 'none'
-                }}
-              />
-              
-              <input
-                type="password"
-                placeholder="🔒 Password (min 6 characters)"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                style={{
-                  padding: '14px 18px',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '10px',
-                  fontSize: '15px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  color: 'white',
-                  outline: 'none'
-                }}
-              />
-              
-              {authError && (
-                <div style={{
-                  backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                  color: '#fca5a5',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  border: '1px solid rgba(239, 68, 68, 0.3)'
-                }}>
-                  ⚠️ {authError}
-                </div>
-              )}
-              
-              <button
-                type="submit"
-                style={{
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  color: 'white',
-                  border: 'none',
-                  padding: '16px',
-                  borderRadius: '10px',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  marginTop: '10px',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 8px 20px rgba(16, 185, 129, 0.3)'
-                }}
-                onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-              >
-                🎨 Create Graffiti Profile
-              </button>
-              
-              <div style={{ display: 'flex', gap: '12px', marginTop: '15px' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowSignup(false);
-                    setShowLogin(true);
-                    setAuthError(null);
-                  }}
-                  style={{
-                    flex: 1,
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    color: '#cbd5e1',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease'
-                  }}
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'}
-                >
-                  Already have account?
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowSignup(false);
-                    setEmail('');
-                    setPassword('');
-                    setAuthError(null);
-                  }}
-                  style={{
-                    flex: 1,
-                    backgroundColor: 'transparent',
-                    color: '#94a3b8',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease'
-                  }}
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(16, 185, 129, 0.1))',
-                padding: '20px',
-                borderRadius: '12px',
-                fontSize: '14px',
-                color: '#cbd5e1',
-                marginBottom: '10px',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                textAlign: 'left'
-              }}>
-                <strong style={{ color: '#f59e0b', fontSize: '16px', display: 'block', marginBottom: '10px' }}>🎯 Features:</strong>
-                <ul style={{ margin: '0', paddingLeft: '20px' }}>
-                  <li style={{ marginBottom: '8px' }}>📍 <strong>Live GPS tracking</strong> with accuracy circle</li>
-                  <li style={{ marginBottom: '8px' }}>🎨 <strong>Place custom markers</strong> with different colors</li>
-                  <li style={{ marginBottom: '8px' }}>📏 <strong>50-meter radius visualization</strong></li>
-                  <li style={{ marginBottom: '8px' }}>🏙️ <strong>East Auckland location presets</strong></li>
-                  <li>👤 <strong>See ALL players' drops</strong> in real-time</li>
-                  <li>🎵 <strong>SoundCloud music player</strong> built into app</li>
-                </ul>
-              </div>
-              
-              <button
-                onClick={() => setShowLogin(true)}
-                style={{
-                  background: 'linear-gradient(135deg, #4dabf7, #3b82f6)',
-                  color: 'white',
-                  border: 'none',
-                  padding: '16px',
-                  borderRadius: '10px',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 8px 20px rgba(59, 130, 246, 0.3)'
-                }}
-                onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-              >
-                🚀 Sign In
-              </button>
-              
-              <button
-                onClick={() => setShowSignup(true)}
-                style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  color: '#cbd5e1',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  padding: '16px',
-                  borderRadius: '10px',
-                  fontSize: '16px',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                }}
-              >
-                Create Account
-              </button>
-              
-              <div style={{ 
-                marginTop: '15px', 
-                padding: '12px', 
-                backgroundColor: 'rgba(255, 255, 255, 0.03)', 
-                borderRadius: '8px',
-                border: '1px solid rgba(255, 255, 255, 0.05)'
-              }}>
-                <div style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center' }}>
-                  <div style={{ marginBottom: '5px' }}>🎵 Music: <strong>Blackout - Classic</strong></div>
-                  <div>SoundCloud tracks play directly in app! 🎧</div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-        
-        <style>{`
-          @keyframes gradientBG {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-          }
-        `}</style>
-      </div>
+      <LoginScreen
+        showLogin={showLogin}
+        showSignup={showSignup}
+        email={email}
+        password={password}
+        authError={authError}
+        onLogin={handleLogin}
+        onSignup={handleSignup}
+        onEmailChange={setEmail}
+        onPasswordChange={setPassword}
+        onSetShowLogin={setShowLogin}
+        onSetShowSignup={setShowSignup}
+        onClearAuthError={() => setAuthError(null)}
+        isPlaying={isPlaying}
+        currentTrackIndex={currentTrackIndex}
+        unlockedTracks={unlockedTracks}
+        userProfileTracks={userProfile?.unlockedTracks}
+        onTogglePlay={togglePlay}
+        onPlayNext={playNextTrack}
+        getCurrentTrackName={getCurrentTrackName}
+      />
     );
   }
 
@@ -3688,256 +3188,25 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       </MapContainer>
 
       {/* Drop Type Selection Modal */}
-      {showDropTypeModal && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10000,
-            backdropFilter: 'blur(4px)'
-          }}
-          onClick={() => {
-            setShowDropTypeModal(false);
-            setPendingDropPosition(null);
-          }}
-        >
-          <div
-            style={{
-              background: 'linear-gradient(135deg, #1e293b, #0f172a)',
-              borderRadius: '20px',
-              padding: '30px',
-              maxWidth: '400px',
-              width: '90%',
-              border: '2px solid rgba(59, 130, 246, 0.3)',
-              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
-              animation: 'popIn 0.3s ease-out'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 style={{
-              color: '#f1f5f9',
-              fontSize: '24px',
-              fontWeight: 'bold',
-              textAlign: 'center',
-              marginBottom: '8px',
-              background: 'linear-gradient(135deg, #60a5fa, #3b82f6)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text'
-            }}>
-              🚀 Drop Type
-            </h3>
-            <p style={{
-              color: '#94a3b8',
-              textAlign: 'center',
-              marginBottom: '30px',
-              fontSize: '14px'
-            }}>
-              Choose what type of drop you want to place
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              {/* Surface and Graffiti Type Selection */}
-              <div style={{ marginBottom: '10px' }}>
-                <SurfaceGraffitiSelector
-                  selectedSurface={selectedSurface}
-                  selectedGraffitiType={selectedGraffitiType}
-                  onSurfaceChange={setSelectedSurface}
-                  onGraffitiTypeChange={setSelectedGraffitiType}
-                />
-              </div>
-
-              {/* Marker Option */}
-              <button
-                onClick={handleMarkerDrop}
-                style={{
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  border: 'none',
-                  borderRadius: '12px',
-                  padding: '18px',
-                  color: 'white',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 8px 25px rgba(16, 185, 129, 0.4)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 4px 15px rgba(16, 185, 129, 0.3)';
-                }}
-              >
-                <span style={{ fontSize: '24px' }}>📍</span>
-                <div style={{ textAlign: 'left' }}>
-                  <div>Place {selectedMarkerType} Marker</div>
-                  <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: 'normal' }}>
-                    Custom marker drop (+5 REP)
-                  </div>
-                </div>
-              </button>
-
-              {/* Photo Option */}
-              <button
-                onClick={handlePhotoDrop}
-                style={{
-                  background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
-                  border: 'none',
-                  borderRadius: '12px',
-                  padding: '18px',
-                  color: 'white',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 8px 25px rgba(139, 92, 246, 0.4)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 4px 15px rgba(139, 92, 246, 0.3)';
-                }}
-              >
-                <span style={{ fontSize: '24px' }}>📸</span>
-                <div style={{ textAlign: 'left' }}>
-                  <div>Place Photo</div>
-                  <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: 'normal' }}>
-                    Upload a photo (+10 REP, +15 REP with GPS!)
-                  </div>
-                </div>
-              </button>
-
-              {/* Music Drop Option */}
-              {unlockedTracks.length > 0 ? (
-                <>
-                  <label style={{
-                    color: '#f1f5f9',
-                    fontSize: '14px',
-                    fontWeight: 'bold',
-                    marginBottom: '4px',
-                    display: 'block'
-                  }}>
-                    MUSIC Drop (you lose this song):
-                  </label>
-                  <select
-                    value={selectedTrackForMusicDrop ?? unlockedTracks[0]}
-                    onChange={(e) => setSelectedTrackForMusicDrop(e.target.value || null)}
-                    style={{
-                      width: '100%',
-                      padding: '10px',
-                      borderRadius: '8px',
-                      border: '2px solid rgba(138, 43, 226, 0.4)',
-                      backgroundColor: 'rgba(15, 23, 42, 0.8)',
-                      color: '#f1f5f9',
-                      fontSize: '13px',
-                      cursor: 'pointer',
-                      marginBottom: '4px'
-                    }}
-                  >
-                    {unlockedTracks.map((url) => (
-                      <option key={url} value={url} style={{ backgroundColor: '#1e293b' }}>
-                        {getTrackNameFromUrl(url)}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={handleMusicDrop}
-                    style={{
-                      background: 'linear-gradient(135deg, #8a2be2, #6a1bb2)',
-                      border: 'none',
-                      borderRadius: '12px',
-                      padding: '18px',
-                      color: 'white',
-                      fontSize: '16px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      transition: 'all 0.3s ease',
-                      boxShadow: '0 4px 15px rgba(138, 43, 226, 0.3)'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                      e.currentTarget.style.boxShadow = '0 8px 25px rgba(138, 43, 226, 0.4)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = '0 4px 15px rgba(138, 43, 226, 0.3)';
-                    }}
-                  >
-                    <span style={{ fontSize: '24px' }}>MUSIC</span>
-                    <div style={{ textAlign: 'left' }}>
-                      <div>Place Music Drop</div>
-                      <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: 'normal' }}>
-                        Save song on map – you lose it from your collection
-                      </div>
-                    </div>
-                  </button>
-                </>
-              ) : (
-                <div style={{
-                  padding: '14px',
-                  borderRadius: '12px',
-                  background: 'rgba(138, 43, 226, 0.15)',
-                  border: '1px dashed rgba(138, 43, 226, 0.4)',
-                  color: '#a78bfa',
-                  fontSize: '13px',
-                  textAlign: 'center'
-                }}>
-                  MUSIC Drop – unlock tracks first (place marker or photo drops)
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => {
-                setShowDropTypeModal(false);
-                setPendingDropPosition(null);
-              }}
-              style={{
-                marginTop: '20px',
-                background: 'none',
-                border: '1px solid rgba(148, 163, 184, 0.3)',
-                borderRadius: '8px',
-                padding: '10px 20px',
-                color: '#94a3b8',
-                cursor: 'pointer',
-                width: '100%',
-                fontSize: '14px',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(148, 163, 184, 0.1)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      <DropTypeModal
+        isVisible={showDropTypeModal}
+        onClose={() => {
+          setShowDropTypeModal(false);
+          setPendingDropPosition(null);
+        }}
+        onMarkerDrop={handleMarkerDrop}
+        onPhotoDrop={handlePhotoDrop}
+        onMusicDrop={handleMusicDrop}
+        selectedSurface={selectedSurface}
+        selectedGraffitiType={selectedGraffitiType}
+        onSurfaceChange={setSelectedSurface}
+        onGraffitiTypeChange={setSelectedGraffitiType}
+        selectedMarkerType={selectedMarkerType}
+        unlockedTracks={unlockedTracks}
+        selectedTrackForMusicDrop={selectedTrackForMusicDrop}
+        onTrackSelect={setSelectedTrackForMusicDrop}
+        getTrackNameFromUrl={getTrackNameFromUrl}
+      />
 
       {/* Photo Selection Modal */}
       <PhotoSelectionModal
@@ -3991,190 +3260,12 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       </button>
 
       {/* Profile Stats Display - Top Right */}
-      {userProfile && (
-        <div style={{
-          position: 'absolute',
-          top: 20,
-          right: 20,
-          background: 'rgba(0,0,0,0.85)',
-          color: '#e0e0e0',
-          padding: '12px',
-          borderRadius: '8px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          zIndex: 1001,
-          minWidth: '200px',
-          backdropFilter: 'blur(4px)',
-          paddingTop: '18px' // Added padding to make room for plate
-        }}>
-          {/* License Plate - Shows ONE for solo, crew initials for crew */}
-          <div style={{
-            position: 'absolute',
-            top: '-12px', // Moved up slightly
-            right: '15px', // Moved in from edge
-            width: '55px', // Slightly smaller
-            height: '24px', // Slightly shorter
-            zIndex: 1002
-          }}>
-            <svg 
-              width="55" 
-              height="24" 
-              viewBox="0 0 55 24"
-              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }}
-            >
-              {/* License plate base - smaller */}
-              <rect 
-                x="2" y="2" 
-                width="51" height="20" 
-                rx="3" ry="3"
-                fill="#1e293b"
-                stroke={userProfile.isSolo ? '#f59e0b' : 
-                        userProfile.crewId === 'bqc' ? '#ef4444' : 
-                        userProfile.crewId === 'sps' ? '#4dabf7' : 
-                        userProfile.crewId === 'lzt' ? '#10b981' : 
-                        userProfile.crewId === 'dgc' ? '#8b5cf6' : '#9ca3af'}
-                strokeWidth="1.5"
-              />
-              
-              {/* Inner shine effect */}
-              <rect 
-                x="4" y="4" 
-                width="47" height="16" 
-                rx="2" ry="2"
-                fill="url(#plateGradient)"
-                opacity="0.8"
-              />
-              
-              {/* Text: ONE for solo, crew initials for crew */}
-              <text
-                x="27.5"
-                y="16"
-                textAnchor="middle"
-                fill="white"
-                fontSize="12" // Smaller font
-                fontWeight="bold"
-                fontFamily="monospace"
-                style={{ 
-                  textTransform: 'uppercase',
-                  letterSpacing: userProfile.isSolo ? '0.5px' : 'normal'
-                }}
-              >
-                {userProfile.isSolo ? 'ONE' : userProfile.crewId?.toUpperCase() || 'SOLO'}
-              </text>
-              
-              {/* Simple border highlight */}
-              <rect 
-                x="3" y="3" 
-                width="49" height="18" 
-                rx="2.5" ry="2.5"
-                fill="none"
-                stroke="rgba(255,255,255,0.2)"
-                strokeWidth="0.5"
-              />
-              
-              <defs>
-                <linearGradient id="plateGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="rgba(255,255,255,0.1)" />
-                  <stop offset="100%" stopColor="rgba(255,255,255,0.05)" />
-                </linearGradient>
-              </defs>
-            </svg>
-            
-            {/* Tiny status dot */}
-            <div style={{
-              position: 'absolute',
-              top: '26px',
-              right: '5px',
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              backgroundColor: userProfile.isSolo ? '#f59e0b' :
-                    userProfile.crewId === 'bqc' ? '#ffffff' : 
-                    userProfile.crewId === 'sps' ? '#4dabf7' : 
-                    userProfile.crewId === 'lzt' ? '#10b981' : 
-                    userProfile.crewId === 'dgc' ? '#8b5cf6' : '#9ca3af',
-              boxShadow: '0 0 4px currentColor'
-            }} />
-          </div>
-          
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            marginBottom: '8px'
-          }}>
-            <img
-              src={userProfile.profilePicUrl}
-              alt="Profile"
-              style={{
-                width: '40px',
-                height: '40px',
-                border: `3px solid ${userProfile.isSolo ? '#f59e0b' : '#ff6b6b'}`,
-                borderRadius: '0',
-                objectFit: 'cover',
-                position: 'relative'
-              }}
-            />
-            {/* Spray Can Drip in Bottom Left */}
-            <div style={{
-              position: 'absolute',
-              bottom: '-6px',
-              left: '-6px',
-              width: '20px',
-              height: '20px',
-              zIndex: 5,
-              fontSize: '16px',
-              lineHeight: '1'
-            }}>
-              🎨
-            </div>
-            <div>
-              <div style={{ 
-                fontWeight: 'bold', 
-                fontSize: '14px',
-                color: userProfile.isSolo ? '#f59e0b' : '#ff6b6b'
-              }}>
-                {userProfile.username}
-              </div>
-              <div style={{ 
-                color: userProfile.isSolo ? '#f59e0b' : '#ff6b6b', 
-                fontSize: '12px' 
-              }}>
-                {userProfile.rank} • Lv {userProfile.level}
-              </div>
-            </div>
-          </div>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            fontSize: '12px'
-          }}>
-            <div style={{ color: '#4dabf7' }}>
-              REP: {userProfile.rep || 0}
-            </div>
-            <div style={{ color: '#10b981' }}>
-              {userMarkers.filter(m => m.userId === user?.uid).length} drops
-            </div>
-          </div>
-          
-          {/* Crew/Solo status indicator - more subtle */}
-          <div style={{
-            marginTop: '8px',
-            fontSize: '9px',
-            color: userProfile.isSolo ? '#f59e0b' : '#10b981',
-            textAlign: 'center',
-            backgroundColor: userProfile.isSolo ? 
-              'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
-            padding: '2px 4px',
-            borderRadius: '3px',
-            border: userProfile.isSolo ? 
-              '1px solid rgba(245, 158, 11, 0.2)' : '1px solid rgba(16, 185, 129, 0.2)'
-          }}>
-            {userProfile.isSolo ? '🎯 SOLO' : `👥 ${userProfile.crewName || 'CREW'}`}
-          </div>
-        </div>
-      )}
+      <ProfileStats
+        userProfile={userProfile}
+        user={user}
+        userMarkersCount={userMarkers.length}
+        myMarkersCount={userMarkers.filter(m => m.userId === user?.uid).length}
+      />
 
       {/* ========== DUAL CONTROL PANELS ========== */}
 <div style={{
@@ -5917,277 +5008,48 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           </div>
         )}
 
-                      {/* Blur Effect Layer Behind SVG */}
-      <div style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: '68px',
-        zIndex: 1099, // Behind the navigation
-        backdropFilter: 'blur(12px)',
-        backgroundColor: 'rgba(0, 0, 0, 0.4)',
-      }} />
-
-      {/* Bottom Navigation Container */}
-      <div style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: '68px',
-        zIndex: 1100, // On top of blur layer
-        overflow: 'hidden',
-      }}>
-        
-        {/* White Glow Layer - Behind SVG only */}
-        <div style={{
-          position: 'absolute',
-          width: '100%',
-          height: '100%',
-          // White glow effect
-          boxShadow: `
-            0 0 40px rgba(255, 255, 255, 0.8),
-            0 0 80px rgba(255, 255, 255, 0.6),
-            0 0 120px rgba(255, 255, 255, 0.4),
-            inset 0 0 60px rgba(255, 255, 255, 0.7)
-          `,
-          filter: `drop-shadow(0 0 25px rgba(255, 255, 255, 1))`,
-          animation: 'whiteGlowPulse 3s ease-in-out infinite',
-          pointerEvents: 'none',
-          zIndex: 1,
-        }} />
-        
-        {/* Crew Color Glow Layer - For selected button */}
-        <div style={{
-          position: 'absolute',
-          width: '100%',
-          height: '100%',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          pointerEvents: 'none',
-          zIndex: 1,
-        }}>
-          {/* Map Button Glow Section */}
-          <div style={{
-            opacity: showMapPanel ? 1 : 0,
-            transition: 'opacity 0.3s ease',
-            background: 'radial-gradient(circle at center, rgba(77, 171, 247, 1) 0%, rgba(77, 171, 247, 0.7) 50%, transparent 85%)',
-            boxShadow: `
-              inset 0 0 80px rgba(77, 171, 247, 0.9),
-              0 0 120px rgba(77, 171, 247, 0.8),
-              0 0 180px rgba(77, 171, 247, 0.6)
-            `,
-            filter: 'blur(1px)',
-          }} />
-          
-          {/* Blackbook Button Glow Section */}
-          <div style={{
-            opacity: showProfilePanel ? 1 : 0,
-            transition: 'opacity 0.3s ease',
-            background: 'radial-gradient(circle at center, rgba(77, 171, 247, 1) 0%, rgba(77, 171, 247, 0.7) 50%, transparent 85%)',
-            boxShadow: `
-              inset 0 0 80px rgba(77, 171, 247, 0.9),
-              0 0 120px rgba(77, 171, 247, 0.8),
-              0 0 180px rgba(77, 171, 247, 0.6)
-            `,
-            filter: 'blur(1px)',
-          }} />
-          
-          {/* Camera Button Glow Section */}
-          <div style={{
-            opacity: showPhotosPanel ? 1 : 0,
-            transition: 'opacity 0.3s ease',
-            background: 'radial-gradient(circle at center, rgba(77, 171, 247, 1) 0%, rgba(77, 171, 247, 0.7) 50%, transparent 85%)',
-            boxShadow: `
-              inset 0 0 80px rgba(77, 171, 247, 0.9),
-              0 0 120px rgba(77, 171, 247, 0.8),
-              0 0 180px rgba(77, 171, 247, 0.6)
-            `,
-            filter: 'blur(1px)',
-          }} />
-          
-          {/* Crew Chat Glow Section */}
-          <div style={{
-            opacity: showCrewChat ? 1 : 0,
-            transition: 'opacity 0.3s ease',
-            background: 'radial-gradient(circle at center, rgba(77, 171, 247, 1) 0%, rgba(77, 171, 247, 0.7) 50%, transparent 85%)',
-            boxShadow: `
-              inset 0 0 80px rgba(77, 171, 247, 0.9),
-              0 0 120px rgba(77, 171, 247, 0.8),
-              0 0 180px rgba(77, 171, 247, 0.6)
-            `,
-            filter: 'blur(1px)',
-          }} />
-        </div>
-
-        {/* SVG Background - White glow shows through transparent areas */}
-        <img 
-          src="bobottomnav1.svg" 
-          alt="Bottom Navigation"
-          style={{
-            position: 'absolute',
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            pointerEvents: 'none',
-            zIndex: 2,
-          }}
-        />
-        
-        {/* Interactive Buttons Layer - Only clickable areas, no text/emoji */}
-        <div style={{
-          position: 'relative',
-          height: '100%',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          alignItems: 'center',
-          zIndex: 3,
-        }}>
-          
-          {/* Map Button - Empty, just clickable */}
-          <button
-            onClick={() => {
-              setShowMapPanel(!showMapPanel);
-              setShowProfilePanel(false);
-              setShowPhotosPanel(false);
-              setShowCrewChat(false);
-              setShowMusicPanel(false);
-              setShowStoryPanel(false);
-            }}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'transparent',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '12px 0',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              height: '100%',
-              width: '100%',
-              borderRadius: '0',
-              position: 'relative',
-            }}
-            aria-label="Map"
-          >
-            {/* Empty button - icon/text should be in SVG */}
-          </button>
-
-          {/* Blackbook Button - Empty, just clickable */}
-          <button
-            onClick={() => {
-              setShowProfilePanel(!showProfilePanel);
-              setShowPhotosPanel(false);
-              setShowCrewChat(false);
-              setShowMapPanel(false);
-              setShowMusicPanel(false);
-              setShowStoryPanel(false);
-            }}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'transparent',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '12px 0',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              height: '100%',
-              width: '100%',
-              borderRadius: '0',
-              position: 'relative',
-            }}
-            aria-label="Blackbook"
-          >
-            {/* Empty button - icon/text should be in SVG */}
-          </button>
-
-          {/* Camera Button - Empty, just clickable */}
-          <button
-            onClick={() => {
-              setShowPhotosPanel(!showPhotosPanel);
-              setShowProfilePanel(false);
-              setShowCrewChat(false);
-              setShowMapPanel(false);
-              setShowMusicPanel(false);
-              setShowStoryPanel(false);
-            }}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'transparent',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '12px 0',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              height: '100%',
-              width: '100%',
-              borderRadius: '0',
-              position: 'relative',
-            }}
-            aria-label="Camera"
-          >
-            {/* Empty button - icon/text should be in SVG */}
-          </button>
-
-          {/* Crew Chat Button - Empty, just clickable */}
-          <button
-            onClick={() => {
-              setShowCrewChat(!showCrewChat);
-              setShowProfilePanel(false);
-              setShowPhotosPanel(false);
-              setShowMapPanel(false);
-              setShowMusicPanel(false);
-              setShowStoryPanel(false);
-            }}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'transparent',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '12px 0',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              height: '100%',
-              width: '100%',
-              borderRadius: '0',
-              position: 'relative',
-            }}
-            aria-label="Crew Chat"
-          >
-            {/* Unread Message Badge */}
-            {hasUnreadMessages && !showCrewChat && unreadCount > 0 && (
-              <div style={{
-                position: 'absolute',
-                top: '5px',
-                right: '5px',
-                backgroundColor: '#ef4444', // Red for notification
-                color: 'white',
-                borderRadius: '50%',
-                width: '20px',
-                height: '20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '11px',
-                fontWeight: 'bold',
-                zIndex: 4, // Above other elements
-                boxShadow: '0 0 5px rgba(239, 68, 68, 0.7)'
-              }}>
-                {unreadCount}
-              </div>
-            )}
-            {/* Empty button - icon/text should be in SVG */}
-          </button>
-        </div>
-      </div>
+      {/* Bottom Navigation */}
+      <BottomNavigation
+        showMapPanel={showMapPanel}
+        showProfilePanel={showProfilePanel}
+        showPhotosPanel={showPhotosPanel}
+        showCrewChat={showCrewChat}
+        onToggleMapPanel={() => {
+          setShowMapPanel(!showMapPanel);
+          setShowProfilePanel(false);
+          setShowPhotosPanel(false);
+          setShowCrewChat(false);
+          setShowMusicPanel(false);
+          setShowStoryPanel(false);
+        }}
+        onToggleProfilePanel={() => {
+          setShowProfilePanel(!showProfilePanel);
+          setShowPhotosPanel(false);
+          setShowCrewChat(false);
+          setShowMapPanel(false);
+          setShowMusicPanel(false);
+          setShowStoryPanel(false);
+        }}
+        onTogglePhotosPanel={() => {
+          setShowPhotosPanel(!showPhotosPanel);
+          setShowProfilePanel(false);
+          setShowCrewChat(false);
+          setShowMapPanel(false);
+          setShowMusicPanel(false);
+          setShowStoryPanel(false);
+        }}
+        onToggleCrewChat={() => {
+          setShowCrewChat(!showCrewChat);
+          setShowProfilePanel(false);
+          setShowPhotosPanel(false);
+          setShowMapPanel(false);
+          setShowMusicPanel(false);
+          setShowStoryPanel(false);
+        }}
+        onCloseAllPanels={() => {}}
+        hasUnreadMessages={hasUnreadMessages}
+        unreadCount={unreadCount}
+      />
 
       {/* Secondary Controls - Under Online Button */}
       <div style={{
@@ -6294,78 +5156,18 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       </div>
 
       {/* Legend */}
-      {showLegend && (
-        <div className="legend" style={{
-          position: 'absolute',
-          bottom: 20,
-          left: 20,
-          background: 'rgba(0,0,0,0.65)',
-          color: 'white',
-          padding: '10px 14px',
-          borderRadius: 8,
-          fontSize: 13,
-          zIndex: 900,
-          backdropFilter: 'blur(4px)',
-          maxWidth: '250px'
-        }}>
-          <div>📍 Your location {isOfflineMode ? '(Offline)' : '(NZ only)'}</div>
-          <div style={{color: selectedMarkerColor}}>● All drops (blue dot = yours)</div>
-          <div>{isOfflineMode ? '🔴' : '🟢'} 50m radius {isOfflineMode ? '(Offline Mode)' : '(Online Mode)'}</div>
-          <div>🎯 GPS accuracy {isOfflineMode ? '(Disabled)' : ''}</div>
-          <div style={{fontSize: '10px', color: isOfflineMode ? '#ef4444' : '#60a5fa', marginTop: '4px'}}>
-            {isOfflineMode ? '🎮 Offline Mode' : '🗺️ Blackout NZ - Street art across Aotearoa'}
-          </div>
-          <div style={{
-            marginTop: '8px',
-            fontSize: '11px',
-            color: gpsStatus === 'tracking' ? '#10b981' :
-                  gpsStatus === 'acquiring' ? '#f59e0b' :
-                  gpsStatus === 'error' ? '#ef4444' : '#6b7280'
-          }}>
-            📡 GPS: {
-              isOfflineMode ? 'Offline Mode' :
-              gpsStatus === 'tracking' ? 'Active' :
-              gpsStatus === 'acquiring' ? 'Acquiring...' :
-              gpsStatus === 'error' ? 'Error' : 'Initializing'
-            }
-            {gpsPosition && (
-              <div style={{ fontSize: '9px', marginTop: '2px', opacity: 0.8 }}>
-                {gpsPosition[0].toFixed(4)}, {gpsPosition[1].toFixed(4)}
-              </div>
-            )}
-            {gpsError && (
-              <div style={{
-                fontSize: '9px',
-                marginTop: '2px',
-                color: '#ef4444',
-                maxWidth: '200px',
-                wordWrap: 'break-word'
-              }}>
-                {gpsError}
-              </div>
-            )}
-          </div>
-          {showTopPlayers && (
-            <>
-              <div style={{marginTop: '8px', color: '#fbbf24'}}>🥇 Top Writer</div>
-              <div style={{color: '#cbd5e1'}}>🥈 Runner-up</div>
-              <div style={{color: '#d97706'}}>🥉 Contender</div>
-            </>
-          )}
-          <div style={{marginTop: '8px', fontSize: '11px', color: '#4dabf7'}}>
-            Total drops: {userMarkers.length}
-          </div>
-          <div style={{marginTop: '8px', fontSize: '11px', color: '#8a2be2'}}>
-            Music: {unlockedTracks.length} tracks unlocked
-          </div>
-          {/* 🆕 Add Crew Chat Status */}
-          {userProfile?.crewId && !userProfile?.isSolo && (
-            <div style={{marginTop: '8px', fontSize: '11px', color: '#10b981'}}>
-              Crew: {userProfile.crewName} (Chat available)
-            </div>
-          )}
-        </div>
-      )}
+      <LegendPanel
+        isVisible={showLegend}
+        isOfflineMode={isOfflineMode}
+        showTopPlayers={showTopPlayers}
+        selectedMarkerColor={selectedMarkerColor}
+        userMarkersCount={userMarkers.length}
+        unlockedTracksCount={unlockedTracks.length}
+        gpsStatus={gpsStatus}
+        gpsPosition={gpsPosition}
+        gpsError={gpsError}
+        userProfile={userProfile}
+      />
 
       
 

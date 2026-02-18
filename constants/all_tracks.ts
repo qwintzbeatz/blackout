@@ -24,7 +24,7 @@ export const SPOTIFY_TRACKS = [
 'https://open.spotify.com/track/5V46sbFSgli7y5Kl1shed0', // Corrella - How Will I Know
 'https://open.spotify.com/track/27bYzUlo34pVueQgpD1d5V', // Lomez Brown - Sweet Lover
 'https://open.spotify.com/track/6UGJKTfIzk6WqjTgBeQg5O', // L.A.B. - Controller
-'https://open.spotify.com/track/1HqW8SFxqhHgy2m5m13v7C', // Brutha Rodz, Wiz Tokelau - Heart of a Lion
+'https://open.spotify.com/track/7etGJzSv1g7S8RxZinqkdS', // Brutha Rodz, Wiz Tokelau - Heart of a Lion
 'https://open.spotify.com/track/6HwcP1XamKZwjAmcdBN2Pk', // Fia - Love Me
 'https://open.spotify.com/track/7dGsBUADSyHoD7zdkKi9Ef', // L.A.B. - Mr Reggae
 'https://open.spotify.com/track/0JMazmj2Tzqr7cgcwlYjVf', // L.A.B. - Why Oh Why
@@ -61,7 +61,7 @@ export const SPOTIFY_TRACKS = [
 'https://open.spotify.com/track/51AXsgpHP8R1QWzFZRWZJk', // Nesian Mystik - For the People
 'https://open.spotify.com/track/1LJCrSMWXJiNWk2wXa7vSV', // Kora - On My Mind
 'https://open.spotify.com/track/1PEMFdaHfWv4EXUc26Y3dz', // Stan Walker - Māori Ki Te Ao
-'https://open.spotify.com/track/2Ohkq2xdLHkOnNRV4tztg', // Sweet & Irie, HORSEMEN FAMILY - Feels Like Magic
+'https://open.spotify.com/track/2Ohkq2xdLHkOnrNRV4tztg', // Sweet & Irie, HORSEMEN FAMILY - Feels Like Magic
 'https://open.spotify.com/track/59rgy4OQ0G4yJMIIUNOrAj', // Supergroove - Sitting Inside My Head
 'https://open.spotify.com/track/1qwwLJjHF21wuPgX5o1d5c', // Sammielz - Let Us Be
 'https://open.spotify.com/track/1Ot8se5RnFZJWpB4WLIzr8', // Te Matatini, Te Kuru Marutea - Kei Wareware i a Tātou
@@ -111,7 +111,6 @@ export const SPOTIFY_TRACKS = [
 'https://open.spotify.com/track/5tX9BkjTeQEoJCPTVVkRxx', // David Dallas - Runnin
 'https://open.spotify.com/track/36CZ5EJujXLCPFjoBy8a5y', // David Dallas - O.T.T
 'https://open.spotify.com/track/2zBYsFzd8gM4CfDRmsCZ59', // David Dallas - Ain't None Left
-'https://open.spotify.com/track/0tkEKBrgdMZXjZylYRoN7H', // MELODOWNZ - Infinite
 'https://open.spotify.com/track/1wob4zdM0UtZlo8Q5XF5bi', // LilXSkiEmo - Faith In Us
 'https://open.spotify.com/track/4H3PAXVo7CJWQj30ndGKSn', // Diggy Dupé - Cool Like Dat
 'https://open.spotify.com/track/5woPu1EbjrUxdisOcQL7uo', // RAIZA BIZA - Wassup
@@ -147,7 +146,7 @@ export const SPOTIFY_TRACKS = [
 'https://open.spotify.com/track/1YlZeg7BKzioqyy0Tvc1hF', // Bailey Wiley, Melodownz - Sugar (feat. Melodownz)
 'https://open.spotify.com/track/3sLTNVpRzRWNx6Bh2TOyHU', // Jlow TBH, C.Brook, YNG_SKZR - Band$ up!
 'https://open.spotify.com/track/3V8wsarpumEnJZxwaWC1WF', // YNG_SKZR - Life Hacks
-'https://open.spotify.com/track/3OEPQt3KEhZOUltvappwtg', // Tipene - West Side Hori (Remix)
+'https://open.spotify.com/track/3OEPQt3KEhZOUltvappwtg', // Tipene - Tū (feat. Hone Harawira)
 'https://open.spotify.com/track/0Ea2PZ8DoQzLOO2ReQXhEE', // Tipene - Āriki
 'https://open.spotify.com/track/19kHfKtHUb6rbU25ZoeqEH', // Tipene - Doin' My Thing (feat. Scribe)
 'https://open.spotify.com/track/5m9vqODHmGPdHkd9XjJEzT', // Tipene - Time In The Sunshine (feat. Majic)
@@ -170,7 +169,6 @@ export const SPOTIFY_TRACKS = [
 'https://open.spotify.com/track/4QYwBOwumJhOqzTIiBhg59', // P Money, Zeph Ellis - Sounds and Gimmiks
 'https://open.spotify.com/track/6KDHzbrYx4sY1lCmXYLmEH', // Mareko, Deceptikonz - Stop, Drop and Roll
 'https://open.spotify.com/track/4mYp82ZjFGvgp6lYi7Koaz', // Mareko, Scribe, Flowz, Deceptikonz - Stop, Drop and Roll - Remix
-'https://open.spotify.com/track/4xX5iB4wvUyacBYNrJOUIw', // Mareko, J.Williams - Them Eyes
 'https://open.spotify.com/track/19jCPIeO4PNbS9hznOwKmT', // Mareko, J Williams - Gotta Go
 'https://open.spotify.com/track/73E38And3WgF6zcU7ivebB', // Mareko - Fiyah
 'https://open.spotify.com/track/1SFWWH2a6sqD5Js9INaT5Q', // Mareko - My Lady
@@ -315,9 +313,7 @@ export const SPOTIFY_TRACKS = [
 'https://open.spotify.com/track/6jVFD421Tx5sMI3JyVqiMh', // Maisey Rika - Reconnect
 'https://open.spotify.com/track/61wYZfeRZGgf5M4wRmRvtY', // Maisey Rika - Letting Go
 'https://open.spotify.com/track/5rlghSaW1py8SXvGUxniC7', // Maisey Rika - Children of Romania
-'https://open.spotify.com/track/5yQ5VsEsI3XsqSDgZLo2XF', // Te Wehi - Unaware
 'https://open.spotify.com/track/5bcI3wQpXxQw4PUpinpeSJ', // Herbs - Dragons & Demons
-'https://open.spotify.com/track/2Ohkq2xdLHkOnrNRV4tztg', // Sweet & Irie, HORSEMEN FAMILY - Feels Like Magic
 'https://open.spotify.com/track/1n98zPWINRiuWCvRaChRd4', // Katchafire - Who You With
 'https://open.spotify.com/track/0JeSu23K0BW2g1Bm568C4c', // Katchafire - 100
 'https://open.spotify.com/track/7u4pe8R8Ti1RMVTh7036Hi', // Katchafire - Collie Herb Man
@@ -325,13 +321,11 @@ export const SPOTIFY_TRACKS = [
 'https://open.spotify.com/track/02yYxxU7lRPeoWuWN0bPuw', // Katchafire - Get Away
 'https://open.spotify.com/track/0Yu8oEJnPiIa7F5JTQfJjO', // Uru Whetu, Te Aroha, Torere - Taku Raumiri
 'https://open.spotify.com/track/6hiOaip4EtElxvjjkHiuL1', // Kora - Politician
-'https://open.spotify.com/track/53HYJLPX6InfqIsDt3BdLH', // 1814 - Jah Rastafari
 'https://open.spotify.com/track/2uuxnBjbWGbIq1fNS4yJfg', // 1814 - Picture On The Wall
 'https://open.spotify.com/track/01hdQfU8xCXA8aW59GnyWG', // House of Shem - Thinking About You
 'https://open.spotify.com/track/6HDZr2mm9iPL6dvBZt8zjB', // House of Shem - Anything You Ask For
 'https://open.spotify.com/track/1ikaWxcEqv5pyaDuJWcKcZ', // Ardijah - Silly Love Songs
 'https://open.spotify.com/track/5yz64s7TvgfOtqYTXLt5MK', // Ardijah - Love So Right
-'https://open.spotify.com/track/0aRiRbMBJ4boE3hhhtlOsB', // Adeaze - Getting Stronger
 'https://open.spotify.com/track/61uQYPlrQ9BGusRmLKoEDE', // Adeaze - A Life with You
 'https://open.spotify.com/track/0khkwt5FCMHDObLbGZkcjo', // Adeaze - How Deep Is Your Love
 'https://open.spotify.com/track/6hfi8kVyz46X7qMEQXyk7m', // Whenua Patuwai - Holding on to You
@@ -339,7 +333,6 @@ export const SPOTIFY_TRACKS = [
 'https://open.spotify.com/track/3mnLllWwZ6c4DLIs3fKOoH', // P-Money, Scribe - Scribe 2001
 'https://open.spotify.com/track/2SO5DZTOi0Fxvyo9QHH7QD', // P-Money, 4 Corners, Scribe - Synchronize Thoughts
 'https://open.spotify.com/track/4rr67zXmEYf9ykLigeEsbv', // Crowded House - Don't Dream It's Over
-'https://open.spotify.com/track/6EooyE6kbrbosNjhCZDQ4i', // Katchafire - Seriously
 'https://open.spotify.com/track/3mTm7dnT1M7pivXKKuTs4m', // Blindspott - Phlex
 'https://open.spotify.com/track/2XqKlm86ZLP7NRD0vz9BNP', // Fast Crew - Suburbia Streets
 'https://open.spotify.com/track/07OHMnw4BIHiw0ml7FeqUj', // Fast Crew - I Got
@@ -347,11 +340,8 @@ export const SPOTIFY_TRACKS = [
 'https://open.spotify.com/track/3gJr1bJPUD9SgPZXesduSV', // Brooke Fraser - Arithmetic
 'https://open.spotify.com/track/0erUKbzlyZS4rcW6oaYaW5', // Brooke Fraser - Lifeline
 'https://open.spotify.com/track/41YkLqy2HVkMcNuH3Mh5Wa', // Tomorrow People - Souljah Feeling - feat. Chad Chambers
-'https://open.spotify.com/track/0PwoAyaHGmY9BGCVdsNeK4', // Nesian Mystik - Brothaz
 'https://open.spotify.com/track/2m57yduhfsJu0COFEdxCqA', // Ché-Fu - Hold Tight
 'https://open.spotify.com/track/7jjewQIrmp0NIddDnhh618', // David Grace & Injustice - Rua Kenana
-'https://open.spotify.com/track/51AXsgpHP8R1QWzFZRWZJk', // Nesian Mystik - For the People
-'https://open.spotify.com/track/6IwTZB5S5s2nAlfd8WpLFx', // Ché-Fu - Fade Away
 'https://open.spotify.com/track/7dt8NIkwXx7ZMJFmMDpbhb', // Ché-Fu - Misty Frequencies
 'https://open.spotify.com/track/2HB74eXrsfT1gVc8e4Wpcy', // Nesian Mystik - It's On
 'https://open.spotify.com/track/4ioAzfrxs8zqadm2woDNJW', // Ché-Fu - Waka
@@ -427,7 +417,7 @@ export const getTrackName = (url: string): string => {
 'https://open.spotify.com/track/5V46sbFSgli7y5Kl1shed0': 'Corrella - How Will I Know',
 'https://open.spotify.com/track/27bYzUlo34pVueQgpD1d5V': 'Lomez Brown - Sweet Lover',
 'https://open.spotify.com/track/6UGJKTfIzk6WqjTgBeQg5O': 'L.A.B. - Controller',
-'https://open.spotify.com/track/1HqW8SFxqhHgy2m5m13v7C': 'Brutha Rodz, Wiz Tokelau - Heart of a Lion',
+'https://open.spotify.com/track/7etGJzSv1g7S8RxZinqkdS': 'Brutha Rodz, Wiz Tokelau - Heart of a Lion',
 'https://open.spotify.com/track/6HwcP1XamKZwjAmcdBN2Pk': 'Fia - Love Me',
 'https://open.spotify.com/track/7dGsBUADSyHoD7zdkKi9Ef': 'L.A.B. - Mr Reggae',
 'https://open.spotify.com/track/0JMazmj2Tzqr7cgcwlYjVf': 'L.A.B. - Why Oh Why',
@@ -453,7 +443,6 @@ export const getTrackName = (url: string): string => {
 'https://open.spotify.com/track/0gCNs3jCCDhObAK0MRghtv': 'Drax Project, SIX60 - Catching Feelings (feat. SIX60)',
 'https://open.spotify.com/track/5Ov3TERXJhFfuHcTpJR0iV': 'Hori Shaw, Te Wehi - Ready To Ride',
 'https://open.spotify.com/track/6mSnSuOhgHHohqeBw76jRV': 'salvia palth - i was all over her',
-//'https://open.spotify.com/track/2OcX0meMxqyTlWIhBMwNW0': 'Ladi6 - Like Water',
 'https://open.spotify.com/track/3fpYUnUFAj9gFCGvJg4kaE': 'SIX60 - Sundown',
 'https://open.spotify.com/track/4Tad6g9EPE3gv5RjOzRcJF': 'Te Wehi - Ill Be Your Home',
 'https://open.spotify.com/track/6K8VQ84MqhsoakN5MjrnVR': 'Lorde - Supercut',
@@ -464,7 +453,7 @@ export const getTrackName = (url: string): string => {
 'https://open.spotify.com/track/51AXsgpHP8R1QWzFZRWZJk': 'Nesian Mystik - For the People',
 'https://open.spotify.com/track/1LJCrSMWXJiNWk2wXa7vSV': 'Kora - On My Mind',
 'https://open.spotify.com/track/1PEMFdaHfWv4EXUc26Y3dz': 'Stan Walker - Māori Ki Te Ao',
-'https://open.spotify.com/track/2Ohkq2xdLHkOnNRV4tztg': 'Sweet & Irie, HORSEMEN FAMILY - Feels Like Magic',
+'https://open.spotify.com/track/2Ohkq2xdLHkOnrNRV4tztg': 'Sweet & Irie, HORSEMEN FAMILY - Feels Like Magic',
 'https://open.spotify.com/track/59rgy4OQ0G4yJMIIUNOrAj': 'Supergroove - Sitting Inside My Head',
 'https://open.spotify.com/track/1qwwLJjHF21wuPgX5o1d5c': 'Sammielz - Let Us Be',
 'https://open.spotify.com/track/1Ot8se5RnFZJWpB4WLIzr8': 'Te Matatini, Te Kuru Marutea - Kei Wareware i a Tātou',
@@ -514,7 +503,6 @@ export const getTrackName = (url: string): string => {
 'https://open.spotify.com/track/5tX9BkjTeQEoJCPTVVkRxx': 'David Dallas - Runnin',
 'https://open.spotify.com/track/36CZ5EJujXLCPFjoBy8a5y': 'David Dallas - O.T.T',
 'https://open.spotify.com/track/2zBYsFzd8gM4CfDRmsCZ59': 'David Dallas - Aint None Left',
-'https://open.spotify.com/track/0tkEKBrgdMZXjZylYRoN7H': 'MELODOWNZ - Infinite',
 'https://open.spotify.com/track/1wob4zdM0UtZlo8Q5XF5bi': 'LilXSkiEmo - Faith In Us',
 'https://open.spotify.com/track/4H3PAXVo7CJWQj30ndGKSn': 'Diggy Dupé - Cool Like Dat',
 'https://open.spotify.com/track/5woPu1EbjrUxdisOcQL7uo': 'RAIZA BIZA - Wassup',
@@ -550,7 +538,7 @@ export const getTrackName = (url: string): string => {
 'https://open.spotify.com/track/1YlZeg7BKzioqyy0Tvc1hF': 'Bailey Wiley, Melodownz - Sugar (feat. Melodownz)',
 'https://open.spotify.com/track/3sLTNVpRzRWNx6Bh2TOyHU': 'Jlow TBH, C.Brook, YNG_SKZR - Band$ up!',
 'https://open.spotify.com/track/3V8wsarpumEnJZxwaWC1WF': 'YNG_SKZR - Life Hacks',
-'https://open.spotify.com/track/3OEPQt3KEhZOUltvappwtg': 'Tipene - West Side Hori (Remix)',
+'https://open.spotify.com/track/3OEPQt3KEhZOUltvappwtg': 'Tipene - Tū (feat. Hone Harawira)',
 'https://open.spotify.com/track/0Ea2PZ8DoQzLOO2ReQXhEE': 'Tipene - Āriki',
 'https://open.spotify.com/track/19kHfKtHUb6rbU25ZoeqEH': 'Tipene - Doin My Thing (feat. Scribe)',
 'https://open.spotify.com/track/5m9vqODHmGPdHkd9XjJEzT': 'Tipene - Time In The Sunshine (feat. Majic)',
@@ -573,7 +561,6 @@ export const getTrackName = (url: string): string => {
 'https://open.spotify.com/track/4QYwBOwumJhOqzTIiBhg59': 'P Money, Zeph Ellis - Sounds and Gimmiks',
 'https://open.spotify.com/track/6KDHzbrYx4sY1lCmXYLmEH': 'Mareko, Deceptikonz - Stop, Drop and Roll',
 'https://open.spotify.com/track/4mYp82ZjFGvgp6lYi7Koaz': 'Mareko, Scribe, Flowz, Deceptikonz - Stop, Drop and Roll - Remix',
-'https://open.spotify.com/track/4xX5iB4wvUyacBYNrJOUIw': 'Mareko, J.Williams - Them Eyes',
 'https://open.spotify.com/track/19jCPIeO4PNbS9hznOwKmT': 'Mareko, J Williams - Gotta Go',
 'https://open.spotify.com/track/73E38And3WgF6zcU7ivebB': 'Mareko - Fiyah',
 'https://open.spotify.com/track/1SFWWH2a6sqD5Js9INaT5Q': 'Mareko - My Lady',
@@ -720,7 +707,6 @@ export const getTrackName = (url: string): string => {
 'https://open.spotify.com/track/61wYZfeRZGgf5M4wRmRvtY': 'Maisey Rika - Letting Go',
 'https://open.spotify.com/track/5rlghSaW1py8SXvGUxniC7': 'Maisey Rika - Children of Romania',
 'https://open.spotify.com/track/5bcI3wQpXxQw4PUpinpeSJ': 'Herbs - Dragons & Demons',
-'https://open.spotify.com/track/2Ohkq2xdLHkOnrNRV4tztg': 'Sweet & Irie, HORSEMEN FAMILY - Feels Like Magic',
 'https://open.spotify.com/track/1n98zPWINRiuWCvRaChRd4': 'Katchafire - Who You With',
 'https://open.spotify.com/track/0mnBhXXnKQoCCXKF5L45ad': 'Katchafire - Seriously',
 'https://open.spotify.com/track/0Yu8oEJnPiIa7F5JTQfJjO': 'Uru Whetu, Te Aroha, Torere - Taku Raumiri',
@@ -736,7 +722,6 @@ export const getTrackName = (url: string): string => {
 'https://open.spotify.com/track/3mnLllWwZ6c4DLIs3fKOoH': 'P-Money, Scribe - Scribe 2001',
 'https://open.spotify.com/track/2SO5DZTOi0Fxvyo9QHH7QD': 'P-Money, 4 Corners, Scribe - Synchronize Thoughts',
 'https://open.spotify.com/track/4rr67zXmEYf9ykLigeEsbv': 'Crowded House - Don\'t Dream It\'s Over',
-'https://open.spotify.com/track/6EooyE6kbrbosNjhCZDQ4i': 'Katchafire - Seriously',
 'https://open.spotify.com/track/3mTm7dnT1M7pivXKKuTs4m': 'Blindspott - Phlex',
 'https://open.spotify.com/track/2XqKlm86ZLP7NRD0vz9BNP': 'Fast Crew - Suburbia Streets',
 'https://open.spotify.com/track/07OHMnw4BIHiw0ml7FeqUj': 'Fast Crew - I Got',
