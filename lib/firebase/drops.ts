@@ -7,6 +7,7 @@ import {
   updateDoc,
   doc,
   getDoc,
+  deleteDoc,
   Timestamp,
   orderBy,
   limit,
@@ -27,6 +28,12 @@ export const saveDropToFirestore = async (drop: {
   likes?: string[];
   username?: string;
   userProfilePic?: string;
+  photoMetadata?: {
+    hasLocation: boolean;
+    originalLat?: number;
+    originalLng?: number;
+    timestamp?: Date;
+  };
 }): Promise<string | null> => {
   try {
     const dropData: any = {
@@ -41,6 +48,16 @@ export const saveDropToFirestore = async (drop: {
 
     if (drop.photoUrl) dropData.photoUrl = drop.photoUrl;
     if (drop.trackUrl) dropData.trackUrl = drop.trackUrl;
+    
+    // Save photo metadata (GPS location info)
+    if (drop.photoMetadata) {
+      dropData.photoMetadata = {
+        hasLocation: drop.photoMetadata.hasLocation,
+        originalLat: drop.photoMetadata.originalLat || null,
+        originalLng: drop.photoMetadata.originalLng || null,
+        timestamp: drop.photoMetadata.timestamp ? Timestamp.fromDate(drop.photoMetadata.timestamp) : null,
+      };
+    }
 
     const docRef = await addDoc(collection(db, 'drops'), dropData);
     return docRef.id;
@@ -66,6 +83,18 @@ export const loadAllDrops = async (maxDrops: number = 100): Promise<Drop[]> => {
 
     querySnapshot.forEach((doc) => {
       const data = doc.data();
+      
+      // Load photo metadata if it exists
+      let photoMetadata: Drop['photoMetadata'] = undefined;
+      if (data.photoMetadata) {
+        photoMetadata = {
+          hasLocation: data.photoMetadata.hasLocation || false,
+          originalLat: data.photoMetadata.originalLat || undefined,
+          originalLng: data.photoMetadata.originalLng || undefined,
+          timestamp: data.photoMetadata.timestamp?.toDate ? data.photoMetadata.timestamp.toDate() : undefined,
+        };
+      }
+      
       loadedDrops.push({
         id: `drop-${doc.id}`,
         firestoreId: doc.id,
@@ -78,6 +107,7 @@ export const loadAllDrops = async (maxDrops: number = 100): Promise<Drop[]> => {
         likes: data.likes || [],
         username: data.username,
         userProfilePic: data.userProfilePic,
+        photoMetadata: photoMetadata,
       });
     });
 
@@ -234,5 +264,28 @@ export const deleteCommentFromDrop = async (dropId: string, commentId: string): 
   } catch (error) {
     console.error('Error deleting comment:', error);
     return false;
+  }
+};
+
+/**
+ * Delete all drops created by a specific user
+ * Used when resetting a user's profile
+ */
+export const deleteUserDrops = async (userId: string): Promise<number> => {
+  try {
+    const q = query(
+      collection(db, 'drops'),
+      where('createdBy', '==', userId)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletePromises);
+    
+    console.log(`Deleted ${querySnapshot.size} drops for user ${userId}`);
+    return querySnapshot.size;
+  } catch (error) {
+    console.error('Error deleting user drops:', error);
+    return 0;
   }
 };

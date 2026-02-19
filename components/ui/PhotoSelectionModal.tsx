@@ -2,11 +2,12 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { uploadImageToImgBB } from '@/lib/services/imgbb';
+import exifr from 'exifr';
 
 interface PhotoSelectionModalProps {
   isVisible: boolean;
   onClose: () => void;
-  onPhotoSelect: (photoData: { url: string; file: File }) => void;
+  onPhotoSelect: (photoData: { url: string; file: File; location?: { lat: number; lng: number } }) => void;
   onPhotoCapture?: (position: { lat: number; lng: number }) => void;
 }
 
@@ -118,13 +119,34 @@ const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
       
       const imageUrl = await uploadImageToImgBB(selectedFile);
       
+      // Extract GPS coordinates from EXIF data
+      let location: { lat: number; lng: number } | undefined = undefined;
+      
+      try {
+        const exifData = await exifr.gps(selectedFile);
+        
+        if (exifData && exifData.latitude !== undefined && exifData.longitude !== undefined) {
+          location = {
+            lat: exifData.latitude,
+            lng: exifData.longitude
+          };
+          console.log('📍 GPS coordinates extracted from photo:', location);
+        } else {
+          console.log('📍 No GPS data found in photo EXIF');
+        }
+      } catch (exifError) {
+        console.log('📍 Could not extract EXIF data:', exifError);
+        // Continue without location - will use user's current GPS position
+      }
+      
       clearInterval(progressInterval);
       setUploadProgress(100);
       
       setTimeout(() => {
         onPhotoSelect({
           url: imageUrl,
-          file: selectedFile
+          file: selectedFile,
+          location: location
         });
         handleClose();
       }, 500);

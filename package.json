@@ -13,6 +13,7 @@
   "dependencies": {
     "@mapbox/mapbox-gl-geocoder": "^5.1.2",
     "browser-image-compression": "^2.0.2",
+    "exifr": "^7.1.3",
     "exifreader": "^4.36.1",
     "firebase": "^12.8.0",
     "framer-motion": "^12.26.1",

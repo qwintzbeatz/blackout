@@ -56,7 +56,7 @@ import PhotoDropPopup from '@/components/photo/PhotoDropPopup';
 import MarkerDropPopup from '@/components/marker/MarkerDropPopup';
 import DirectMessaging from '@/components/DirectMessaging';
 import { uploadImageToImgBB } from '@/lib/services/imgbb';
-import { saveDropToFirestore, loadAllDrops } from '@/lib/firebase/drops';
+import { saveDropToFirestore, loadAllDrops, deleteUserDrops } from '@/lib/firebase/drops';
 import CrewChatPanel from '@/components/chat/CrewChatPanel';
 
 import { ProfilePanel } from '@/components/profile/ProfilePanel';
@@ -3829,22 +3829,28 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                 {/* Reset Profile Button - Updated to sign out after reset */}
               <button
                 onClick={async () => {
-                  if (!window.confirm('Reset ALL your markers and stats permanently?\n\nThis will:\n• Delete all your markers\n• Reset REP to 0\n• Reset Rank to TOY\n• Reset Level to 1\n• Sign you out immediately')) return;
+                  if (!window.confirm('Reset ALL your markers, drops and stats permanently?\n\nThis will:\n• Delete all your markers\n• Delete all your drops (photos, music, marker drops)\n• Reset REP to 0\n• Reset Rank to TOY\n• Reset Level to 1\n• Sign you out immediately')) return;
                   if (!user || !userProfile) return;
                   
                   try {
                     if (!user) return;
+                    
+                    // Delete all user's markers
                     const userMarkersQuery = query(
                       collection(db, 'markers'),
                       where('userId', '==', user.uid)
                     );
                     const userMarkersSnapshot = await getDocs(userMarkersQuery);
                     
-                    const deletePromises = userMarkersSnapshot.docs.map(doc => 
+                    const deleteMarkerPromises = userMarkersSnapshot.docs.map(doc => 
                       deleteDoc(doc.ref)
                     );
                     
-                    await Promise.all(deletePromises);
+                    await Promise.all(deleteMarkerPromises);
+                    
+                    // Delete all user's drops (photo drops, music drops, marker drops)
+                    const deletedDropsCount = await deleteUserDrops(user.uid);
+                    console.log(`Deleted ${deletedDropsCount} drops for user ${user.uid}`);
                     
                     const userRef = doc(db, 'users', user.uid);
         await updateDoc(userRef, {
@@ -3920,14 +3926,22 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         )}
 
         {/* Right Panel - Photos & Gallery (Camera) */}
-        {showPhotosPanel && (
+        {showPhotosPanel && (() => {
+          // Get user's photo drops
+          const myPhotoDrops = drops.filter(drop => drop.photoUrl && drop.createdBy === user?.uid);
+          const totalPhotosTaken = userProfile?.photosTaken || myPhotoDrops.length;
+          
+          return (
           <div style={{
             ...panelStyle,
             border: '1px solid #333',
             display: 'flex',
             flexDirection: 'column',
             animation: 'slideInRight 0.3s ease-out',
-            position: 'relative' as const
+            position: 'relative' as const,
+            maxWidth: '350px',
+            maxHeight: '80vh',
+            overflowY: 'auto'
           }}>
             <div style={{
               display: 'flex',
@@ -3970,14 +3984,14 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
             {/* Upload Section - Profile Picture */}
             <div style={{
-              marginBottom: '20px',
-              padding: '15px',
+              marginBottom: '15px',
+              padding: '12px',
               background: 'rgba(59, 130, 246, 0.1)',
               borderRadius: '8px',
               border: '1px solid rgba(59, 130, 246, 0.3)'
             }}>
-              <div style={{ fontSize: '16px', color: '#4dabf7', fontWeight: 'bold', marginBottom: '10px' }}>
-                📤 upload you own profilepic
+              <div style={{ fontSize: '14px', color: '#4dabf7', fontWeight: 'bold', marginBottom: '8px' }}>
+                📤 Upload Profile Picture
               </div>
               <input
                 type="file"
@@ -3985,17 +3999,17 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                 id="profilepic-upload"
                 style={{
                   width: '100%',
-                  padding: '10px',
+                  padding: '8px',
                   background: 'rgba(255,255,255,0.05)',
                   border: '1px dashed #4dabf7',
                   borderRadius: '6px',
                   color: '#e0e0e0',
-                  marginBottom: '10px'
+                  marginBottom: '8px',
+                  fontSize: '12px'
                 }}
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) {
-                    // Trigger the upload
                     handleProfilePicUpload(file);
                   }
                 }}
@@ -4013,139 +4027,195 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   background: 'linear-gradient(135deg, #4dabf7, #3b82f6)',
                   color: 'white',
                   border: 'none',
-                  padding: '10px',
+                  padding: '8px',
                   borderRadius: '6px',
                   cursor: 'pointer',
                   width: '100%',
-                  fontWeight: 'bold'
+                  fontWeight: 'bold',
+                  fontSize: '12px'
                 }}
               >
                 📲 Update Profile Pic
               </button>
             </div>
 
-            {/* Gallery Section */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{
-                fontSize: '16px',
-                color: '#10b981',
-                fontWeight: 'bold',
-                marginBottom: '12px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}>
-                <span>🖼️ Recent Photos</span>
-                <span style={{ fontSize: '12px', color: '#aaa' }}>0/∞</span>
-              </div>
-              
-              {/* Empty State */}
-              <div style={{
-                textAlign: 'center',
-                padding: '30px 20px',
-                background: 'rgba(255,255,255,0.03)',
-                borderRadius: '8px',
-                border: '1px dashed #444'
-              }}>
-                <div style={{ fontSize: '48px', marginBottom: '10px' }}>📸</div>
-                <div style={{ color: '#aaa', marginBottom: '15px' }}>
-                  No photos yet
-                </div>
-                <button
-                  onClick={() => alert('Take a photo first using the camera button below!')}
-                  style={{
-                    background: 'rgba(16, 185, 129, 0.2)',
-                    color: '#10b981',
-                    border: '1px solid #10b981',
-                    padding: '8px 16px',
-                    borderRadius: '6px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Take Your First Photo
-                </button>
-              </div>
-            </div>
-
             {/* Photo Stats */}
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: '10px',
-              marginBottom: '20px'
+              gap: '8px',
+              marginBottom: '15px'
             }}>
               <div style={{
                 background: 'rgba(255,255,255,0.05)',
-                padding: '12px',
+                padding: '10px',
                 borderRadius: '8px',
                 textAlign: 'center',
                 border: '1px solid #444'
               }}>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#4dabf7' }}>0</div>
-                <div style={{ fontSize: '11px', color: '#aaa' }}>Photos Taken</div>
+                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#4dabf7' }}>{totalPhotosTaken}</div>
+                <div style={{ fontSize: '10px', color: '#aaa' }}>Photos Taken</div>
               </div>
               <div style={{
                 background: 'rgba(255,255,255,0.05)',
-                padding: '12px',
+                padding: '10px',
                 borderRadius: '8px',
                 textAlign: 'center',
                 border: '1px solid #444'
               }}>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#10b981' }}>0</div>
-                <div style={{ fontSize: '11px', color: '#aaa' }}>Markers with Photos</div>
+                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#10b981' }}>{myPhotoDrops.length}</div>
+                <div style={{ fontSize: '10px', color: '#aaa' }}>Photo Drops</div>
               </div>
             </div>
 
-            {/* Camera Controls */}
-            <div>
+            {/* Gallery Section */}
+            <div style={{ marginBottom: '15px' }}>
               <div style={{
-                fontSize: '16px',
-                color: '#fbbf24',
+                fontSize: '14px',
+                color: '#10b981',
                 fontWeight: 'bold',
-                marginBottom: '12px'
+                marginBottom: '10px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
               }}>
-                📱 Camera Settings
+                <span>🖼️ Your Photos</span>
+                <span style={{ fontSize: '11px', color: '#aaa' }}>{myPhotoDrops.length} total</span>
               </div>
               
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {myPhotoDrops.length === 0 ? (
+                /* Empty State */
+                <div style={{
+                  textAlign: 'center',
+                  padding: '20px',
+                  background: 'rgba(255,255,255,0.03)',
+                  borderRadius: '8px',
+                  border: '1px dashed #444'
+                }}>
+                  <div style={{ fontSize: '36px', marginBottom: '8px' }}>📸</div>
+                  <div style={{ color: '#aaa', marginBottom: '10px', fontSize: '13px' }}>
+                    No photos yet
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#666' }}>
+                    Tap on the map to place a photo drop!
+                  </div>
+                </div>
+              ) : (
+                /* Photo Grid */
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: '8px',
+                  maxHeight: '200px',
+                  overflowY: 'auto'
+                }}>
+                  {myPhotoDrops.slice(0, 12).map((drop, index) => (
+                    <div
+                      key={drop.id || drop.firestoreId || index}
+                      onClick={() => {
+                        setSelectedPhotoDrop(drop);
+                        setShowPhotosPanel(false);
+                        if (mapRef.current) {
+                          mapRef.current.setView([drop.lat, drop.lng], 17);
+                        }
+                      }}
+                      style={{
+                        position: 'relative',
+                        aspectRatio: '1',
+                        borderRadius: '6px',
+                        overflow: 'hidden',
+                        cursor: 'pointer',
+                        border: '1px solid #444'
+                      }}
+                    >
+                      <img
+                        src={drop.photoUrl}
+                        alt={`Photo ${index + 1}`}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover'
+                        }}
+                      />
+                      {drop.likes && drop.likes.length > 0 && (
+                        <div style={{
+                          position: 'absolute',
+                          bottom: '4px',
+                          right: '4px',
+                          background: 'rgba(0,0,0,0.7)',
+                          color: '#ef4444',
+                          padding: '2px 5px',
+                          borderRadius: '4px',
+                          fontSize: '9px',
+                          fontWeight: 'bold'
+                        }}>
+                          ❤️ {drop.likes.length}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Camera Controls */}
+            <div style={{ marginBottom: '15px' }}>
+              <div style={{
+                fontSize: '14px',
+                color: '#fbbf24',
+                fontWeight: 'bold',
+                marginBottom: '8px'
+              }}>
+                📱 Camera
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <button
-                  onClick={() => alert('Switch to front camera')}
+                  onClick={() => {
+                    // Open photo selection modal for dropping
+                    if (!gpsPosition) {
+                      alert('GPS location not available. Please enable location services.');
+                      return;
+                    }
+                    setPendingDropPosition({ lat: gpsPosition[0], lng: gpsPosition[1] });
+                    setShowPhotoModal(true);
+                    setShowPhotosPanel(false);
+                  }}
                   style={{
-                    background: 'rgba(251, 191, 36, 0.1)',
-                    color: '#fbbf24',
-                    border: '1px solid #fbbf24',
+                    background: 'rgba(16, 185, 129, 0.2)',
+                    color: '#10b981',
+                    border: '1px solid #10b981',
                     padding: '10px',
                     borderRadius: '6px',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '10px'
+                    gap: '10px',
+                    fontWeight: 'bold'
                   }}
                 >
-                  <span style={{ fontSize: '20px' }}>📱</span>
-                  Switch Camera
+                  <span style={{ fontSize: '18px' }}>📸</span>
+                  Take / Upload Photo
                 </button>
                 
                 <button
-                  onClick={() => alert('Toggle flash mode')}
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    color: '#e0e0e0',
-                    border: '1px solid #666',
-                    padding: '10px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px'
+                  onClick={() => {
+                    // Browse all photo drops on map
+                    const allPhotoDrops = drops.filter(d => d.photoUrl);
+                    if (allPhotoDrops.length === 0) {
+                      alert('No photo drops found on the map yet!');
+                      return;
+                    }
+                    if (mapRef.current && allPhotoDrops.length > 0) {
+                      const bounds = allPhotoDrops.map(d => [d.lat, d.lng] as [number, number]);
+                      const minLat = Math.min(...bounds.map(b => b[0]));
+                      const maxLat = Math.max(...bounds.map(b => b[0]));
+                      const minLng = Math.min(...bounds.map(b => b[1]));
+                      const maxLng = Math.max(...bounds.map(b => b[1]));
+                      mapRef.current.fitBounds([[minLat, minLng], [maxLat, maxLng]], { padding: [50, 50] });
+                    }
+                    setShowPhotosPanel(false);
                   }}
-                >
-                  <span style={{ fontSize: '20px' }}>⚡</span>
-                  Flash: Auto
-                </button>
-                
-                <button
-                  onClick={() => alert('Open photo gallery')}
                   style={{
                     background: 'rgba(139, 92, 246, 0.1)',
                     color: '#8b5cf6',
@@ -4158,26 +4228,36 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     gap: '10px'
                   }}
                 >
-                  <span style={{ fontSize: '20px' }}>🖼️</span>
-                  Browse Gallery
+                  <span style={{ fontSize: '18px' }}>🗺️</span>
+                  View All Photo Drops
                 </button>
               </div>
             </div>
 
             {/* Quick Actions */}
-            <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #444' }}>
+            <div style={{ paddingTop: '10px', borderTop: '1px solid #444' }}>
               <div style={{
-                fontSize: '14px',
+                fontSize: '12px',
                 color: '#ec4899',
                 fontWeight: 'bold',
-                marginBottom: '10px'
+                marginBottom: '8px'
               }}>
                 ⚡ Quick Actions
               </div>
               
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
                 <button
-                  onClick={() => alert('Share your gallery')}
+                  onClick={() => {
+                    const photoCount = myPhotoDrops.length;
+                    if (photoCount === 0) {
+                      alert('You have no photos to share yet!');
+                      return;
+                    }
+                    // Copy shareable text to clipboard
+                    const shareText = `Check out my ${photoCount} photo${photoCount > 1 ? 's' : ''} on Blackout NZ! 📸`;
+                    navigator.clipboard?.writeText(shareText);
+                    alert('Share link copied to clipboard!');
+                  }}
                   style={{
                     background: 'rgba(236, 72, 153, 0.1)',
                     color: '#ec4899',
@@ -4185,14 +4265,14 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     padding: '8px',
                     borderRadius: '6px',
                     cursor: 'pointer',
-                    fontSize: '12px'
+                    fontSize: '11px'
                   }}
                 >
                   🔗 Share
                 </button>
                 
                 <button
-                  onClick={() => alert('Export all photos')}
+                  onClick={handleRefreshAll}
                   style={{
                     background: 'rgba(16, 185, 129, 0.1)',
                     color: '#10b981',
@@ -4200,43 +4280,16 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     padding: '8px',
                     borderRadius: '6px',
                     cursor: 'pointer',
-                    fontSize: '12px' }}>
-                  📤 Export
-                </button>
-                
-                <button
-                  onClick={() => alert('Print photos')}
-                  style={{
-                    background: 'rgba(59, 130, 246, 0.1)',
-                    color: '#4dabf7',
-                    border: '1px solid #4dabf7',
-                    padding: '8px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px'
+                    fontSize: '11px'
                   }}
                 >
-                  🖨️ Print
-                </button>
-                
-                <button
-                  onClick={() => alert('Photo settings')}
-                  style={{
-                    background: 'rgba(107, 114, 128, 0.1)',
-                    color: '#9ca3af',
-                    border: '1px solid #6b7280',
-                    padding: '8px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px'
-                  }}
-                >
-                  ⚙️ Settings
+                  🔄 Refresh
                 </button>
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* Map Control Panel */}
         {showMapPanel && (
