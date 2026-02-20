@@ -40,7 +40,9 @@ import LoginScreen from '@/components/auth/LoginScreen';
 import BottomNavigation from '@/components/navigation/BottomNavigation';
 import ProfileStats from '@/components/profile/ProfileStats';
 import DropTypeModal from '@/components/modals/DropTypeModal';
+import SongSelectionModal from '@/components/modals/SongSelectionModal';
 import LegendPanel from '@/components/ui/LegendPanel';
+import ColorPickerPanel from '@/components/ui/ColorPickerPanel';
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import React from 'react';
@@ -59,7 +61,7 @@ import { uploadImageToImgBB } from '@/lib/services/imgbb';
 import { saveDropToFirestore, loadAllDrops, deleteUserDrops } from '@/lib/firebase/drops';
 import CrewChatPanel from '@/components/chat/CrewChatPanel';
 
-import { ProfilePanel } from '@/components/profile/ProfilePanel';
+import { BlackbookPanel } from '@/components/blackbook/BlackbookPanel';
 import { useFirebaseAuth } from '@/hooks/useFirebaseAuth';
 import { useMarkers } from '@/hooks/useMarkers';
 import { useMusicPlayer, getRandomStartTrack } from '@/hooks/useMusicPlayer';
@@ -91,6 +93,7 @@ import {
   GRAFFITI_TO_MARKER_DESCRIPTION
 } from '@/utils/typeMapping';
 import { calculateRep, RepResult, calculateEnhancedRank, getRankColor, getRankProgress } from '@/utils/repCalculator';
+import { initializeUnlockedColors, getDefaultColorForCrew } from '@/utils/colorUnlocks';
 import { calculateDistance as calculateDistanceHelper, getTrackNameFromUrl as getTrackNameFromUrlHelper, getTrackSource, getTrackThemeColor } from '@/lib/utils/dropHelpers';
 import { generateAvatarUrl as generateAvatarUrlHelper } from '@/lib/utils/avatarGenerator';
 import { getTrackName as getTrackNameHelper } from '@/constants/all_tracks';
@@ -180,8 +183,53 @@ const calculateLevel = (rep: number): number => {
   return Math.floor(rep / 100) + 1;
 };
 
-// Helper function to unlock a random track (both Spotify AND SoundCloud)
-// Returns both the updated unlocked tracks AND the newly unlocked track info
+// Helper function to unlock a random SPOTIFY track only
+// Used for: Tag/Marker drops
+const unlockRandomSpotifyTrack = (currentUnlocked: string[]): { newTracks: string[], newlyUnlocked: { url: string; name: string; source: 'Spotify' | 'SoundCloud' } | null } => {
+  // Spotify tracks only
+  const availableTracks = SPOTIFY_TRACKS.filter(track =>
+    !currentUnlocked.includes(track)
+  );
+
+  if (availableTracks.length === 0) return { newTracks: currentUnlocked, newlyUnlocked: null };
+
+  // Pick random Spotify track
+  const randomTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)];
+  
+  return {
+    newTracks: [...currentUnlocked, randomTrack],
+    newlyUnlocked: {
+      url: randomTrack,
+      name: getTrackNameFromUrl(randomTrack),
+      source: 'Spotify'
+    }
+  };
+};
+
+// Helper function to unlock a random SOUNDCLOUD track only
+// Used for: Photo drops
+const unlockRandomSoundCloudTrack = (currentUnlocked: string[]): { newTracks: string[], newlyUnlocked: { url: string; name: string; source: 'Spotify' | 'SoundCloud' } | null } => {
+  // SoundCloud tracks only (HIPHOP_TRACKS are SoundCloud URLs)
+  const availableTracks = HIPHOP_TRACKS.filter(track =>
+    !currentUnlocked.includes(track)
+  );
+
+  if (availableTracks.length === 0) return { newTracks: currentUnlocked, newlyUnlocked: null };
+
+  // Pick random SoundCloud track
+  const randomTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)];
+  
+  return {
+    newTracks: [...currentUnlocked, randomTrack],
+    newlyUnlocked: {
+      url: randomTrack,
+      name: getTrackNameFromUrl(randomTrack),
+      source: 'SoundCloud'
+    }
+  };
+};
+
+// Keep original function for backward compatibility (combines both)
 const unlockRandomTrack = (currentUnlocked: string[]): { newTracks: string[], newlyUnlocked: { url: string; name: string; source: 'Spotify' | 'SoundCloud' } | null } => {
   // Combine Spotify and SoundCloud tracks
   const ALL_TRACKS = [...SPOTIFY_TRACKS, ...HIPHOP_TRACKS];
@@ -511,6 +559,8 @@ const HomeComponent = () => {
   const [showMessagesPanel, setShowMessagesPanel] = useState(false);
   const [showMapPanel, setShowMapPanel] = useState(false);
   const [showMusicPanel, setShowMusicPanel] = useState(false);
+  const [showBlackbookPanel, setShowBlackbookPanel] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
 
   // Mobile detection state
   const [isMobile, setIsMobile] = useState(false);
@@ -552,6 +602,12 @@ const HomeComponent = () => {
     name: string;
     source: 'Spotify' | 'SoundCloud';
   } | null>(null);
+  
+  // 🆕 Loading state for drop creation (prevents rapid clicks)
+  const [isCreatingDrop, setIsCreatingDrop] = useState(false);
+  
+  // 🆕 Song selection modal state
+  const [showSongSelection, setShowSongSelection] = useState(false);
   
   // ========== PROFILE PICTURE UPLOAD ==========
   const handleProfilePicUpload = async (file: File) => {
@@ -987,6 +1043,13 @@ const {
         }
       }
       
+      // Initialize unlocked colors based on crew/solo choice
+      const initialUnlockedColors = initializeUnlockedColors(crewId);
+      const initialFavoriteColor = getDefaultColorForCrew(crewId);
+      
+      // Set the selected marker color to the crew's default
+      setSelectedMarkerColor(initialFavoriteColor);
+      
       const userProfileData: UserProfile = {
         uid: user.uid,
         email: user.email || '',
@@ -997,7 +1060,8 @@ const {
         level: 1,
         rank: 'TOY',
         totalMarkers: 0,
-        favoriteColor: selectedMarkerColor,
+        favoriteColor: initialFavoriteColor,
+        unlockedColors: initialUnlockedColors,
         unlockedTracks: getRandomStartTrack(),
         createdAt: new Date(),
         lastActive: new Date(),
@@ -1014,7 +1078,10 @@ const {
         collaborations: 0,
         blackoutEventsInvestigated: 0,
         kaiTiakiEvaluationsReceived: 0,
-        hasReceivedCrewWelcomeMessage: false // Initialize new field
+        hasReceivedCrewWelcomeMessage: false,
+        // Initialize graffiti styles
+        unlockedGraffitiTypes: ['sticker', 'tag'],
+        activeGraffitiStyle: 'tag'
       };
       
       const userRef = doc(db, 'users', user.uid);
@@ -1178,6 +1245,9 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
   : getRandomStartTrack();
       setUnlockedTracks(userUnlockedTracks);
 
+      // Initialize unlockedColors if not present (for existing users)
+      const userUnlockedColors = data.unlockedColors || initializeUnlockedColors(data.crewId);
+      
       const userProfileData: UserProfile = {
         uid: data.uid || currentUser.uid,
         email: data.email || currentUser.email || '',
@@ -1189,6 +1259,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         rank: data.rank || 'TOY',
         totalMarkers: data.totalMarkers || 0,
         favoriteColor: favoriteColor,
+        unlockedColors: userUnlockedColors,
         unlockedTracks: userUnlockedTracks,
         createdAt: data.createdAt?.toDate() || new Date(),
         lastActive: data.lastActive?.toDate() || new Date(),
@@ -1445,8 +1516,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         distanceFromCenter: marker.distanceFromCenter || null,
         repEarned: totalRep,
         // New surface and graffiti type fields
-        surface: marker.surface || migrateMarkerNameToSurface(marker.name),
-        graffitiType: marker.graffitiType || migrateMarkerDescriptionToGraffiti(marker.description),
+        surface: (marker.surface ?? migrateMarkerNameToSurface(marker.name)) as SurfaceType | undefined,
+        graffitiType: (marker.graffitiType ?? migrateMarkerDescriptionToGraffiti(marker.description)) as GraffitiType | undefined,
         repBreakdown: repResult.breakdown
       };
       
@@ -1645,7 +1716,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         const currentTracks = userProfile.unlockedTracks && userProfile.unlockedTracks.length > 0 
           ? userProfile.unlockedTracks 
           : getRandomStartTrack();
-        const unlockResult = unlockRandomTrack(currentTracks);
+        // 📸 PHOTO DROP: Unlocks SoundCloud tracks only
+        const unlockResult = unlockRandomSoundCloudTrack(currentTracks);
         const newTracks = unlockResult.newTracks;
 
         const userRef = doc(db, 'users', user.uid);
@@ -1784,6 +1856,15 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       return;
     }
 
+    // 🚫 Rate limit: Set loading state with safety timeout
+    setIsCreatingDrop(true);
+    
+    // 🛡️ Safety timeout: Auto-reset after 10 seconds in case of hangs
+    const safetyTimeout = setTimeout(() => {
+      console.warn('⚠️ Safety timeout: Resetting isCreatingDrop (marker)');
+      setIsCreatingDrop(false);
+    }, 10000);
+    
     try {
       const newDrop: Drop = {
         lat: pendingDropPosition.lat,
@@ -1807,7 +1888,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         userId: user.uid,
         username: userProfile.username,
         userProfilePic: userProfile.profilePicUrl,
-        // New surface and graffiti type fields - explicit type assertion for TypeScript
+        // New surface and graffiti type fields
         surface: selectedSurface,
         graffitiType: selectedGraffitiType,
       };
@@ -1823,7 +1904,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         const currentTracks = userProfile.unlockedTracks && userProfile.unlockedTracks.length > 0 
           ? userProfile.unlockedTracks 
           : getRandomStartTrack();
-        const unlockResult = unlockRandomTrack(currentTracks);
+        // 📍 MARKER DROP: Unlocks Spotify tracks only
+        const unlockResult = unlockRandomSpotifyTrack(currentTracks);
         const newTracks = unlockResult.newTracks;
 
         const userRef = doc(db, 'users', user.uid);
@@ -1883,8 +1965,13 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     } catch (error) {
       console.error('Error creating marker drop:', error);
       alert(`Failed to create marker drop: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      // Clear safety timeout
+      clearTimeout(safetyTimeout);
+      // 🚫 Rate limit: Reset loading state
+      setIsCreatingDrop(false);
     }
-  }, [user, userProfile, pendingDropPosition, selectedMarkerType, selectedMarkerColor, loadDrops, loadAllMarkers]);
+  }, [user, userProfile, pendingDropPosition, selectedMarkerType, selectedMarkerColor, selectedSurface, selectedGraffitiType, loadDrops, loadAllMarkers]);
 
   const handlePhotoDrop = useCallback(() => {
     setShowDropTypeModal(false);
@@ -1998,6 +2085,9 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     } catch (e) {
       console.error('Error creating music drop:', e);
       alert(`Failed to place music drop: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    } finally {
+      // 🚫 Rate limit: Reset loading state
+      setIsCreatingDrop(false);
     }
   }, [user, userProfile, pendingDropPosition, selectedTrackForMusicDrop, unlockedTracks, loadDrops]);
 
@@ -2019,6 +2109,12 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
     if (showProfileSetup || !userProfile) {
       alert('Please complete your profile first!');
+      return;
+    }
+
+    // 🚫 Rate limit: Prevent spam drops
+    if (isCreatingDrop) {
+      alert('⏳ Please wait - creating drop...');
       return;
     }
 
@@ -2044,7 +2140,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
     setPendingDropPosition({ lat, lng });
     setShowDropTypeModal(true);
-  }, [user, userProfile, loadingUserProfile, showProfileSetup, isOfflineMode, gpsPosition, expandedRadius]);
+  }, [user, userProfile, loadingUserProfile, showProfileSetup, isOfflineMode, gpsPosition, expandedRadius, isCreatingDrop]);
 
   // Memoized map click handler for performance
   const memoizedHandleMapClick = useMemo(() => handleMapClick, [handleMapClick]);
@@ -3014,6 +3110,29 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                       )
                     );
                   }}
+                  onDelete={async (dropId) => {
+                    // Remove drop from local state immediately
+                    setDrops(prev => prev.filter(d => d.firestoreId !== dropId));
+                    setSelectedPhotoDrop(null);
+                    
+                    // Decrement photosTaken in Firestore and local state
+                    if (user && userProfile && selectedPhotoDrop?.createdBy === user.uid) {
+                      try {
+                        const userRef = doc(db, 'users', user.uid);
+                        await updateDoc(userRef, {
+                          photosTaken: Math.max(0, (userProfile.photosTaken || 1) - 1),
+                          lastActive: Timestamp.now()
+                        });
+                        
+                        setUserProfile(prev => prev ? {
+                          ...prev,
+                          photosTaken: Math.max(0, (prev.photosTaken || 1) - 1)
+                        } : null);
+                      } catch (error) {
+                        console.error('Error updating photosTaken:', error);
+                      }
+                    }
+                  }}
                   onClose={() => setSelectedPhotoDrop(null)}
                 />
               </div>
@@ -3196,16 +3315,32 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         }}
         onMarkerDrop={handleMarkerDrop}
         onPhotoDrop={handlePhotoDrop}
-        onMusicDrop={handleMusicDrop}
-        selectedSurface={selectedSurface}
-        selectedGraffitiType={selectedGraffitiType}
-        onSurfaceChange={setSelectedSurface}
-        onGraffitiTypeChange={setSelectedGraffitiType}
+        onMusicDrop={() => {
+          // Open song selection modal instead of direct drop
+          setShowSongSelection(true);
+        }}
         selectedMarkerType={selectedMarkerType}
-        unlockedTracks={unlockedTracks}
-        selectedTrackForMusicDrop={selectedTrackForMusicDrop}
-        onTrackSelect={setSelectedTrackForMusicDrop}
+        hasUnlockedTracks={unlockedTracks.length > 0}
+        isLoading={isCreatingDrop}
+      />
+
+      {/* Song Selection Modal for Music Drops */}
+      <SongSelectionModal
+        isVisible={showSongSelection}
+        onClose={() => setShowSongSelection(false)}
+        tracks={unlockedTracks}
+        onSelectTrack={async (trackUrl: string) => {
+          setSelectedTrackForMusicDrop(trackUrl);
+          setShowSongSelection(false);
+          setIsCreatingDrop(true);
+          try {
+            await handleMusicDrop();
+          } finally {
+            setIsCreatingDrop(false);
+          }
+        }}
         getTrackNameFromUrl={getTrackNameFromUrl}
+        isLoading={isCreatingDrop}
       />
 
       {/* Photo Selection Modal */}
@@ -3265,6 +3400,48 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         user={user}
         userMarkersCount={userMarkers.length}
         myMarkersCount={userMarkers.filter(m => m.userId === user?.uid).length}
+        onProfileUpdate={(updatedProfile) => setUserProfile(updatedProfile)}
+        onLogout={handleLogout}
+        onResetProfile={async () => {
+          if (!window.confirm('Reset ALL your markers, drops and stats permanently?\n\nThis will:\n• Delete all your markers\n• Delete all your drops\n• Reset REP to 0\n• Reset Rank to TOY\n• Sign you out immediately')) return;
+          if (!user || !userProfile) return;
+          
+          try {
+            const userMarkersQuery = query(
+              collection(db, 'markers'),
+              where('userId', '==', user.uid)
+            );
+            const userMarkersSnapshot = await getDocs(userMarkersQuery);
+            await Promise.all(userMarkersSnapshot.docs.map(doc => deleteDoc(doc.ref)));
+            
+            await deleteUserDrops(user.uid);
+            
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, {
+              totalMarkers: 0,
+              rep: 0,
+              rank: 'TOY',
+              level: 1,
+              unlockedTracks: getRandomStartTrack(),
+              photosTaken: 0,
+              markersPlaced: 0,
+              collaborations: 0,
+              blackoutEventsInvestigated: 0,
+              kaiTiakiEvaluationsReceived: 0
+            });
+            
+            setUnlockedTracks(getRandomStartTrack());
+            setCurrentTrackIndex(0);
+            setIsPlaying(false);
+            await loadAllMarkers();
+            
+            alert('✅ Profile reset! Signing out...');
+            setTimeout(() => handleLogout(), 1000);
+          } catch (err: any) {
+            console.error(err);
+            alert('❌ Reset failed: ' + err.message);
+          }
+        }}
       />
 
       {/* ========== DUAL CONTROL PANELS ========== */}
@@ -3277,652 +3454,35 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             zIndex: 1200,
             maxHeight: '80vh'
           }}>
-        {/* Left Panel - Profile & Stats (Blackbook) */}
-        {showProfilePanel && (
-          <div style={{
-            ...panelStyle,
-            border: '1px solid #333',
-            display: 'flex',
-            flexDirection: 'column',
-            animation: 'slideInLeft 0.3s ease-out',
-            position: 'relative' as const
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '10px',
-              paddingBottom: '10px',
-              borderBottom: '1px solid rgba(255,107,107,0.3)'
-            }}>
-              <h3 style={{ 
-                margin: 0, 
-                color: '#ff6b6b', 
-                fontSize: '18px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <span>📓</span>
-                BLACKBOOK — {userProfile?.username?.toUpperCase() || 'PROFILE'}
-              </h3>
-              <button
-                onClick={() => setShowProfilePanel(false)}
-                style={{
-                  background: 'rgba(255,107,107,0.2)',
-                  border: '1px solid rgba(255,107,107,0.3)',
-                  color: '#ff6b6b',
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Profile Info */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              marginBottom: '16px',
-              padding: '12px',
-              background: 'rgba(255,255,255,0.05)',
-              borderRadius: '6px'
-            }}>
-              <img
-                src={userProfile?.profilePicUrl}
-                alt="Profile"
-                style={{
-                  width: '60px',
-                  height: '60px',
-                  borderRadius: '50%',
-                  border: '2px solid #ff6b6b',
-                  objectFit: 'cover'
-                }}
-              />
-              <div>
-                <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{userProfile?.username}</div>
-                <div style={{ color: '#ff6b6b', fontSize: '13px' }}>{userProfile?.rank} • Lv {userProfile?.level}</div>
-                <div style={{ fontSize: '12px', color: '#aaa' }}>REP: {userProfile?.rep || 0}</div>
-                <div style={{ fontSize: '11px', color: '#4dabf7', marginTop: '4px' }}>
-                  {userMarkers.filter(m => m.userId === user?.uid).length} drops • {userMarkers.length} total visible
-                </div>
-              </div>
-            </div>
-
-            {/* Stats Row */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '12px',
-              marginBottom: '20px',
-              textAlign: 'center'
-            }}>
-              <div style={{
-                background: 'rgba(255,255,255,0.06)',
-                padding: '12px 8px',
-                borderRadius: '8px',
-                border: '1px solid #444'
-              }}>
-                <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#ff6b6b' }}>
-                  {userMarkers.filter(m => m.userId === user?.uid).length}
-                </div>
-                <div style={{ fontSize: '11px', color: '#aaa' }}>Your Tags</div>
-              </div>
-
-              <div style={{
-                background: 'rgba(255,255,255,0.06)',
-                padding: '12px 8px',
-                borderRadius: '8px',
-                border: '1px solid #444',
-                position: 'relative'
-              }}>
-                <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#4ecdc4' }}>
-                  {userProfile?.rep || 0}
-                </div>
-                <div style={{ fontSize: '11px', color: '#aaa' }}>REP</div>
-                
-                <div style={{
-                  position: 'absolute',
-                  bottom: '4px',
-                  left: '8px',
-                  right: '8px',
-                  height: '3px',
-                  background: '#333',
-                  borderRadius: '2px',
-                  overflow: 'hidden'
-                }}>
-                  <div style={{
-                    width: `${Math.min((userProfile?.rep || 0) % 100, 100)}%`,
-                    height: '100%',
-                    background: 'linear-gradient(90deg, #4ecdc4, #10b981)',
-                    transition: 'width 0.5s ease'
-                  }}></div>
-                </div>
-                <div style={{
-                  fontSize: '9px',
-                  color: '#888',
-                  position: 'absolute',
-                  bottom: '8px',
-                  right: '8px'
-                }}>
-                  Next: {100 - ((userProfile?.rep || 0) % 100)}
-                </div>
-              </div>
-
-              <div style={{
-                background: 'rgba(255,255,255,0.06)',
-                padding: '12px 8px',
-                borderRadius: '8px',
-                border: '1px solid #444'
-              }}>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#fbbf24' }}>
-                  {userProfile?.rank || 'TOY'}
-                </div>
-                <div style={{ fontSize: '11px', color: '#aaa' }}>Rank</div>
-              </div>
-            </div>
-
-            {/* Crew Status */}
-            <div style={{
-              background: 'rgba(255,255,255,0.06)',
-              padding: '12px',
-              borderRadius: '8px',
-              border: '1px solid #444',
-              marginBottom: '12px'
-            }}>
-              <div style={{
-                fontSize: '13px',
-                fontWeight: 'bold',
-                color: '#4dabf7',
-                marginBottom: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}>
-                {userProfile?.isSolo ? '🎯 Solo Player' : userProfile?.crewName ? `👥 ${userProfile.crewName}` : '👥 No Crew'}
-              </div>
-              
-              {nearbyCrewMembers.length > 0 && (
-                <div style={{
-                  fontSize: '11px',
-                  color: '#10b981',
-                  marginBottom: '8px',
-                  padding: '6px',
-                  background: 'rgba(16,185,129,0.1)',
-                  borderRadius: '4px'
-                }}>
-                  ✨ {nearbyCrewMembers.length} crew member{nearbyCrewMembers.length > 1 ? 's' : ''} nearby!
-                  <br />
-                  <span style={{ fontSize: '10px', color: '#aaa' }}>
-                    Radius expanded to {expandedRadius}m
-                  </span>
-                </div>
-              )}
-
-              {userProfile?.isSolo && (
-                <div style={{ marginTop: '8px' }}>
-                  <input
-                    type="text"
-                    placeholder="Enter crew name to join"
-                    id="joinCrewInput"
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      border: '1px solid #555',
-                      borderRadius: '4px',
-                      background: 'rgba(255,255,255,0.05)',
-                      color: '#e0e0e0',
-                      fontSize: '12px',
-                      marginBottom: '6px'
-                    }}
-                  />
-                  <button
-                    onClick={async () => {
-                      const input = document.getElementById('joinCrewInput') as HTMLInputElement;
-                      const crewName = input?.value.trim();
-                      if (!crewName || !user) return;
-                      
-                      try {
-                        const crewNameLower = crewName.toLowerCase();
-                        const crewsRef = collection(db, 'crews');
-                        const crewQuery = query(crewsRef, where('nameLower', '==', crewNameLower));
-                        const crewSnapshot = await getDocs(crewQuery);
-                        
-                        let crewId: string;
-                        let finalCrewName: string;
-                        
-                        if (crewSnapshot.empty) {
-                          // For new crews, use a generated ID
-                          const newCrewRef = doc(crewsRef);
-                          crewId = newCrewRef.id;
-                          finalCrewName = crewName;
-                          await setDoc(newCrewRef, {
-                            name: crewName,
-                            nameLower: crewNameLower,
-                            members: [user.uid],
-                            createdAt: Timestamp.now(),
-                            createdBy: user.uid
-                          });
-                        } else {
-                          const crewDoc = crewSnapshot.docs[0];
-                          crewId = crewDoc.id;
-                          finalCrewName = crewDoc.data().name;
-                          const currentMembers = crewDoc.data().members || [];
-                          if (!currentMembers.includes(user.uid)) {
-                            await updateDoc(doc(db, 'crews', crewId), {
-                              members: [...currentMembers, user.uid]
-                            });
-                          }
-                        }
-                        
-                        const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, {
-                          crewId: crewId,
-                          crewName: finalCrewName,
-                          isSolo: false
-                        });
-                        
-                        setUserProfile(prev => prev ? {
-                          ...prev,
-                          crewId: crewId as CrewId,
-                          crewName: finalCrewName,
-                          isSolo: false
-                        } : null);
-                        
-                        if (input) input.value = '';
-                        alert(`Joined crew: ${finalCrewName}! 👥`);
-                      } catch (error: any) {
-                        alert(`Failed to join crew: ${error.message}`);
-                      }
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      background: '#4dabf7',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    Join Crew 👥
-                  </button>
-                </div>
-              )}
-
-              {/* 🆕 Crew Chat Button */}
-              {userProfile?.crewId && !userProfile.isSolo && (
-                <button
-                  onClick={() => {
-                    setShowCrewChat(true);
-                    setShowProfilePanel(false);
-                    setShowPhotosPanel(false);
-                    setShowMessagesPanel(false);
-                    setShowMapPanel(false);
-                    setShowMusicPanel(false);
-                    setShowStoryPanel(false);
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    background: '#10b981',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: 'bold',
-                    marginTop: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    transition: 'all 0.2s ease'
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                >
-                  💬 Open Crew Chat
-                </button>
-              )}
-
-              {userProfile?.crewName && !userProfile?.isSolo && (
-                <button
-                  onClick={async () => {
-                    if (!user || !userProfile?.crewId) return;
-                    if (!confirm(`Leave ${userProfile.crewName}?`)) return;
-                    
-                    try {
-                      const crewDoc = await getDoc(doc(db, 'crews', userProfile.crewId));
-                      if (crewDoc.exists()) {
-                        const currentMembers = crewDoc.data().members || [];
-                        const updatedMembers = currentMembers.filter((uid: string) => uid !== user.uid);
-                        await updateDoc(doc(db, 'crews', userProfile.crewId), {
-                          members: updatedMembers
-                        });
-                      }
-                      
-                      const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, {
-                        crewId: null,
-                        crewName: null,
-                        isSolo: true
-                      });
-                      
-                      setUserProfile(prev => prev ? {
-                        ...prev,
-                        crewId: null,
-                        crewName: null,
-                        isSolo: true
-                      } : null);
-                      
-                      alert('Left crew. You are now solo. 🎯');
-                    } catch (error: any) {
-                      alert(`Failed to leave crew: ${error.message}`);
-                    }
-                  }}
-                  style={{
-                    background: '#ef4444',
-                    color: 'white',
-                    border: 'none',
-                    padding: '8px',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    marginTop: '8px'
-                  }}
-                >
-                  Leave Crew 🎯
-                </button>
-              )}
-            </div>
-
-            {/* Filter Toggle */}
-            <button
-              onClick={() => setShowOnlyMyDrops(!showOnlyMyDrops)}
-              style={{
-                background: showOnlyMyDrops ? '#10b981' : '#6b7280',
-                color: 'white',
-                border: 'none',
-                padding: '10px',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                marginBottom: '12px',
-                width: '100%',
-                fontSize: '14px',
-                fontWeight: 'bold'
-              }}
-            >
-              {showOnlyMyDrops ? '👤 Showing Only YOUR Drops' : '🌍 Showing ALL Drops'}
-            </button>
-
-            {/* Top Players Section */}
-            {topPlayers.length > 0 && (
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{
-                  fontSize: '15px',
-                  fontWeight: 'bold',
-                  color: '#fbbf24',
-                  marginBottom: '8px',
-                  borderBottom: '1px solid #444',
-                  paddingBottom: '4px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
-                  <span>👑 TOP WRITERS</span>
-                  <button
-                    onClick={loadTopPlayers}
-                    style={{
-                      background: '#4dabf7',
-                      color: 'white',
-                      border: 'none',
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '10px'
-                    }}
-                  >
-                    🔄
-                  </button>
-                </div>
-                
-                <div style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px'
-                }}>
-                  {topPlayers.map((player, index) => (
-                    <div 
-                      key={player.uid}
-                      onClick={() => player.position && centerMap(player.position, 15)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        padding: '8px',
-                        background: 'rgba(255,255,255,0.04)',
-                        borderRadius: '6px',
-                        border: '1px solid #444',
-                        cursor: player.position ? 'pointer' : 'default',
-                        opacity: player.position ? 1 : 0.6
-                      }}
-                    >
-                      <div style={{
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '50%',
-                        background: index === 0 ? '#fbbf24' : index === 1 ? '#cbd5e1' : '#d97706',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        color: index === 0 ? '#7c2d12' : index === 1 ? '#1f2937' : '#7c2d12'
-                      }}>
-                        {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '13px', fontWeight: 'bold' }}>
-                          {player.username}
-                        </div>
-                        <div style={{ fontSize: '10px', color: '#aaa' }}>
-                          {player.rank} • {player.rep} REP • {player.totalMarkers} tags
-                        </div>
-                      </div>
-                      {player.position && (
-                        <div style={{ fontSize: '10px', color: '#4ecdc4' }}>
-                          🗺️
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>
-              {/* Refresh All Button */}
-              <button
-                onClick={handleRefreshAll}
-                disabled={isRefreshing}
-                style={{
-                  background: '#4dabf7',
-                  color: 'white',
-                  border: 'none',
-                  padding: '10px',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  marginBottom: '5px',
-                  fontSize: '14px',
-                  fontWeight: 'bold',
-                  opacity: isRefreshing ? 0.7 : 1
-                }}
-              >
-                {isRefreshing ? '🔄 Refreshing...' : '🔄 Refresh All Drops'}
-              </button>
-
-              {/* Top Players Toggle */}
-              <button
-                onClick={() => setShowTopPlayers(!showTopPlayers)}
-                style={{
-                  background: showTopPlayers ? '#10b981' : '#6b7280',
-                  color: 'white',
-                  border: 'none',
-                  padding: '10px',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  marginBottom: '5px'
-                }}
-              >
-                {showTopPlayers ? '👑 Hide Top Players' : '👑 Show Top Players'}
-              </button>
-
-              {/* Performance Settings Toggle */}
-              <button
-                onClick={() => setShowPerformanceSettings(!showPerformanceSettings)}
-                style={{
-                  background: showPerformanceSettings ? '#f59e0b' : '#6b7280',
-                  color: 'white',
-                  border: 'none',
-                  padding: '10px',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  marginBottom: '5px'
-                }}
-              >
-                {showPerformanceSettings ? '⚡ Hide Settings' : '⚡ Performance'}
-              </button>
-
-              <button
-                onClick={handleLogout}
-                style={{
-                  background: '#444',
-                  color: '#ff6b6b',
-                  border: 'none',
-                  padding: '10px',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  marginTop: '10px'
-                }}
-              >
-                Sign Out
-              </button>
-
-                {/* Reset Profile Button - Updated to sign out after reset */}
-              <button
-                onClick={async () => {
-                  if (!window.confirm('Reset ALL your markers, drops and stats permanently?\n\nThis will:\n• Delete all your markers\n• Delete all your drops (photos, music, marker drops)\n• Reset REP to 0\n• Reset Rank to TOY\n• Reset Level to 1\n• Sign you out immediately')) return;
-                  if (!user || !userProfile) return;
-                  
-                  try {
-                    if (!user) return;
-                    
-                    // Delete all user's markers
-                    const userMarkersQuery = query(
-                      collection(db, 'markers'),
-                      where('userId', '==', user.uid)
-                    );
-                    const userMarkersSnapshot = await getDocs(userMarkersQuery);
-                    
-                    const deleteMarkerPromises = userMarkersSnapshot.docs.map(doc => 
-                      deleteDoc(doc.ref)
-                    );
-                    
-                    await Promise.all(deleteMarkerPromises);
-                    
-                    // Delete all user's drops (photo drops, music drops, marker drops)
-                    const deletedDropsCount = await deleteUserDrops(user.uid);
-                    console.log(`Deleted ${deletedDropsCount} drops for user ${user.uid}`);
-                    
-                    const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, {
-                      totalMarkers: 0,
-                      rep: 0,
-                      rank: 'TOY',
-                      level: 1,
-                      unlockedTracks: getRandomStartTrack()
-                    });
-                    
-                    setUserProfile(prev => prev ? {
-                      ...prev,
-                      totalMarkers: 0,
-                      rep: 0,
-                      rank: 'TOY',
-                      level: 1,
-                      unlockedTracks: getRandomStartTrack()
-                    } : null);
-                    
-                    // Also reset local unlocked tracks state
-                    setUnlockedTracks(getRandomStartTrack());
-                    setCurrentTrackIndex(0);
-                    
-                    // Stop music
-                    setIsPlaying(false);
-                    
-                    await loadAllMarkers();
-                    
-                    // Show success message first
-                    alert('✅ Profile reset successful!\n\n• All markers deleted\n• Stats reset to zero\n• Signing out now...');
-                    
-                    // Sign out after a short delay
-                    setTimeout(async () => {
-                      await handleLogout();
-                    }, 1000);
-                    
-                  } catch (err: any) {
-                    console.error(err);
-                    alert('❌ Reset failed: ' + err.message);
-                  }
-                }}
-                style={{
-                  background: 'linear-gradient(135deg, #dc2626, #b91c1c)',
-                  color: 'white',
-                  border: 'none',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold',
-                  fontSize: '14px',
-                  marginTop: '8px',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 4px 12px rgba(220, 38, 38, 0.3)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px'
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(220, 38, 38, 0.4)';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.3)';
-                }}
-              >
-                <span style={{ fontSize: '16px' }}>🔄</span>
-                Reset & Sign Out
-              </button>
-            </div>
-          </div>
+        {/* Left Panel - Blackbook (New Feed-Style Layout) */}
+        {showProfilePanel && userProfile && (
+          <BlackbookPanel
+            userProfile={userProfile}
+            userMarkers={userMarkers}
+            drops={drops}
+            topPlayers={topPlayers}
+            onClose={() => setShowProfilePanel(false)}
+            onProfileUpdate={(updatedProfile) => setUserProfile(updatedProfile)}
+            onCenterMap={centerMap}
+            onRefreshAll={handleRefreshAll}
+            isRefreshing={isRefreshing}
+            showTopPlayers={showTopPlayers}
+            onToggleTopPlayers={() => setShowTopPlayers(!showTopPlayers)}
+            showOnlyMyDrops={showOnlyMyDrops}
+            onToggleFilter={() => setShowOnlyMyDrops(!showOnlyMyDrops)}
+            onLogout={handleLogout}
+            nearbyCrewMembers={nearbyCrewMembers}
+            expandedRadius={expandedRadius}
+            onOpenCrewChat={() => {
+              setShowCrewChat(true);
+              setShowProfilePanel(false);
+              setShowPhotosPanel(false);
+              setShowMessagesPanel(false);
+              setShowMapPanel(false);
+              setShowMusicPanel(false);
+              setShowStoryPanel(false);
+            }}
+          />
         )}
 
         {/* Right Panel - Photos & Gallery (Camera) */}
@@ -4394,156 +3954,6 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                 </span>
               </div>
 
-              {/* Color Picker */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-              <div style={{ fontSize: '15px', color: '#ff6b6b', marginBottom: '8px', fontWeight: 'bold' }}>
-                🎨 MARKER COLOR
-              </div>
-                <div style={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: 'repeat(5, 1fr)', 
-                  gap: '10px',
-                  padding: '12px',
-                  backgroundColor: 'rgba(255,255,255,0.05)',
-                  borderRadius: '10px',
-                  border: '1px solid rgba(255, 107, 107, 0.2)',
-                  width: '100%'
-                }}>
-                {MARKER_COLORS.map((color) => (
-                  <div 
-                    key={color.value}
-                    onClick={() => {
-                      setSelectedMarkerColor(color.value);
-                      saveFavoriteColor(color.value);
-                    }}
-                    style={{
-                      position: 'relative',
-                      width: '36px',  // Larger size
-                      height: '36px', // Larger size
-                      backgroundColor: color.value,
-                      border: selectedMarkerColor === color.value ? 
-                        '3px solid #ff6b6b' : '2px solid rgba(255,255,255,0.3)',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: selectedMarkerColor === color.value ? 
-                        '0 0 12px rgba(255, 107, 107, 0.5)' : '0 2px 6px rgba(0,0,0,0.3)',
-                      transform: selectedMarkerColor === color.value ? 'scale(1.1)' : 'scale(1)'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (selectedMarkerColor !== color.value) {
-                        e.currentTarget.style.transform = 'scale(1.05)';
-                        e.currentTarget.style.boxShadow = '0 0 8px rgba(255,255,255,0.2)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (selectedMarkerColor !== color.value) {
-                        e.currentTarget.style.transform = 'scale(1)';
-                        e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
-                      }
-                    }}
-                  >
-                      {/* Selected indicator */}
-                      {selectedMarkerColor === color.value && (
-                        <div style={{
-                          position: 'absolute',
-                          top: '-6px',
-                          right: '-6px',
-                          width: '16px',
-                          height: '16px',
-                          backgroundColor: '#ff6b6b',
-                          borderRadius: '50%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '10px',
-                          color: 'white',
-                          fontWeight: 'bold',
-                          border: '2px solid rgba(0,0,0,0.5)',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
-                        }}>
-                          ✓
-                        </div>
-                      )}
-                      
-                      {/* Color name tooltip on hover */}
-                      <div style={{
-                        position: 'absolute',
-                        bottom: '100%',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        backgroundColor: 'rgba(0,0,0,0.9)',
-                        color: 'white',
-                        padding: '6px 10px',
-                        borderRadius: '6px',
-                        fontSize: '11px',
-                        fontWeight: 'bold',
-                        whiteSpace: 'nowrap',
-                        opacity: 0,
-                        pointerEvents: 'none',
-                        transition: 'opacity 0.2s',
-                        marginBottom: '8px',
-                        border: '1px solid rgba(255,255,255,0.2)',
-                        zIndex: 1
-                      }} className="color-tooltip">
-                        {color.name}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Current color display */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  marginTop: '8px',
-                  padding: '10px',
-                  backgroundColor: 'rgba(255,255,255,0.03)',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  width: '100%'
-                }}>
-                  <div style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    backgroundColor: selectedMarkerColor,
-                    border: '2px solid white',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-                  }} />
-                  <div style={{
-                    fontSize: '12px',
-                    color: '#e0e0e0',
-                    fontWeight: 'bold'
-                  }}>
-                    {MARKER_COLORS.find(c => c.value === selectedMarkerColor)?.name || 'Custom'}
-                  </div>
-                  <div style={{
-                    fontSize: '10px',
-                    color: '#94a3b8',
-                    backgroundColor: 'rgba(255,255,255,0.05)',
-                    padding: '2px 6px',
-                    borderRadius: '4px',
-                    fontFamily: 'monospace'
-                  }}>
-                    {selectedMarkerColor}
-                  </div>
-                </div>
-                
-                <span style={{ 
-                  fontSize: '11px', 
-                  color: '#94a3b8', 
-                  textAlign: 'center',
-                  marginTop: '4px'
-                }}>
-                  Click to choose marker color
-                </span>
-              </div>
 
               {/* Refresh Drops */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
@@ -5180,6 +4590,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             setShowMessagesPanel(false);
             setShowMapPanel(false);
             setShowStoryPanel(false);
+            setShowColorPicker(false);
           }}
           style={{
             background: showMusicPanel ? 'rgba(138, 43, 226, 0.2)' : 'rgba(15, 23, 42, 0.9)',
@@ -5206,7 +4617,60 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           </div>
           Music
         </button>
+
+        {/* Colors - Toggles Color Picker Panel */}
+        <button
+          onClick={() => {
+            setShowColorPicker(!showColorPicker);
+            setShowProfilePanel(false);
+            setShowPhotosPanel(false);
+            setShowMessagesPanel(false);
+            setShowMapPanel(false);
+            setShowStoryPanel(false);
+            setShowMusicPanel(false);
+          }}
+          style={{
+            background: showColorPicker ? 'rgba(255, 107, 107, 0.2)' : 'rgba(15, 23, 42, 0.9)',
+            border: showColorPicker ? '1px solid rgba(255, 107, 107, 0.3)' : '1px solid rgba(255,255,255,0.1)',
+            color: showColorPicker ? '#ff6b6b' : '#cbd5e1',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            fontSize: '11px',
+            gap: '3px',
+            padding: '8px 12px',
+            cursor: 'pointer',
+            borderRadius: '8px',
+            transition: 'all 0.3s ease',
+            minWidth: '60px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+          }}
+        >
+          <div style={{
+            fontSize: '20px',
+            transform: showColorPicker ? 'scale(1.1)' : 'scale(1)'
+          }}>
+            🎨
+          </div>
+          Colors
+        </button>
       </div>
+
+      {/* Color Picker Panel */}
+      {showColorPicker && userProfile && (
+        <ColorPickerPanel
+          isOpen={showColorPicker}
+          unlockedColors={userProfile.unlockedColors || []}
+          selectedColor={selectedMarkerColor}
+          onColorSelect={(colorId, colorHex) => {
+            setSelectedMarkerColor(colorHex);
+            saveFavoriteColor(colorHex);
+          }}
+          onClose={() => setShowColorPicker(false)}
+          crewId={userProfile.crewId}
+          isSolo={userProfile.isSolo}
+        />
+      )}
 
       {/* Legend */}
       <LegendPanel

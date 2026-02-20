@@ -46,6 +46,13 @@ const BottomNavigationOptimized: React.FC<BottomNavigationProps> = ({
       isActive: activePanel === 'music'
     },
     {
+      id: 'colors',
+      icon: '🎨',
+      label: 'Colors',
+      color: '#ec4899',
+      isActive: activePanel === 'colors'
+    },
+    {
       id: 'map',
       icon: '🗺️',
       label: 'Map',

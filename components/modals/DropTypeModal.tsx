@@ -1,9 +1,7 @@
 'use client';
 
 import React from 'react';
-import { SurfaceType, GraffitiType } from '@/types';
 import { MarkerDescription } from '@/constants/markers';
-import { SurfaceGraffitiSelector } from '@/components/ui/SurfaceGraffitiSelector';
 
 interface DropTypeModalProps {
   isVisible: boolean;
@@ -12,18 +10,13 @@ interface DropTypeModalProps {
   onPhotoDrop: () => void;
   onMusicDrop: () => void;
   
-  // Surface and graffiti type selection
-  selectedSurface: SurfaceType;
-  selectedGraffitiType: GraffitiType;
-  onSurfaceChange: (surface: SurfaceType) => void;
-  onGraffitiTypeChange: (type: GraffitiType) => void;
   selectedMarkerType: MarkerDescription;
   
-  // Music drop options
-  unlockedTracks: string[];
-  selectedTrackForMusicDrop: string | null;
-  onTrackSelect: (track: string | null) => void;
-  getTrackNameFromUrl: (url: string) => string;
+  // Music drop options - simplified
+  hasUnlockedTracks: boolean;
+  
+  // Loading state
+  isLoading?: boolean;
 }
 
 const DropTypeModal: React.FC<DropTypeModalProps> = ({
@@ -32,15 +25,9 @@ const DropTypeModal: React.FC<DropTypeModalProps> = ({
   onMarkerDrop,
   onPhotoDrop,
   onMusicDrop,
-  selectedSurface,
-  selectedGraffitiType,
-  onSurfaceChange,
-  onGraffitiTypeChange,
   selectedMarkerType,
-  unlockedTracks,
-  selectedTrackForMusicDrop,
-  onTrackSelect,
-  getTrackNameFromUrl
+  hasUnlockedTracks,
+  isLoading = false
 }) => {
   if (!isVisible) return null;
 
@@ -59,8 +46,48 @@ const DropTypeModal: React.FC<DropTypeModalProps> = ({
         zIndex: 10000,
         backdropFilter: 'blur(4px)'
       }}
-      onClick={onClose}
+      onClick={isLoading ? undefined : onClose}
     >
+      {/* Loading Overlay */}
+      {isLoading && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10001,
+          borderRadius: '20px'
+        }}>
+          <div style={{
+            width: '60px',
+            height: '60px',
+            border: '4px solid rgba(59, 130, 246, 0.3)',
+            borderTop: '4px solid #3b82f6',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            marginBottom: '16px'
+          }} />
+          <div style={{
+            color: '#f1f5f9',
+            fontSize: '18px',
+            fontWeight: 'bold',
+            textAlign: 'center'
+          }}>
+            Creating Drop...
+          </div>
+          <div style={{
+            color: '#94a3b8',
+            fontSize: '14px',
+            marginTop: '8px'
+          }}>
+            Please wait
+          </div>
+        </div>
+      )}
+
       <div
         style={{
           background: 'linear-gradient(135deg, #1e293b, #0f172a)',
@@ -70,7 +97,10 @@ const DropTypeModal: React.FC<DropTypeModalProps> = ({
           width: '90%',
           border: '2px solid rgba(59, 130, 246, 0.3)',
           boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
-          animation: 'popIn 0.3s ease-out'
+          animation: 'popIn 0.3s ease-out',
+          position: 'relative',
+          opacity: isLoading ? 0.5 : 1,
+          pointerEvents: isLoading ? 'none' : 'auto'
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -97,19 +127,10 @@ const DropTypeModal: React.FC<DropTypeModalProps> = ({
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-          {/* Surface and Graffiti Type Selection */}
-          <div style={{ marginBottom: '10px' }}>
-            <SurfaceGraffitiSelector
-              selectedSurface={selectedSurface}
-              selectedGraffitiType={selectedGraffitiType}
-              onSurfaceChange={onSurfaceChange}
-              onGraffitiTypeChange={onGraffitiTypeChange}
-            />
-          </div>
-
           {/* Marker Option */}
           <button
             onClick={onMarkerDrop}
+            disabled={isLoading}
             style={{
               background: 'linear-gradient(135deg, #10b981, #059669)',
               border: 'none',
@@ -118,12 +139,13 @@ const DropTypeModal: React.FC<DropTypeModalProps> = ({
               color: 'white',
               fontSize: '16px',
               fontWeight: 'bold',
-              cursor: 'pointer',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
               transition: 'all 0.3s ease',
-              boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)'
+              boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)',
+              opacity: isLoading ? 0.6 : 1
             }}
           >
             <span style={{ fontSize: '24px' }}>📍</span>
@@ -138,6 +160,7 @@ const DropTypeModal: React.FC<DropTypeModalProps> = ({
           {/* Photo Option */}
           <button
             onClick={onPhotoDrop}
+            disabled={isLoading}
             style={{
               background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
               border: 'none',
@@ -146,12 +169,13 @@ const DropTypeModal: React.FC<DropTypeModalProps> = ({
               color: 'white',
               fontSize: '16px',
               fontWeight: 'bold',
-              cursor: 'pointer',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
               transition: 'all 0.3s ease',
-              boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)'
+              boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)',
+              opacity: isLoading ? 0.6 : 1
             }}
           >
             <span style={{ fontSize: '24px' }}>📸</span>
@@ -163,83 +187,64 @@ const DropTypeModal: React.FC<DropTypeModalProps> = ({
             </div>
           </button>
 
-          {/* Music Drop Option */}
-          {unlockedTracks.length > 0 ? (
-            <>
-              <label style={{
-                color: '#f1f5f9',
-                fontSize: '14px',
+          {/* Music Drop Option - Simplified */}
+          {hasUnlockedTracks ? (
+            <button
+              onClick={onMusicDrop}
+              disabled={isLoading}
+              style={{
+                background: 'linear-gradient(135deg, #8a2be2, #6a1bb2)',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '18px',
+                color: 'white',
+                fontSize: '16px',
                 fontWeight: 'bold',
-                marginBottom: '4px',
-                display: 'block'
-              }}>
-                MUSIC Drop (you lose this song):
-              </label>
-              <select
-                value={selectedTrackForMusicDrop ?? unlockedTracks[0]}
-                onChange={(e) => onTrackSelect(e.target.value || null)}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  borderRadius: '8px',
-                  border: '2px solid rgba(138, 43, 226, 0.4)',
-                  backgroundColor: 'rgba(15, 23, 42, 0.8)',
-                  color: '#f1f5f9',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  marginBottom: '4px'
-                }}
-              >
-                {unlockedTracks.map((url) => (
-                  <option key={url} value={url} style={{ backgroundColor: '#1e293b' }}>
-                    {getTrackNameFromUrl(url)}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={onMusicDrop}
-                style={{
-                  background: 'linear-gradient(135deg, #8a2be2, #6a1bb2)',
-                  border: 'none',
-                  borderRadius: '12px',
-                  padding: '18px',
-                  color: 'white',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 4px 15px rgba(138, 43, 226, 0.3)'
-                }}
-              >
-                <span style={{ fontSize: '24px' }}>🎵</span>
-                <div style={{ textAlign: 'left' }}>
-                  <div>Place Music Drop</div>
-                  <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: 'normal' }}>
-                    Save song on map – you lose it from your collection
-                  </div>
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                transition: 'all 0.3s ease',
+                boxShadow: '0 4px 15px rgba(138, 43, 226, 0.3)',
+                opacity: isLoading ? 0.6 : 1
+              }}
+            >
+              <span style={{ fontSize: '24px' }}>🎵</span>
+              <div style={{ textAlign: 'left' }}>
+                <div>Place Music Drop</div>
+                <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: 'normal' }}>
+                  Select a song to drop on the map
                 </div>
-              </button>
-            </>
+              </div>
+            </button>
           ) : (
             <div style={{
-              padding: '14px',
+              padding: '18px',
               borderRadius: '12px',
               background: 'rgba(138, 43, 226, 0.15)',
               border: '1px dashed rgba(138, 43, 226, 0.4)',
               color: '#a78bfa',
-              fontSize: '13px',
-              textAlign: 'center'
+              fontSize: '14px',
+              textAlign: 'center',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px'
             }}>
-              MUSIC Drop – unlock tracks first (place marker or photo drops)
+              <span style={{ fontSize: '24px' }}>🎵</span>
+              <div>
+                <div style={{ fontWeight: 'bold' }}>Music Drop</div>
+                <div style={{ fontSize: '12px', opacity: 0.8 }}>
+                  Unlock tracks first (place marker or photo drops)
+                </div>
+              </div>
             </div>
           )}
         </div>
 
         <button
           onClick={onClose}
+          disabled={isLoading}
           style={{
             marginTop: '20px',
             background: 'none',
@@ -247,10 +252,11 @@ const DropTypeModal: React.FC<DropTypeModalProps> = ({
             borderRadius: '8px',
             padding: '10px 20px',
             color: '#94a3b8',
-            cursor: 'pointer',
+            cursor: isLoading ? 'not-allowed' : 'pointer',
             width: '100%',
             fontSize: '14px',
-            transition: 'all 0.2s ease'
+            transition: 'all 0.2s ease',
+            opacity: isLoading ? 0.5 : 1
           }}
         >
           Cancel
@@ -262,6 +268,10 @@ const DropTypeModal: React.FC<DropTypeModalProps> = ({
           0% { transform: scale(0.5); opacity: 0; }
           70% { transform: scale(1.1); }
           100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
       `}</style>
     </div>

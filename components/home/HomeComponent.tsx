@@ -68,6 +68,7 @@ import BottomNavigation from '@/src/components/ui/BottomNavigation';
 import SVGBottomNavigation from '@/src/components/ui/SVGBottomNavigation';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import StatusPanel from '@/components/ui/StatusPanel';
+import ColorPickerPanel from '@/components/ui/ColorPickerPanel';
 import { getTrackNameFromUrl, calculateDistance } from '@/lib/utils/dropHelpers';
 import { calculateRepForMarker } from '@/lib/utils';
 
@@ -1549,6 +1550,33 @@ const HomeComponent = () => {
             crewId={userProfile?.crewId || null}
             onClose={() => setActivePanel(null)}
             userProfile={userProfile}
+          />
+        )}
+
+        {/* COLOR PICKER PANEL */}
+        {activePanel === 'colors' && (
+          <ColorPickerPanel
+            isOpen={true}
+            onClose={() => setActivePanel(null)}
+            unlockedColors={userProfile?.unlockedColors || ['grey']}
+            selectedColor={userProfile?.selectedColor}
+            onColorSelect={async (colorId, colorHex) => {
+              // Update user's selected color in profile
+              if (user && userProfile) {
+                try {
+                  const { doc, updateDoc } = await import('firebase/firestore');
+                  const { db } = await import('@/lib/firebase/config');
+                  await updateDoc(doc(db, 'users', user.uid), {
+                    selectedColor: colorHex
+                  });
+                  updateUserProfile({ selectedColor: colorHex });
+                } catch (error) {
+                  console.error('Error updating color:', error);
+                }
+              }
+            }}
+            crewId={userProfile?.crewId}
+            isSolo={userProfile?.isSolo}
           />
         )}
       </div>

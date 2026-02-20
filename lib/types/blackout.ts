@@ -89,6 +89,9 @@ export interface Drop {
   color?: string;
   repEarned?: number;
   markerType?: string;
+  // Surface and graffiti type fields
+  surface?: SurfaceType;
+  graffitiType?: GraffitiType;
   // Photo metadata for GPS-tagged photos
   photoMetadata?: {
     hasLocation: boolean;
@@ -138,6 +141,12 @@ export interface UserProfile {
   crewLastReadTimestamps?: Record<CrewId, Timestamp>; // New field for tracking unread chat messages
   hasReceivedCrewWelcomeMessage?: boolean; // New field for tracking if player received initial crew welcome
   lastViewedStoryTimestamp?: Timestamp; // New field for tracking when user last viewed story content
+  // Graffiti style unlock fields
+  unlockedGraffitiTypes?: string[]; // Array of unlocked graffiti type IDs
+  activeGraffitiStyle?: string; // Currently selected active style
+  // Color unlock fields
+  unlockedColors?: string[]; // Array of unlocked color IDs
+  selectedColor?: string; // Currently selected color hex
 }
 
 // Top Player type

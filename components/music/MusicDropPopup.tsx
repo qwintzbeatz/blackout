@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Drop } from "@/lib/types/blackout";
 import { User as FirebaseUser } from "firebase/auth";
 import { getTrackNameFromUrl, getTrackPlatform, isSpotifyUrl, getSpotifyEmbedUrl, getSoundCloudEmbedUrl } from "@/lib/utils/dropHelpers";
+import { deleteDrop, likeDrop, unlikeDrop } from "@/lib/firebase/drops";
 
 interface MusicDropPopupProps {
   drop: Drop;
@@ -18,8 +19,10 @@ const MusicDropPopup: React.FC<MusicDropPopupProps> = ({ drop, user, onLikeUpdat
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(drop.likes?.length || 0);
   const [embedUrl, setEmbedUrl] = useState<string>("");
+  const [isDeleting, setIsDeleting] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   
+  const isOwner = user?.uid === drop.createdBy;
   const isSpotify = isSpotifyUrl(drop.trackUrl || "");
   const isSoundCloud = drop.trackUrl?.includes('soundcloud.com') || false;
   const trackPlatform = getTrackPlatform(drop.trackUrl || "");
@@ -43,10 +46,31 @@ const MusicDropPopup: React.FC<MusicDropPopupProps> = ({ drop, user, onLikeUpdat
 
   const handleLike = async () => {
     if (!user) return;
-    const newLikes = isLiked ? drop.likes?.filter((id) => id !== user.uid) || [] : [...(drop.likes || []), user.uid];
-    await onLikeUpdate(drop.firestoreId || drop.id || "", newLikes);
-    setIsLiked(!isLiked);
-    setLikeCount(newLikes.length);
+    
+    const firestoreId = drop.firestoreId || drop.id;
+    if (!firestoreId) return;
+
+    try {
+      let success: boolean;
+      
+      if (isLiked) {
+        success = await unlikeDrop(firestoreId, user.uid);
+      } else {
+        success = await likeDrop(firestoreId, user.uid);
+      }
+      
+      if (success) {
+        const newLikes = isLiked 
+          ? drop.likes?.filter((id) => id !== user.uid) || [] 
+          : [...(drop.likes || []), user.uid];
+        
+        setIsLiked(!isLiked);
+        setLikeCount(newLikes.length);
+        onLikeUpdate(firestoreId, newLikes);
+      }
+    } catch (error) {
+      console.error('Error updating like:', error);
+    }
   };
 
   const handlePlayPause = () => {
@@ -58,6 +82,29 @@ const MusicDropPopup: React.FC<MusicDropPopupProps> = ({ drop, user, onLikeUpdat
 
   const handleClose = () => {
     if (onClose) onClose();
+  };
+
+  const handleDelete = async () => {
+    if (!user || !isOwner) return;
+    
+    const firestoreId = drop.firestoreId || drop.id;
+    if (!firestoreId) return;
+
+    if (!window.confirm('Are you sure you want to delete this music drop? This action cannot be undone.')) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await deleteDrop(firestoreId);
+      alert('✅ Music drop deleted successfully!');
+      if (onClose) onClose();
+    } catch (error) {
+      console.error('Error deleting music drop:', error);
+      alert('Failed to delete music drop. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const formatTimeAgo = (timestamp: Date) => {
@@ -139,6 +186,19 @@ const MusicDropPopup: React.FC<MusicDropPopupProps> = ({ drop, user, onLikeUpdat
               🎵 {trackPlatform || "Track"}
             </div>
             <span style={{ fontSize: "12px", color: "#64748b" }}>{formatTimeAgo(drop.timestamp)}</span>
+            {isOwner && (
+              <span style={{
+                fontSize: "10px",
+                background: "rgba(59, 130, 246, 0.2)",
+                color: "#4dabf7",
+                padding: "3px 8px",
+                borderRadius: "10px",
+                fontWeight: "bold",
+                border: "1px solid rgba(59, 130, 246, 0.3)"
+              }}>
+                👤 Yours
+              </span>
+            )}
           </div>
 
           <h2 style={{ fontSize: "24px", fontWeight: "700", color: "#fff", margin: "0 0 12px", lineHeight: 1.2 }}>{trackName}</h2>
@@ -185,6 +245,34 @@ const MusicDropPopup: React.FC<MusicDropPopupProps> = ({ drop, user, onLikeUpdat
             </div>
           )}
         </div>
+
+        {/* Owner Delete Button */}
+        {isOwner && (
+          <div style={{ padding: "0 24px", marginBottom: "12px" }}>
+            <button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              style={{
+                width: "100%",
+                background: "rgba(239, 68, 68, 0.15)",
+                border: "1px solid rgba(239, 68, 68, 0.3)",
+                borderRadius: "12px",
+                padding: "10px",
+                color: "#ef4444",
+                fontSize: "13px",
+                fontWeight: "bold",
+                cursor: isDeleting ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                opacity: isDeleting ? 0.7 : 1
+              }}
+            >
+              🗑️ {isDeleting ? "Deleting..." : "Delete Drop"}
+            </button>
+          </div>
+        )}
 
         <div style={{ padding: "20px 24px 28px", display: "flex", alignItems: "center", gap: "16px" }}>
           <button onClick={handlePlayPause} style={{

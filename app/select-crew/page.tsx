@@ -21,6 +21,7 @@ import { UserProfile } from '@/lib/types/blackout';
 import CharacterSelection from '@/components/CharacterSelection';
 import { Gender } from '@/types';
 import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
+import { initializeUnlockedColors, getDefaultColorForCrew, CrewId } from '@/utils/colorUnlocks';
 
 interface CrewData {
   id: string;
@@ -28,8 +29,10 @@ interface CrewData {
   leader: string;
   description: string;
   bonus: string;
-  color: string;
-  accentColor: string;
+  colors: {
+    primary: string;
+    secondary: string;
+  };
 }
 
 export default function SelectCrewPage() {
@@ -155,6 +158,10 @@ export default function SelectCrewPage() {
       // Generate profile picture if not already set
       const finalProfilePicUrl = profilePicUrl || generateAvatarUrl(user.uid, username.trim(), gender, 100);
       
+      // Initialize unlocked colors based on crew selection
+      const unlockedColors = initializeUnlockedColors(selectedCrew as CrewId);
+      const selectedColor = getDefaultColorForCrew(selectedCrew as CrewId);
+      
       // Prepare user profile data
       const userProfileData = {
         uid: user.uid,
@@ -166,7 +173,7 @@ export default function SelectCrewPage() {
         level: userProfile?.level || 1,
         rank: userProfile?.rank || 'TOY',
         totalMarkers: userProfile?.totalMarkers || 0,
-        favoriteColor: userProfile?.favoriteColor || '#10b981',
+        favoriteColor: selectedColor, // Use crew color as default
         unlockedTracks: userProfile?.unlockedTracks || ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'],
         createdAt: userProfile?.createdAt || Timestamp.now(),
         lastActive: Timestamp.now(),
@@ -183,7 +190,9 @@ export default function SelectCrewPage() {
         collaborations: userProfile?.collaborations || 0,
         blackoutEventsInvestigated: userProfile?.blackoutEventsInvestigated || 0,
         kaiTiakiEvaluationsReceived: userProfile?.kaiTiakiEvaluationsReceived || 0,
-        playerCharacterId: userProfile?.playerCharacterId || null // Will be set by character selection
+        playerCharacterId: userProfile?.playerCharacterId || null, // Will be set by character selection
+        unlockedColors: unlockedColors,
+        selectedColor: selectedColor
       };
       
       // Update or create user profile
@@ -267,6 +276,10 @@ export default function SelectCrewPage() {
     try {
       const finalProfilePicUrl = profilePicUrl || generateAvatarUrl(user.uid, username.trim(), gender, 100);
       
+      // Solo players get grey only
+      const soloUnlockedColors = initializeUnlockedColors(null); // null = solo
+      const soloSelectedColor = getDefaultColorForCrew(null); // Grey
+      
       const userProfileData = {
         uid: user.uid,
         email: user.email || '',
@@ -277,13 +290,15 @@ export default function SelectCrewPage() {
         level: userProfile?.level || 1,
         rank: userProfile?.rank || 'TOY',
         totalMarkers: userProfile?.totalMarkers || 0,
-        favoriteColor: userProfile?.favoriteColor || '#10b981',
+        favoriteColor: soloSelectedColor, // Grey for solo
         unlockedTracks: userProfile?.unlockedTracks || ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'],
         lastActive: Timestamp.now(),
         crewId: null,
         crewName: null,
         isSolo: true,
-        crewJoinedAt: null
+        crewJoinedAt: null,
+        unlockedColors: soloUnlockedColors,
+        selectedColor: soloSelectedColor
       };
       
       const userRef = doc(db, 'users', user.uid);
@@ -476,16 +491,16 @@ export default function SelectCrewPage() {
           <div style={{
             marginBottom: '30px',
             padding: '20px',
-            backgroundColor: `rgba(${CREWS.find(c => c.id === userProfile.crewId)?.color?.replace('#', '') || '59,130,246'}, 0.1)`,
+            backgroundColor: `rgba(${CREWS.find(c => c.id === userProfile.crewId)?.colors?.primary?.replace('#', '') || '59,130,246'}, 0.1)`,
             borderRadius: '12px',
-            border: `2px solid ${CREWS.find(c => c.id === userProfile.crewId)?.color || '#3b82f6'}`,
+            border: `2px solid ${CREWS.find(c => c.id === userProfile.crewId)?.colors?.primary || '#3b82f6'}`,
             textAlign: 'center'
           }}>
             <div style={{
               fontSize: '20px',
               fontWeight: 'bold',
               marginBottom: '10px',
-              color: CREWS.find(c => c.id === userProfile.crewId)?.color || '#3b82f6'
+              color: CREWS.find(c => c.id === userProfile.crewId)?.colors?.primary || '#3b82f6'
             }}>
               👥 Current Crew: {userProfile.crewName}
             </div>

@@ -268,6 +268,36 @@ export const deleteCommentFromDrop = async (dropId: string, commentId: string): 
 };
 
 /**
+ * Update a drop in Firestore
+ */
+export const updateDrop = async (dropId: string, updates: Partial<Drop>): Promise<boolean> => {
+  try {
+    const dropRef = doc(db, 'drops', dropId);
+    await updateDoc(dropRef, {
+      ...updates,
+      lastUpdated: Timestamp.now(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error updating drop:', error);
+    return false;
+  }
+};
+
+/**
+ * Delete a drop from Firestore
+ */
+export const deleteDrop = async (dropId: string): Promise<boolean> => {
+  try {
+    await deleteDoc(doc(db, 'drops', dropId));
+    return true;
+  } catch (error) {
+    console.error('Error deleting drop:', error);
+    return false;
+  }
+};
+
+/**
  * Delete all drops created by a specific user
  * Used when resetting a user's profile
  */

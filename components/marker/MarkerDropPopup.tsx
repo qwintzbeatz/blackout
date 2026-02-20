@@ -4,9 +4,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Drop } from '@/lib/types/blackout';
 import { User as FirebaseUser } from 'firebase/auth';
-import { likeDrop, unlikeDrop, addCommentToDrop, getCommentsForDrop, DropComment } from '@/lib/firebase/drops';
+import { likeDrop, unlikeDrop, addCommentToDrop, getCommentsForDrop, DropComment, updateDrop, deleteDrop } from '@/lib/firebase/drops';
 import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
 import { getTimeAgo } from '@/lib/utils/dropHelpers';
+import { SurfaceGraffitiSelector } from '@/components/ui/SurfaceGraffitiSelector';
+import { SurfaceType, GraffitiType } from '@/types';
+import { SURFACE_TO_MARKER_NAME, GRAFFITI_TO_MARKER_DESCRIPTION } from '@/utils/typeMapping';
 
 interface MarkerDropPopupProps {
   drop: Drop;
@@ -35,6 +38,13 @@ const MarkerDropPopup: React.FC<MarkerDropPopupProps> = ({
   const [newComment, setNewComment] = useState('');
   const [isPostingComment, setIsPostingComment] = useState(false);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedSurface, setSelectedSurface] = useState<SurfaceType>((drop as any).surface || 'wall');
+  const [selectedGraffitiType, setSelectedGraffitiType] = useState<GraffitiType>((drop as any).graffitiType || 'tag');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const isOwner = user?.uid === drop.createdBy;
 
   // Load comments when opening comment section
   useEffect(() => {
@@ -125,6 +135,52 @@ const MarkerDropPopup: React.FC<MarkerDropPopupProps> = ({
       console.error('Error posting comment:', error);
     } finally {
       setIsPostingComment(false);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!user) return;
+    
+    const firestoreId = drop.firestoreId || drop.id;
+    if (!firestoreId) return;
+
+    setIsSaving(true);
+    try {
+      await updateDrop(firestoreId, {
+        surface: selectedSurface as any,
+        graffitiType: selectedGraffitiType as any,
+      });
+      
+      setIsEditing(false);
+      alert('✅ Drop updated successfully!');
+    } catch (error) {
+      console.error('Error updating drop:', error);
+      alert('Failed to update drop. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!user || !isOwner) return;
+    
+    const firestoreId = drop.firestoreId || drop.id;
+    if (!firestoreId) return;
+
+    if (!window.confirm('Are you sure you want to delete this drop? This action cannot be undone.')) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await deleteDrop(firestoreId);
+      alert('✅ Drop deleted successfully!');
+      if (onClose) onClose();
+    } catch (error) {
+      console.error('Error deleting drop:', error);
+      alert('Failed to delete drop. Please try again.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -321,155 +377,273 @@ const MarkerDropPopup: React.FC<MarkerDropPopupProps> = ({
         )}
       </div>
 
-      {/* Marker Info */}
-      <div style={{
-        padding: '12px',
-        background: 'rgba(255,255,255,0.05)',
-        borderRadius: '8px',
-        marginBottom: '12px'
-      }}>
-        <div style={{
-          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-          color: 'white',
-          padding: '8px 12px',
-          borderRadius: '6px',
-          textAlign: 'center',
-          marginBottom: '8px'
-        }}>
-          <div style={{ fontSize: '14px', fontWeight: 'bold' }}>
-            📍 Location Tag
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <div style={{ fontSize: '13px', color: '#cbd5e1' }}>
-            🎨 Type: <span style={{ color: drop.color || '#4dabf7', fontWeight: 'bold' }}>
-              Signature Tag
-            </span>
-          </div>
+      {/* Edit Mode */}
+      {isEditing ? (
+        <div style={{ marginBottom: '12px' }}>
           <div style={{
-            fontSize: '12px',
-            padding: '2px 8px',
-            background: 'rgba(16, 185, 129, 0.2)',
-            color: '#10b981',
-            borderRadius: '12px'
+            background: 'rgba(59, 130, 246, 0.1)',
+            padding: '12px',
+            borderRadius: '8px',
+            border: '1px solid rgba(59, 130, 246, 0.3)',
+            marginBottom: '12px'
           }}>
-            {drop.repEarned || 5} REP
+            <h4 style={{ margin: '0 0 12px 0', color: '#4dabf7', fontSize: '14px' }}>
+              ✏️ Edit Drop
+            </h4>
+            <SurfaceGraffitiSelector
+              selectedSurface={selectedSurface}
+              selectedGraffitiType={selectedGraffitiType}
+              onSurfaceChange={setSelectedSurface}
+              onGraffitiTypeChange={setSelectedGraffitiType}
+            />
+          </div>
+          
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={handleSaveEdit}
+              disabled={isSaving}
+              style={{
+                flex: 1,
+                background: 'linear-gradient(135deg, #10b981, #059669)',
+                border: 'none',
+                padding: '10px',
+                borderRadius: '6px',
+                color: 'white',
+                fontWeight: 'bold',
+                cursor: isSaving ? 'not-allowed' : 'pointer',
+                opacity: isSaving ? 0.7 : 1,
+                fontSize: '12px'
+              }}
+            >
+              {isSaving ? '💾 Saving...' : '✅ Save'}
+            </button>
+            <button
+              onClick={() => setIsEditing(false)}
+              style={{
+                flex: 1,
+                background: 'rgba(107, 114, 128, 0.3)',
+                border: '1px solid #6b7280',
+                padding: '10px',
+                borderRadius: '6px',
+                color: '#cbd5e1',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                fontSize: '12px'
+              }}
+            >
+              ❌ Cancel
+            </button>
           </div>
         </div>
-      </div>
-
-      {/* Location */}
-      <div style={{ marginBottom: '12px' }}>
-        <div style={{ fontSize: '12px', color: '#cbd5e1', marginBottom: '4px' }}>
-          📍 Coordinates
-        </div>
-        <div style={{
-          fontSize: '11px',
-          color: '#94a3b8',
-          fontFamily: 'monospace',
-          backgroundColor: 'rgba(255,255,255,0.03)',
-          padding: '6px 8px',
-          borderRadius: '6px',
-          textAlign: 'center'
-        }}>
-          {drop.lat?.toFixed(6)}, {drop.lng?.toFixed(6)}
-        </div>
-      </div>
-
-      {/* Interactive Buttons */}
-      <div style={{
-        display: 'flex',
-        gap: '8px',
-        marginBottom: '12px',
-        flexWrap: 'wrap'
-      }}>
-        <button
-          onClick={handleLike}
-          disabled={!user}
-          style={{
-            flex: 1,
-            padding: '8px 12px',
-            background: isLiked ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255,255,255,0.07)',
-            border: isLiked ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(255,255,255,0.1)',
-            color: isLiked ? '#ef4444' : 'white',
+      ) : (
+        <>
+          {/* Marker Info */}
+          <div style={{
+            padding: '12px',
+            background: 'rgba(255,255,255,0.05)',
             borderRadius: '8px',
-            cursor: user ? 'pointer' : 'not-allowed',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            fontSize: '13px',
-            opacity: user ? 1 : 0.6
-          }}
-        >
-          {isLiked ? '❤️' : '🤍'} {likeCount}
-        </button>
-        
-        <button
-          onClick={() => setIsCommenting(!isCommenting)}
-          style={{
-            flex: 1,
-            padding: '8px 12px',
-            background: 'rgba(59, 130, 246, 0.2)',
-            border: '1px solid rgba(59, 130, 246, 0.3)',
-            color: '#4dabf7',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            fontSize: '13px'
-          }}
-        >
-          💬 Comment
-        </button>
-        
-        {mapRef && (
-          <button
-            onClick={() => {
-              if (mapRef.current && drop.lat && drop.lng) {
-                mapRef.current.setView([drop.lat, drop.lng], 18);
-                if (onClose) onClose();
-              }
-            }}
-            style={{
+            marginBottom: '12px'
+          }}>
+            <div style={{
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              color: 'white',
               padding: '8px 12px',
-              background: 'rgba(16, 185, 129, 0.2)',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
-              color: '#10b981',
-              borderRadius: '8px',
-              cursor: 'pointer',
+              borderRadius: '6px',
+              textAlign: 'center',
+              marginBottom: '8px'
+            }}>
+              <div style={{ fontSize: '14px', fontWeight: 'bold' }}>
+                📍 Location Tag
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div style={{ fontSize: '13px', color: '#cbd5e1' }}>
+                🎨 Type: <span style={{ color: drop.color || '#4dabf7', fontWeight: 'bold' }}>
+                  {(drop as any).graffitiType || 'Signature Tag'}
+                </span>
+              </div>
+              <div style={{
+                fontSize: '12px',
+                padding: '2px 8px',
+                background: 'rgba(16, 185, 129, 0.2)',
+                color: '#10b981',
+                borderRadius: '12px'
+              }}>
+                {drop.repEarned || 5} REP
+              </div>
+            </div>
+            
+            <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+              Surface: <span style={{ color: '#e0e0e0' }}>{(drop as any).surface || 'Wall'}</span>
+            </div>
+          </div>
+
+          {/* Owner Actions */}
+          {isOwner && (
+            <div style={{
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              fontSize: '13px'
-            }}
-          >
-            🚀 Go to
-          </button>
-        )}
-      </div>
+              gap: '8px',
+              marginBottom: '12px'
+            }}>
+              <button
+                onClick={() => setIsEditing(true)}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  background: 'rgba(59, 130, 246, 0.2)',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  color: '#4dabf7',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }}
+              >
+                ✏️ Edit
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  background: 'rgba(239, 68, 68, 0.2)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: '#ef4444',
+                  borderRadius: '6px',
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  opacity: isDeleting ? 0.7 : 1
+                }}
+              >
+                🗑️ Delete
+              </button>
+            </div>
+          )}
 
-      {/* Comments Section */}
-      {isCommenting && <CommentSection />}
+          {/* Location */}
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{ fontSize: '12px', color: '#cbd5e1', marginBottom: '4px' }}>
+              📍 Coordinates
+            </div>
+            <div style={{
+              fontSize: '11px',
+              color: '#94a3b8',
+              fontFamily: 'monospace',
+              backgroundColor: 'rgba(255,255,255,0.03)',
+              padding: '6px 8px',
+              borderRadius: '6px',
+              textAlign: 'center'
+            }}>
+              {drop.lat?.toFixed(6)}, {drop.lng?.toFixed(6)}
+            </div>
+          </div>
 
-      {/* User ownership indicator */}
-      {drop.createdBy === user?.uid && (
-        <div style={{
-          marginTop: '12px',
-          padding: '6px 12px',
-          background: 'rgba(59, 130, 246, 0.1)',
-          border: '1px solid rgba(59, 130, 246, 0.2)',
-          borderRadius: '8px',
-          fontSize: '11px',
-          color: '#4dabf7',
-          textAlign: 'center'
-        }}>
-          ✨ Your Drop
-        </div>
+          {/* Interactive Buttons */}
+          <div style={{
+            display: 'flex',
+            gap: '8px',
+            marginBottom: '12px',
+            flexWrap: 'wrap'
+          }}>
+            <button
+              onClick={handleLike}
+              disabled={!user}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                background: isLiked ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255,255,255,0.07)',
+                border: isLiked ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(255,255,255,0.1)',
+                color: isLiked ? '#ef4444' : 'white',
+                borderRadius: '8px',
+                cursor: user ? 'pointer' : 'not-allowed',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                fontSize: '13px',
+                opacity: user ? 1 : 0.6
+              }}
+            >
+              {isLiked ? '❤️' : '🤍'} {likeCount}
+            </button>
+            
+            <button
+              onClick={() => setIsCommenting(!isCommenting)}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                background: 'rgba(59, 130, 246, 0.2)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                color: '#4dabf7',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                fontSize: '13px'
+              }}
+            >
+              💬 Comment
+            </button>
+            
+            {mapRef && (
+              <button
+                onClick={() => {
+                  if (mapRef.current && drop.lat && drop.lng) {
+                    mapRef.current.setView([drop.lat, drop.lng], 18);
+                    if (onClose) onClose();
+                  }
+                }}
+                style={{
+                  padding: '8px 12px',
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  color: '#10b981',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  fontSize: '13px'
+                }}
+              >
+                🚀 Go to
+              </button>
+            )}
+          </div>
+
+          {/* Comments Section */}
+          {isCommenting && <CommentSection />}
+
+          {/* User ownership indicator */}
+          {isOwner && (
+            <div style={{
+              marginTop: '12px',
+              padding: '6px 12px',
+              background: 'rgba(59, 130, 246, 0.1)',
+              border: '1px solid rgba(59, 130, 246, 0.2)',
+              borderRadius: '8px',
+              fontSize: '11px',
+              color: '#4dabf7',
+              textAlign: 'center'
+            }}>
+              ✨ Your Drop
+            </div>
+          )}
+        </>
       )}
 
       <style>{`

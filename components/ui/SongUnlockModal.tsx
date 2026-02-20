@@ -1,4 +1,5 @@
 // Song Unlock Modal - Full screen popup when unlocking new tracks
+// Green Spotify theme for Spotify tracks, Orange theme for SoundCloud tracks
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
@@ -13,19 +14,19 @@ interface SongUnlockModalProps {
   unlockSource?: string; // e.g., "Mission Complete", "Level Up", "Daily Reward"
 }
 
-const TrackBadge: React.FC<{ source: string }> = ({ source }) => (
+const TrackBadge: React.FC<{ source: string; themeColor: string; themeColorLight: string }> = ({ source, themeColor, themeColorLight }) => (
   <div
     style={{
       display: "inline-flex",
       alignItems: "center",
       gap: "6px",
       padding: "6px 14px",
-      background: "rgba(255, 85, 0, 0.2)",
-      border: "1px solid rgba(255, 85, 0, 0.4)",
+      background: `rgba(${hexToRgb(themeColor)}, 0.2)`,
+      border: `1px solid rgba(${hexToRgb(themeColor)}, 0.4)`,
       borderRadius: "20px",
       fontSize: "12px",
       fontWeight: "600",
-      color: "#ff5500",
+      color: themeColor,
       textTransform: "uppercase",
       letterSpacing: "1px",
     }}
@@ -34,6 +35,14 @@ const TrackBadge: React.FC<{ source: string }> = ({ source }) => (
     {source || "UNLOCKED"}
   </div>
 );
+
+// Helper function to convert hex to RGB
+function hexToRgb(hex: string): string {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result 
+    ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
+    : "255, 85, 0";
+}
 
 export default function SongUnlockModal({
   trackUrl,
@@ -51,6 +60,12 @@ export default function SongUnlockModal({
 
   const isSpotify = isSpotifyUrl(trackUrl || "");
   const isSoundCloud = trackUrl?.includes('soundcloud.com') || false;
+
+  // Dynamic theme colors based on track source
+  const themeColor = isSpotify ? '#1DB954' : '#ff5500'; // Spotify green vs SoundCloud orange
+  const themeColorLight = isSpotify ? '#1ed760' : '#ff6b00';
+  const themeName = isSpotify ? 'Spotify' : 'SoundCloud';
+  const themeIcon = isSpotify ? '🎵' : '🔊';
 
   useEffect(() => {
     if (isOpen) {
@@ -106,7 +121,7 @@ export default function SongUnlockModal({
           position: "absolute",
           inset: 0,
           background: `
-            radial-gradient(ellipse at 50% 0%, rgba(255, 85, 0, 0.15) 0%, transparent 50%),
+            radial-gradient(ellipse at 50% 0%, rgba(${hexToRgb(themeColor)}, 0.15) 0%, transparent 50%),
             radial-gradient(ellipse at 50% 100%, rgba(138, 43, 226, 0.1) 0%, transparent 50%)
           `,
         }}
@@ -121,7 +136,7 @@ export default function SongUnlockModal({
               position: "absolute",
               width: Math.random() * 6 + 2,
               height: Math.random() * 6 + 2,
-              backgroundColor: Math.random() > 0.5 ? "#ff5500" : "#8a2be2",
+              backgroundColor: Math.random() > 0.5 ? themeColor : "#8a2be2",
               borderRadius: "50%",
               left: `${Math.random() * 100}%`,
               top: `${Math.random() * 100}%`,
@@ -143,10 +158,10 @@ export default function SongUnlockModal({
           borderRadius: "28px",
           boxShadow: `
             0 25px 80px rgba(0, 0, 0, 0.6),
-            0 0 60px rgba(255, 85, 0, 0.2),
+            0 0 60px rgba(${hexToRgb(themeColor)}, 0.2),
             inset 0 1px 0 rgba(255, 255, 255, 0.1)
           `,
-          border: "1px solid rgba(255, 85, 0, 0.3)",
+          border: `1px solid rgba(${hexToRgb(themeColor)}, 0.3)`,
           overflow: "hidden",
           transform: animate ? "scale(1) translateY(0)" : "scale(0.8) translateY(40px)",
           transition: "transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
@@ -170,12 +185,12 @@ export default function SongUnlockModal({
               transform: "translate(-50%, -50%)",
               width: "200px",
               height: "200px",
-              background: "radial-gradient(circle, rgba(255, 85, 0, 0.3) 0%, transparent 70%)",
+              background: `radial-gradient(circle, rgba(${hexToRgb(themeColor)}, 0.3) 0%, transparent 70%)`,
               filter: "blur(20px)",
             }}
           />
 
-          <TrackBadge source={unlockSource} />
+          <TrackBadge source={unlockSource} themeColor={themeColor} themeColorLight={themeColorLight} />
 
           <h2
             style={{
@@ -185,11 +200,24 @@ export default function SongUnlockModal({
               color: "#fff",
               textTransform: "uppercase",
               letterSpacing: "2px",
-              textShadow: "0 0 30px rgba(255, 85, 0, 0.5)",
+              textShadow: `0 0 30px rgba(${hexToRgb(themeColor)}, 0.5)`,
             }}
           >
             NEW TRACK
           </h2>
+          
+          {/* Platform indicator */}
+          <div
+            style={{
+              marginTop: "8px",
+              fontSize: "12px",
+              color: themeColor,
+              fontWeight: "600",
+              letterSpacing: "1px",
+            }}
+          >
+            {themeIcon} {themeName}
+          </div>
         </div>
 
         {/* Album Art / Vinyl */}
@@ -210,13 +238,13 @@ export default function SongUnlockModal({
               border: "4px solid rgba(255, 255, 255, 0.1)",
               boxShadow: `
                 0 15px 40px rgba(0, 0, 0, 0.5),
-                0 0 80px rgba(255, 85, 0, 0.3),
+                0 0 80px rgba(${hexToRgb(themeColor)}, 0.3),
                 inset 0 0 60px rgba(0, 0, 0, 0.3)
               `,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              animation: isPlaying ? "spin 3s linear infinite" : "pulse-glow 2s ease-in-out infinite",
+              animation: isPlaying ? "spin 3s linear infinite" : `pulse-glow-${isSpotify ? 'spotify' : 'soundcloud'} 2s ease-in-out infinite`,
             }}
           >
             {/* Vinyl Grooves */}
@@ -243,11 +271,11 @@ export default function SongUnlockModal({
                 width: "70px",
                 height: "70px",
                 borderRadius: "50%",
-                background: "linear-gradient(135deg, #ff5500 0%, #ff6b00 100%)",
+                background: `linear-gradient(135deg, ${themeColor} 0%, ${themeColorLight} 100%)`,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 4px 20px rgba(255, 85, 0, 0.4)",
+                boxShadow: `0 4px 20px rgba(${hexToRgb(themeColor)}, 0.4)`,
               }}
             >
               <span style={{ fontSize: "28px" }}>🎵</span>
@@ -271,7 +299,7 @@ export default function SongUnlockModal({
                     key={i}
                     style={{
                       width: "4px",
-                      background: "#ff5500",
+                      background: themeColor,
                       borderRadius: "2px",
                       animation: `soundWave 0.5s ease-in-out infinite`,
                       animationDelay: `${i * 0.1}s`,
@@ -338,7 +366,7 @@ export default function SongUnlockModal({
               margin: "0 20px 20px",
               padding: "16px",
               borderRadius: "16px",
-              background: "linear-gradient(135deg, rgba(255, 85, 0, 0.15) 0%, rgba(138, 43, 226, 0.15) 100%)",
+              background: `linear-gradient(135deg, rgba(${hexToRgb(themeColor)}, 0.15) 0%, rgba(138, 43, 226, 0.15) 100%)`,
               textAlign: "center",
             }}
           >
@@ -355,7 +383,7 @@ export default function SongUnlockModal({
               onClick={() => window.open(trackUrl, "_blank")}
               style={{
                 padding: "10px 24px",
-                background: "linear-gradient(135deg, #ff5500 0%, #ff6b00 100%)",
+                background: `linear-gradient(135deg, ${themeColor} 0%, ${themeColorLight} 100%)`,
                 border: "none",
                 borderRadius: "24px",
                 color: "#fff",
@@ -364,7 +392,7 @@ export default function SongUnlockModal({
                 cursor: "pointer",
               }}
             >
-              {isSoundCloud ? "🔊 Open in SoundCloud" : "🎵 Open in App"}
+              {themeIcon} Open in {themeName}
             </button>
           </div>
         )}
@@ -384,7 +412,7 @@ export default function SongUnlockModal({
               padding: "16px",
               background: isPlaying
                 ? "rgba(239, 68, 68, 0.2)"
-                : "linear-gradient(135deg, #ff5500 0%, #ff6b00 100%)",
+                : `linear-gradient(135deg, ${themeColor} 0%, ${themeColorLight} 100%)`,
               border: isPlaying ? "1px solid rgba(239, 68, 68, 0.5)" : "none",
               borderRadius: "16px",
               color: "#fff",
@@ -397,7 +425,7 @@ export default function SongUnlockModal({
               gap: "8px",
               boxShadow: isPlaying
                 ? "none"
-                : "0 6px 20px rgba(255, 85, 0, 0.4)",
+                : `0 6px 20px rgba(${hexToRgb(themeColor)}, 0.4)`,
             }}
           >
             {isPlaying ? (
@@ -437,8 +465,8 @@ export default function SongUnlockModal({
             left: "12px",
             width: "24px",
             height: "24px",
-            borderTop: "2px solid #ff5500",
-            borderLeft: "2px solid #ff5500",
+            borderTop: `2px solid ${themeColor}`,
+            borderLeft: `2px solid ${themeColor}`,
             borderTopLeftRadius: "8px",
           }}
         />
@@ -449,8 +477,8 @@ export default function SongUnlockModal({
             right: "12px",
             width: "24px",
             height: "24px",
-            borderTop: "2px solid #ff5500",
-            borderRight: "2px solid #ff5500",
+            borderTop: `2px solid ${themeColor}`,
+            borderRight: `2px solid ${themeColor}`,
             borderTopRightRadius: "8px",
           }}
         />
@@ -461,8 +489,8 @@ export default function SongUnlockModal({
             left: "12px",
             width: "24px",
             height: "24px",
-            borderBottom: "2px solid #ff5500",
-            borderLeft: "2px solid #ff5500",
+            borderBottom: `2px solid ${themeColor}`,
+            borderLeft: `2px solid ${themeColor}`,
             borderBottomLeftRadius: "8px",
           }}
         />
@@ -473,8 +501,8 @@ export default function SongUnlockModal({
             right: "12px",
             width: "24px",
             height: "24px",
-            borderBottom: "2px solid #ff5500",
-            borderRight: "2px solid #ff5500",
+            borderBottom: `2px solid ${themeColor}`,
+            borderRight: `2px solid ${themeColor}`,
             borderBottomRightRadius: "8px",
           }}
         />
@@ -486,7 +514,21 @@ export default function SongUnlockModal({
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
-        @keyframes pulse-glow {
+        @keyframes pulse-glow-spotify {
+          0%, 100% {
+            box-shadow: 
+              0 15px 40px rgba(0, 0, 0, 0.5),
+              0 0 80px rgba(29, 185, 84, 0.3),
+              inset 0 0 60px rgba(0, 0, 0, 0.3);
+          }
+          50% {
+            box-shadow: 
+              0 15px 40px rgba(0, 0, 0, 0.5),
+              0 0 100px rgba(29, 185, 84, 0.5),
+              inset 0 0 60px rgba(0, 0, 0, 0.3);
+          }
+        }
+        @keyframes pulse-glow-soundcloud {
           0%, 100% {
             box-shadow: 
               0 15px 40px rgba(0, 0, 0, 0.5),
