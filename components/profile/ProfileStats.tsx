@@ -212,7 +212,7 @@ const ProfileStats: React.FC<ProfileStatsProps> = ({
             </defs>
           </svg>
           
-          {/* Cheat menu indicator */}
+          {/* Environment indicator - Green = Production, Red = Development */}
           <div style={{
             position: 'absolute',
             top: '26px',
@@ -220,8 +220,8 @@ const ProfileStats: React.FC<ProfileStatsProps> = ({
             width: '6px',
             height: '6px',
             borderRadius: '50%',
-            backgroundColor: showSettings ? '#8b5cf6' : crewColor,
-            boxShadow: '0 0 4px currentColor',
+            backgroundColor: showSettings ? '#8b5cf6' : (isDevelopment ? '#ef4444' : '#10b981'),
+            boxShadow: `0 0 4px ${isDevelopment ? '#ef4444' : '#10b981'}`,
             animation: showSettings ? 'pulse 1s infinite' : 'none'
           }} />
         </div>
