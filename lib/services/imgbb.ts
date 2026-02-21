@@ -131,30 +131,12 @@ export async function uploadImageToImgBB(
   }
 
   try {
-    // Mobile-optimized compression settings
-    const options = {
-      // More aggressive for mobile: smaller file size
-      maxSizeMB: isMobile ? 0.3 : 0.5, // 300KB for mobile, 500KB for desktop
-      // Smaller dimensions for mobile to prevent memory issues
-      maxWidthOrHeight: isMobile ? 600 : 800,
-      // DISABLE Web Worker on mobile - causes issues on iOS Safari
-      useWebWorker: !isMobile,
-      fileType: 'image/jpeg',
-      // Faster compression with fewer iterations for mobile
-      maxIteration: isMobile ? 4 : 6,
-      // Initial quality for faster compression
-      initialQuality: isMobile ? 0.7 : 0.8,
-      // Always convert to JPEG for consistency
-      alwaysKeepResolution: false,
-      onProgress: (progress: number) => {
-        if (onProgress) onProgress(progress);
-        console.log(`🖼️ Compression progress: ${progress}%`);
-      },
-    };
-    
     // Race compression against timeout
     let compressedFile: File;
     
+    // NUCLEAR FALLBACK: Wrap everything in try-catch
+    // If ANY error occurs (including "includes" errors from library internals),
+    // skip compression entirely and use original file
     try {
       // Validate file before compression
       if (!file || !file.size || file.size === 0) {
@@ -169,6 +151,27 @@ export async function uploadImageToImgBB(
         lastModified: file.lastModified
       });
       
+      // Mobile-optimized compression settings
+      const options = {
+        // More aggressive for mobile: smaller file size
+        maxSizeMB: isMobile ? 0.3 : 0.5, // 300KB for mobile, 500KB for desktop
+        // Smaller dimensions for mobile to prevent memory issues
+        maxWidthOrHeight: isMobile ? 600 : 800,
+        // DISABLE Web Worker on mobile - causes issues on iOS Safari and some Chrome Android
+        useWebWorker: false, // Always false for maximum compatibility
+        fileType: 'image/jpeg',
+        // Faster compression with fewer iterations for mobile
+        maxIteration: isMobile ? 2 : 4, // Even fewer iterations for reliability
+        // Initial quality for faster compression
+        initialQuality: isMobile ? 0.7 : 0.8,
+        // Always convert to JPEG for consistency
+        alwaysKeepResolution: false,
+        onProgress: (progress: number) => {
+          if (onProgress) onProgress(progress);
+          console.log(`🖼️ Compression progress: ${progress}%`);
+        },
+      };
+      
       const compressionPromise = imageCompression(file, options);
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Compression timeout')), COMPRESSION_TIMEOUT_MS);
@@ -178,28 +181,15 @@ export async function uploadImageToImgBB(
       console.log(`🖼️ Compression completed - New size: ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`);
     } catch (compressionError: any) {
       // Log full error for debugging
-      console.error('🖼️ Compression error details:', {
-        message: compressionError?.message,
-        name: compressionError?.name,
-        stack: compressionError?.stack?.substring(0, 200)
+      console.error('🖼️ Compression error - using original file:', {
+        message: compressionError?.message || 'Unknown error',
+        name: compressionError?.name || 'Unknown'
       });
-      console.warn('⚠️ Compression issue:', compressionError.message);
       
-      // If compression fails, try a simpler resize approach
-      if (compressionError.message === 'Compression timeout' || compressionError.message.includes('Worker')) {
-        console.log('🖼️ Attempting fallback: direct upload with reduced quality...');
-        
-        // Create a canvas-based resize as fallback
-        compressedFile = await resizeImageFallback(file, isMobile ? 600 : 800);
-      } else {
-        // For other errors, try original file if small enough
-        if (file.size < 2 * 1024 * 1024) { // Under 2MB
-          console.log('🖼️ Using original file (small enough)');
-          compressedFile = file;
-        } else {
-          throw new Error(`Image too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Please select a smaller image or try again.`);
-        }
-      }
+      // NUCLEAR FALLBACK: Just use original file
+      // ImgBB accepts files up to 32MB, so this is safe
+      console.log('🖼️ NUCLEAR FALLBACK: Using original file without compression');
+      compressedFile = file;
     }
 
     // Convert compressed file to base64
