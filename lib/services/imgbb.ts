@@ -1,9 +1,98 @@
 import imageCompression from 'browser-image-compression';
 
-// Timeout for upload request (60 seconds for mobile networks)
-const UPLOAD_TIMEOUT_MS = 60000;
-// Max time to spend on compression
-const COMPRESSION_TIMEOUT_MS = 5000;
+// Timeout for upload request (90 seconds for slow mobile networks)
+const UPLOAD_TIMEOUT_MS = 90000;
+// Max time to spend on compression (longer for mobile)
+const COMPRESSION_TIMEOUT_MS = 15000;
+
+/**
+ * Detect if the user is on a mobile device
+ */
+function isMobileDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+    (window.innerWidth <= 768);
+}
+
+/**
+ * Detect HEIC/HEIF format (common on iOS)
+ */
+function isHeicFile(file: File): boolean {
+  const extension = file.name.toLowerCase().endsWith('.heic') || 
+                    file.name.toLowerCase().endsWith('.heif');
+  const mimeType = file.type === 'image/heic' || 
+                   file.type === 'image/heif' ||
+                   file.type === 'image/heic-sequence';
+  
+  return extension || mimeType;
+}
+
+/**
+ * Fallback image resize using canvas (for when compression library fails)
+ * This is more reliable on mobile browsers
+ */
+async function resizeImageFallback(file: File, maxDimension: number): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      
+      // Calculate new dimensions
+      let width = img.width;
+      let height = img.height;
+      
+      if (width > height && width > maxDimension) {
+        height = Math.round((height * maxDimension) / width);
+        width = maxDimension;
+      } else if (height > maxDimension) {
+        width = Math.round((width * maxDimension) / height);
+        height = maxDimension;
+      }
+      
+      // Create canvas and resize
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Could not create canvas context'));
+        return;
+      }
+      
+      // Draw resized image
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      // Convert to blob
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            const resizedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
+              type: 'image/jpeg',
+              lastModified: Date.now()
+            });
+            console.log(`🖼️ Fallback resize: ${img.width}x${img.height} -> ${width}x${height}`);
+            resolve(resizedFile);
+          } else {
+            reject(new Error('Failed to create blob from canvas'));
+          }
+        },
+        'image/jpeg',
+        0.7 // 70% quality for mobile
+      );
+    };
+    
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to load image for resizing'));
+    };
+    
+    img.src = url;
+  });
+}
 
 /**
  * Compress and upload image to ImgBB
@@ -21,37 +110,66 @@ export async function uploadImageToImgBB(
     throw new Error('ImgBB API key is not configured. Please set NEXT_PUBLIC_IMGBB_API_KEY in your environment variables.');
   }
 
+  const isMobile = isMobileDevice();
+  const isHeic = isHeicFile(file);
+  
+  console.log(`🖼️ Upload starting - Mobile: ${isMobile}, HEIC: ${isHeic}, Original size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+
+  // Warn about HEIC format - may need conversion
+  if (isHeic) {
+    console.warn('⚠️ HEIC format detected - attempting conversion. For best results, use JPEG or PNG.');
+  }
+
   try {
-    // Aggressive compression for mobile - get under 500KB
+    // Mobile-optimized compression settings
     const options = {
-      maxSizeMB: 0.5, // 500KB max for fastest mobile upload
-      maxWidthOrHeight: 800, // 800px max dimension
-      useWebWorker: true,
+      // More aggressive for mobile: smaller file size
+      maxSizeMB: isMobile ? 0.3 : 0.5, // 300KB for mobile, 500KB for desktop
+      // Smaller dimensions for mobile to prevent memory issues
+      maxWidthOrHeight: isMobile ? 600 : 800,
+      // DISABLE Web Worker on mobile - causes issues on iOS Safari
+      useWebWorker: !isMobile,
       fileType: 'image/jpeg',
-      // Faster compression settings
-      maxIteration: 6,
+      // Faster compression with fewer iterations for mobile
+      maxIteration: isMobile ? 4 : 6,
+      // Initial quality for faster compression
+      initialQuality: isMobile ? 0.7 : 0.8,
+      // Always convert to JPEG for consistency
+      alwaysKeepResolution: false,
       onProgress: (progress: number) => {
         if (onProgress) onProgress(progress);
+        console.log(`🖼️ Compression progress: ${progress}%`);
       },
     };
     
     // Race compression against timeout
     let compressedFile: File;
-    const compressionPromise = imageCompression(file, options);
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Compression timeout')), COMPRESSION_TIMEOUT_MS);
-    });
     
     try {
+      const compressionPromise = imageCompression(file, options);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Compression timeout')), COMPRESSION_TIMEOUT_MS);
+      });
+      
       compressedFile = await Promise.race([compressionPromise, timeoutPromise]);
-      console.log('🖼️ Compression completed within timeout');
+      console.log(`🖼️ Compression completed - New size: ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`);
     } catch (compressionError: any) {
-      if (compressionError.message === 'Compression timeout') {
-        console.warn('⚠️ Compression timed out, using original file');
-        // Try to resize just by reducing quality without full compression
-        compressedFile = file;
+      console.warn('⚠️ Compression issue:', compressionError.message);
+      
+      // If compression fails, try a simpler resize approach
+      if (compressionError.message === 'Compression timeout' || compressionError.message.includes('Worker')) {
+        console.log('🖼️ Attempting fallback: direct upload with reduced quality...');
+        
+        // Create a canvas-based resize as fallback
+        compressedFile = await resizeImageFallback(file, isMobile ? 600 : 800);
       } else {
-        throw compressionError;
+        // For other errors, try original file if small enough
+        if (file.size < 2 * 1024 * 1024) { // Under 2MB
+          console.log('🖼️ Using original file (small enough)');
+          compressedFile = file;
+        } else {
+          throw new Error(`Image too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Please select a smaller image or try again.`);
+        }
       }
     }
 

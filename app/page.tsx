@@ -93,7 +93,8 @@ import {
   GRAFFITI_TO_MARKER_DESCRIPTION
 } from '@/utils/typeMapping';
 import { calculateRep, RepResult, calculateEnhancedRank, getRankColor, getRankProgress } from '@/utils/repCalculator';
-import { initializeUnlockedColors, getDefaultColorForCrew } from '@/utils/colorUnlocks';
+import { initializeUnlockedColors, getDefaultColorForCrew, ALL_COLORS } from '@/utils/colorUnlocks';
+import { GRAFFITI_STYLES } from '@/utils/graffitiUnlocks';
 import { calculateDistance as calculateDistanceHelper, getTrackNameFromUrl as getTrackNameFromUrlHelper, getTrackSource, getTrackThemeColor } from '@/lib/utils/dropHelpers';
 import { generateAvatarUrl as generateAvatarUrlHelper } from '@/lib/utils/avatarGenerator';
 import { getTrackName as getTrackNameHelper } from '@/constants/all_tracks';
@@ -3314,6 +3315,266 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         myMarkersCount={userMarkers.filter(m => m.userId === user?.uid).length}
         onProfileUpdate={(updatedProfile) => setUserProfile(updatedProfile)}
         onLogout={handleLogout}
+        onAddRep={(amount: number) => {
+          if (!user || !userProfile) return;
+          const addRepAsync = async () => {
+            try {
+              const newRep = userProfile.rep + amount;
+              const newRank = calculateRank(newRep);
+              const newLevel = calculateLevel(newRep);
+              
+              const userRef = doc(db, 'users', user.uid);
+              await updateDoc(userRef, {
+                rep: newRep,
+                rank: newRank,
+                level: newLevel,
+                lastActive: Timestamp.now()
+              });
+              
+              setUserProfile(prev => prev ? {
+                ...prev,
+                rep: newRep,
+                rank: newRank,
+                level: newLevel
+              } : null);
+              
+              alert(`✅ Added ${amount} REP! New total: ${newRep}`);
+            } catch (error) {
+              console.error('Cheat add REP error:', error);
+              alert('Failed to add REP');
+            }
+          };
+          addRepAsync();
+        }}
+        onUnlockAllColors={() => {
+          if (!user || !userProfile) return;
+          const unlockColorsAsync = async () => {
+            try {
+              const allColorIds = ALL_COLORS.map(c => c.id);
+              
+              const userRef = doc(db, 'users', user.uid);
+              await updateDoc(userRef, {
+                unlockedColors: allColorIds,
+                lastActive: Timestamp.now()
+              });
+              
+              setUserProfile(prev => prev ? {
+                ...prev,
+                unlockedColors: allColorIds
+              } : null);
+              
+              alert('✅ All colors unlocked!');
+            } catch (error) {
+              console.error('Cheat unlock colors error:', error);
+              alert('Failed to unlock colors');
+            }
+          };
+          unlockColorsAsync();
+        }}
+        onUnlockAllGraffiti={() => {
+          if (!user || !userProfile) return;
+          const unlockGraffitiAsync = async () => {
+            try {
+              const allGraffitiIds = GRAFFITI_STYLES.map(g => g.id);
+              
+              const userRef = doc(db, 'users', user.uid);
+              await updateDoc(userRef, {
+                unlockedGraffitiTypes: allGraffitiIds,
+                lastActive: Timestamp.now()
+              });
+              
+              setUserProfile(prev => prev ? {
+                ...prev,
+                unlockedGraffitiTypes: allGraffitiIds
+              } : null);
+              
+              alert('✅ All graffiti styles unlocked!');
+            } catch (error) {
+              console.error('Cheat unlock graffiti error:', error);
+              alert('Failed to unlock graffiti styles');
+            }
+          };
+          unlockGraffitiAsync();
+        }}
+        onUnlockRandomSpotify={() => {
+          if (!user || !userProfile) return;
+          const unlockSpotifyAsync = async () => {
+            try {
+              const currentTracks = userProfile.unlockedTracks || [];
+              const result = unlockRandomSpotifyTrack(currentTracks);
+              
+              if (!result.newlyUnlocked) {
+                alert('⚠️ All Spotify tracks already unlocked!');
+                return;
+              }
+              
+              const userRef = doc(db, 'users', user.uid);
+              await updateDoc(userRef, {
+                unlockedTracks: result.newTracks,
+                lastActive: Timestamp.now()
+              });
+              
+              setUserProfile(prev => prev ? {
+                ...prev,
+                unlockedTracks: result.newTracks
+              } : null);
+              
+              setUnlockedTracks(result.newTracks);
+              
+              // Show unlock modal
+              setSongUnlockModal({
+                isOpen: true,
+                trackUrl: result.newlyUnlocked!.url,
+                trackName: result.newlyUnlocked!.name,
+                source: 'CHEAT MENU'
+              });
+            } catch (error) {
+              console.error('Cheat unlock Spotify error:', error);
+              alert('Failed to unlock Spotify track');
+            }
+          };
+          unlockSpotifyAsync();
+        }}
+        onUnlockRandomSoundCloud={() => {
+          if (!user || !userProfile) return;
+          const unlockSoundCloudAsync = async () => {
+            try {
+              const currentTracks = userProfile.unlockedTracks || [];
+              const result = unlockRandomSoundCloudTrack(currentTracks);
+              
+              if (!result.newlyUnlocked) {
+                alert('⚠️ All SoundCloud tracks already unlocked!');
+                return;
+              }
+              
+              const userRef = doc(db, 'users', user.uid);
+              await updateDoc(userRef, {
+                unlockedTracks: result.newTracks,
+                lastActive: Timestamp.now()
+              });
+              
+              setUserProfile(prev => prev ? {
+                ...prev,
+                unlockedTracks: result.newTracks
+              } : null);
+              
+              setUnlockedTracks(result.newTracks);
+              
+              // Show unlock modal
+              setSongUnlockModal({
+                isOpen: true,
+                trackUrl: result.newlyUnlocked!.url,
+                trackName: result.newlyUnlocked!.name,
+                source: 'CHEAT MENU'
+              });
+            } catch (error) {
+              console.error('Cheat unlock SoundCloud error:', error);
+              alert('Failed to unlock SoundCloud track');
+            }
+          };
+          unlockSoundCloudAsync();
+        }}
+        onResetSongs={() => {
+          if (!user || !userProfile) return;
+          const resetSongsAsync = async () => {
+            try {
+              const defaultTracks = getRandomStartTrack();
+              
+              const userRef = doc(db, 'users', user.uid);
+              await updateDoc(userRef, {
+                unlockedTracks: defaultTracks,
+                lastActive: Timestamp.now()
+              });
+              
+              setUserProfile(prev => prev ? {
+                ...prev,
+                unlockedTracks: defaultTracks
+              } : null);
+              
+              setUnlockedTracks(defaultTracks);
+              setCurrentTrackIndex(0);
+              
+              alert('✅ Songs reset to default!');
+            } catch (error) {
+              console.error('Reset songs error:', error);
+              alert('Failed to reset songs');
+            }
+          };
+          resetSongsAsync();
+        }}
+        onMaxRep={() => {
+          if (!user || !userProfile) return;
+          const maxRepAsync = async () => {
+            try {
+              const maxRep = 99999;
+              const newRank = calculateRank(maxRep);
+              const newLevel = calculateLevel(maxRep);
+              
+              const userRef = doc(db, 'users', user.uid);
+              await updateDoc(userRef, {
+                rep: maxRep,
+                rank: newRank,
+                level: newLevel,
+                lastActive: Timestamp.now()
+              });
+              
+              setUserProfile(prev => prev ? {
+                ...prev,
+                rep: maxRep,
+                rank: newRank,
+                level: newLevel
+              } : null);
+              
+              alert(`✅ MAX REP! Now at ${maxRep} REP!`);
+            } catch (error) {
+              console.error('Max REP error:', error);
+              alert('Failed to max REP');
+            }
+          };
+          maxRepAsync();
+        }}
+        onMaxEverything={() => {
+          if (!user || !userProfile) return;
+          const maxEverythingAsync = async () => {
+            try {
+              const allColorIds = ALL_COLORS.map(c => c.id);
+              const allGraffitiIds = GRAFFITI_STYLES.map(g => g.id);
+              const allTracks = [...SPOTIFY_TRACKS, ...HIPHOP_TRACKS];
+              const maxRep = 99999;
+              const newRank = calculateRank(maxRep);
+              const newLevel = calculateLevel(maxRep);
+              
+              const userRef = doc(db, 'users', user.uid);
+              await updateDoc(userRef, {
+                rep: maxRep,
+                rank: newRank,
+                level: newLevel,
+                unlockedColors: allColorIds,
+                unlockedGraffitiTypes: allGraffitiIds,
+                unlockedTracks: allTracks,
+                lastActive: Timestamp.now()
+              });
+              
+              setUserProfile(prev => prev ? {
+                ...prev,
+                rep: maxRep,
+                rank: newRank,
+                level: newLevel,
+                unlockedColors: allColorIds,
+                unlockedGraffitiTypes: allGraffitiIds,
+                unlockedTracks: allTracks
+              } : null);
+              
+              setUnlockedTracks(allTracks);
+              
+              alert('🚀 MAX EVERYTHING! All colors, all graffiti, all songs, max REP!');
+            } catch (error) {
+              console.error('Max everything error:', error);
+              alert('Failed to max everything');
+            }
+          };
+          maxEverythingAsync();
+        }}
         onResetProfile={async () => {
           if (!window.confirm('Reset ALL your markers, drops and stats permanently?\n\nThis will:\n• Delete all your markers\n• Delete all your drops\n• Reset REP to 0\n• Reset Rank to TOY\n• Sign you out immediately')) return;
           if (!user || !userProfile) return;

@@ -104,25 +104,87 @@ const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
     }
   }, [handleFileSelect]);
 
+  // Stop camera
+  const stopCamera = useCallback(() => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+      setCameraMode(false);
+    }
+  }, []);
+
+  // Handle close - defined before handleUpload since it's used there
+  const handleClose = useCallback(() => {
+    setSelectedFile(null);
+    setPreviewUrl('');
+    setError(null);
+    setUploadProgress(0);
+    setIsUploading(false);
+    setCameraMode(false);
+    stopCamera();
+    onClose();
+  }, [onClose, stopCamera]);
+
   // Handle upload
   const handleUpload = useCallback(async () => {
     if (!selectedFile) return;
     
     setIsUploading(true);
     setError(null);
+    setUploadProgress(0);
     
     try {
-      // Simulate upload progress
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => Math.min(prev + 10, 90));
-      }, 100);
+      // Check file size first
+      const fileSizeMB = selectedFile.size / (1024 * 1024);
+      console.log(`📸 Starting upload - File size: ${fileSizeMB.toFixed(2)}MB`);
       
-      const imageUrl = await uploadImageToImgBB(selectedFile);
+      // Warn about very large files on mobile
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (isMobile && fileSizeMB > 10) {
+        console.warn('⚠️ Large file on mobile - upload may take longer');
+      }
+      
+      // Progress simulation
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => Math.min(prev + 5, 85));
+      }, 200);
+      
+      let imageUrl: string;
+      
+      try {
+        // Upload to ImgBB
+        imageUrl = await uploadImageToImgBB(selectedFile, (progress) => {
+          // Map compression progress to 0-50%
+          setUploadProgress(Math.min(progress * 0.5, 50));
+        });
+        console.log('✅ Image uploaded to ImgBB:', imageUrl);
+      } catch (imgbbError: any) {
+        clearInterval(progressInterval);
+        
+        // Provide user-friendly error messages
+        let errorMessage = 'Failed to upload image';
+        
+        if (imgbbError.message?.includes('API key')) {
+          errorMessage = 'Server configuration error. Please contact support.';
+        } else if (imgbbError.message?.includes('timeout')) {
+          errorMessage = 'Upload timed out. Please try a smaller image or check your connection.';
+        } else if (imgbbError.message?.includes('too large')) {
+          errorMessage = imgbbError.message;
+        } else if (imgbbError.message?.includes('network') || imgbbError.message?.includes('fetch')) {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        } else {
+          errorMessage = `Upload failed: ${imgbbError.message || 'Unknown error'}`;
+        }
+        
+        throw new Error(errorMessage);
+      }
       
       // Extract GPS coordinates from EXIF data
       let location: { lat: number; lng: number } | undefined = undefined;
       
       try {
+        setUploadProgress(90);
         const exifData = await exifr.gps(selectedFile);
         
         if (exifData && exifData.latitude !== undefined && exifData.longitude !== undefined) {
@@ -142,6 +204,7 @@ const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
       clearInterval(progressInterval);
       setUploadProgress(100);
       
+      // Small delay for UX feedback
       setTimeout(() => {
         onPhotoSelect({
           url: imageUrl,
@@ -149,14 +212,15 @@ const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
           location: location
         });
         handleClose();
-      }, 500);
+      }, 300);
       
     } catch (error: any) {
-      setError(error.message || 'Failed to upload image');
+      console.error('❌ Upload error:', error);
+      setError(error.message || 'Failed to upload image. Please try again.');
       setIsUploading(false);
       setUploadProgress(0);
     }
-  }, [selectedFile, onPhotoSelect]);
+  }, [selectedFile, onPhotoSelect, handleClose]);
 
   // Handle camera capture
   const handleCameraCapture = useCallback(async () => {
@@ -264,28 +328,6 @@ const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
       setError(errorMessage);
     }
   }, [cameraMode]);
-
-  // Stop camera
-  const stopCamera = useCallback(() => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-      setCameraMode(false);
-    }
-  }, []);
-
-  // Handle close
-  const handleClose = useCallback(() => {
-    setSelectedFile(null);
-    setPreviewUrl('');
-    setError(null);
-    setUploadProgress(0);
-    setIsUploading(false);
-    setCameraMode(false);
-    stopCamera();
-    onClose();
-  }, [onClose, stopCamera]);
 
   // Test camera access with minimal constraints
   const testBasicCamera = useCallback(async () => {
