@@ -181,23 +181,40 @@ const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
       }
       
       // Extract GPS coordinates from EXIF data
+      // Wrapped in extra safety for Chrome Android compatibility
       let location: { lat: number; lng: number } | undefined = undefined;
       
       try {
         setUploadProgress(90);
-        const exifData = await exifr.gps(selectedFile);
         
-        if (exifData && exifData.latitude !== undefined && exifData.longitude !== undefined) {
-          location = {
-            lat: exifData.latitude,
-            lng: exifData.longitude
-          };
-          console.log('📍 GPS coordinates extracted from photo:', location);
+        // Safely check if file is valid before EXIF extraction
+        if (!selectedFile || !(selectedFile instanceof Blob)) {
+          console.log('📍 Invalid file object, skipping EXIF extraction');
         } else {
-          console.log('📍 No GPS data found in photo EXIF');
+          // Add timeout and safety wrapper for exifr
+          const exifPromise = exifr.gps(selectedFile);
+          const timeoutPromise = new Promise<null>((_, reject) => {
+            setTimeout(() => reject(new Error('EXIF timeout')), 5000);
+          });
+          
+          const exifData = await Promise.race([exifPromise, timeoutPromise]).catch((err) => {
+            console.log('📍 EXIF extraction failed:', err?.message || err);
+            return null;
+          });
+          
+          if (exifData && typeof exifData.latitude === 'number' && typeof exifData.longitude === 'number') {
+            location = {
+              lat: exifData.latitude,
+              lng: exifData.longitude
+            };
+            console.log('📍 GPS coordinates extracted from photo:', location);
+          } else {
+            console.log('📍 No GPS data found in photo EXIF');
+          }
         }
-      } catch (exifError) {
-        console.log('📍 Could not extract EXIF data:', exifError);
+      } catch (exifError: any) {
+        // Catch any error including "includes" errors from exifr internals
+        console.log('📍 Could not extract EXIF data:', exifError?.message || exifError);
         // Continue without location - will use user's current GPS position
       }
       

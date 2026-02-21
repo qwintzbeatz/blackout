@@ -156,6 +156,19 @@ export async function uploadImageToImgBB(
     let compressedFile: File;
     
     try {
+      // Validate file before compression
+      if (!file || !file.size || file.size === 0) {
+        throw new Error('Invalid file: empty or missing');
+      }
+      
+      // Log file details for debugging Chrome Android issues
+      console.log(`🖼️ File details:`, {
+        name: file.name || 'unnamed',
+        type: file.type || 'unknown',
+        size: file.size,
+        lastModified: file.lastModified
+      });
+      
       const compressionPromise = imageCompression(file, options);
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Compression timeout')), COMPRESSION_TIMEOUT_MS);
@@ -164,6 +177,12 @@ export async function uploadImageToImgBB(
       compressedFile = await Promise.race([compressionPromise, timeoutPromise]);
       console.log(`🖼️ Compression completed - New size: ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`);
     } catch (compressionError: any) {
+      // Log full error for debugging
+      console.error('🖼️ Compression error details:', {
+        message: compressionError?.message,
+        name: compressionError?.name,
+        stack: compressionError?.stack?.substring(0, 200)
+      });
       console.warn('⚠️ Compression issue:', compressionError.message);
       
       // If compression fails, try a simpler resize approach
