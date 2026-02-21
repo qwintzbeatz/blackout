@@ -17,15 +17,20 @@ function isMobileDevice(): boolean {
 
 /**
  * Detect HEIC/HEIF format (common on iOS)
+ * Safe version with null checks for camera-captured blobs
  */
 function isHeicFile(file: File): boolean {
-  const extension = file.name.toLowerCase().endsWith('.heic') || 
-                    file.name.toLowerCase().endsWith('.heif');
-  const mimeType = file.type === 'image/heic' || 
-                   file.type === 'image/heif' ||
-                   file.type === 'image/heic-sequence';
+  // Safely check file name (camera blobs may not have proper names)
+  const fileName = file?.name?.toLowerCase() || '';
+  const extension = fileName.endsWith('.heic') || fileName.endsWith('.heif');
   
-  return extension || mimeType;
+  // Safely check mime type
+  const mimeType = file?.type || '';
+  const isHeicMime = mimeType === 'image/heic' || 
+                     mimeType === 'image/heif' ||
+                     mimeType === 'image/heic-sequence';
+  
+  return extension || isHeicMime;
 }
 
 /**
@@ -70,7 +75,12 @@ async function resizeImageFallback(file: File, maxDimension: number): Promise<Fi
       canvas.toBlob(
         (blob) => {
           if (blob) {
-            const resizedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
+            // Safely handle file name (camera blobs may not have names)
+            const safeName = (file?.name && file.name.length > 0) 
+              ? file.name.replace(/\.[^/.]+$/, '.jpg') 
+              : `photo_${Date.now()}.jpg`;
+            
+            const resizedFile = new File([blob], safeName, {
               type: 'image/jpeg',
               lastModified: Date.now()
             });

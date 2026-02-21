@@ -257,7 +257,9 @@ const unlockRandomTrack = (currentUnlocked: string[]): { newTracks: string[], ne
 };
 
 // Helper function to get track name from URL
-const getTrackNameFromUrl = (url: string): string => {
+// Safe version with null checks
+const getTrackNameFromUrl = (url: string | undefined | null): string => {
+  if (!url) return 'Unknown Track';
   if (url === 'blackout-classic.mp3') return 'Blackout (Default)';
   if (url.includes('open.spotify.com/')) {
     // Use the getTrackName function from all_tracks

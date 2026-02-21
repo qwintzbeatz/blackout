@@ -320,7 +320,7 @@ const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
           errorMessage = '📷 No camera found. Please use file upload instead.';
         } else if (error.name === 'NotReadableError') {
           errorMessage = '📹 Camera is already in use. Please close other apps using camera.';
-        } else if (error.message.includes('HTTPS')) {
+        } else if (error.message?.includes('HTTPS')) {
           errorMessage = '🔒 Camera requires HTTPS connection. Please use file upload.';
         }
       }
