@@ -1,166 +1,9 @@
 import imageCompression from 'browser-image-compression';
 
-// Timeout for upload request (90 seconds for slow mobile networks)
-const UPLOAD_TIMEOUT_MS = 90000;
-// Max time to spend on compression (longer for mobile)
-const COMPRESSION_TIMEOUT_MS = 15000;
-
-/**
- * Detect if the user is on a mobile device
- */
-function isMobileDevice(): boolean {
-  if (typeof window === 'undefined') return false;
-  
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-    (window.innerWidth <= 768);
-}
-
-/**
- * Detect HEIC/HEIF format (common on iOS)
- * Safe version with null checks for camera-captured blobs
- */
-function isHeicFile(file: File): boolean {
-  // Safely check file name (camera blobs may not have proper names)
-  const fileName = file?.name?.toLowerCase() || '';
-  const extension = fileName.endsWith('.heic') || fileName.endsWith('.heif');
-  
-  // Safely check mime type
-  const mimeType = file?.type || '';
-  const isHeicMime = mimeType === 'image/heic' || 
-                     mimeType === 'image/heif' ||
-                     mimeType === 'image/heic-sequence';
-  
-  return extension || isHeicMime;
-}
-
-/**
- * Fallback image resize using canvas (for when compression library fails)
- * This is more reliable on mobile browsers
- */
-async function resizeImageFallback(file: File, maxDimension: number): Promise<File> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      
-      // Calculate new dimensions
-      let width = img.width;
-      let height = img.height;
-      
-      if (width > height && width > maxDimension) {
-        height = Math.round((height * maxDimension) / width);
-        width = maxDimension;
-      } else if (height > maxDimension) {
-        width = Math.round((width * maxDimension) / height);
-        height = maxDimension;
-      }
-      
-      // Create canvas and resize
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        reject(new Error('Could not create canvas context'));
-        return;
-      }
-      
-      // Draw resized image
-      ctx.drawImage(img, 0, 0, width, height);
-      
-      // Convert to blob
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            // Safely handle file name (camera blobs may not have names)
-            const safeName = (file?.name && file.name.length > 0) 
-              ? file.name.replace(/\.[^/.]+$/, '.jpg') 
-              : `photo_${Date.now()}.jpg`;
-            
-            const resizedFile = new File([blob], safeName, {
-              type: 'image/jpeg',
-              lastModified: Date.now()
-            });
-            console.log(`🖼️ Fallback resize: ${img.width}x${img.height} -> ${width}x${height}`);
-            resolve(resizedFile);
-          } else {
-            reject(new Error('Failed to create blob from canvas'));
-          }
-        },
-        'image/jpeg',
-        0.7 // 70% quality for mobile
-      );
-    };
-    
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Failed to load image for resizing'));
-    };
-    
-    img.src = url;
-  });
-}
-
-/**
- * Sanitize file object for Chrome Android compatibility
- * Chrome Android camera blobs may be missing type/name properties
- * This creates a new File with guaranteed properties
- */
-function sanitizeFile(file: File): File {
-  // Check if file needs sanitization
-  const needsSanitization = 
-    !file.type || 
-    file.type === '' || 
-    !file.name || 
-    file.name === '' ||
-    file.name === 'undefined' ||
-    file.name === 'null';
-  
-  if (!needsSanitization) {
-    return file; // File is fine, return as-is
-  }
-  
-  console.log('🖼️ Sanitizing file for Chrome Android compatibility...');
-  
-  // Determine file type - default to jpeg for camera photos
-  let mimeType = file.type;
-  if (!mimeType || mimeType === '') {
-    // Try to guess from name
-    const ext = file.name?.split('.').pop()?.toLowerCase();
-    if (ext === 'png') mimeType = 'image/png';
-    else if (ext === 'gif') mimeType = 'image/gif';
-    else if (ext === 'webp') mimeType = 'image/webp';
-    else mimeType = 'image/jpeg'; // Default for camera photos
-  }
-  
-  // Create safe filename
-  let safeName = file.name;
-  if (!safeName || safeName === '' || safeName === 'undefined' || safeName === 'null') {
-    const timestamp = Date.now();
-    const ext = mimeType === 'image/png' ? 'png' : 
-                mimeType === 'image/gif' ? 'gif' : 
-                mimeType === 'image/webp' ? 'webp' : 'jpg';
-    safeName = `photo_${timestamp}.${ext}`;
-  }
-  
-  // Create new File object with guaranteed properties
-  const sanitizedFile = new File([file], safeName, {
-    type: mimeType,
-    lastModified: file.lastModified || Date.now()
-  });
-  
-  console.log(`🖼️ Sanitized file:`, {
-    originalName: file.name || 'missing',
-    originalType: file.type || 'missing',
-    sanitizedName: safeName,
-    sanitizedType: mimeType
-  });
-  
-  return sanitizedFile;
-}
+// Timeout for upload request (60 seconds for mobile networks)
+const UPLOAD_TIMEOUT_MS = 60000;
+// Max time to spend on compression
+const COMPRESSION_TIMEOUT_MS = 5000;
 
 /**
  * Compress and upload image to ImgBB
@@ -178,80 +21,38 @@ export async function uploadImageToImgBB(
     throw new Error('ImgBB API key is not configured. Please set NEXT_PUBLIC_IMGBB_API_KEY in your environment variables.');
   }
 
-  // CRITICAL: Sanitize file FIRST for Chrome Android compatibility
-  // This must happen BEFORE any library tries to access file properties
-  const sanitizedFile = sanitizeFile(file);
-  
-  const isMobile = isMobileDevice();
-  const isHeic = isHeicFile(sanitizedFile);
-  
-  console.log(`🖼️ Upload starting - Mobile: ${isMobile}, HEIC: ${isHeic}, Original size: ${(sanitizedFile.size / 1024 / 1024).toFixed(2)}MB`);
-
-  // Warn about HEIC format - may need conversion
-  if (isHeic) {
-    console.warn('⚠️ HEIC format detected - attempting conversion. For best results, use JPEG or PNG.');
-  }
-
   try {
+    // Aggressive compression for mobile - get under 500KB
+    const options = {
+      maxSizeMB: 0.5, // 500KB max for fastest mobile upload
+      maxWidthOrHeight: 800, // 800px max dimension
+      useWebWorker: true,
+      fileType: 'image/jpeg',
+      // Faster compression settings
+      maxIteration: 6,
+      onProgress: (progress: number) => {
+        if (onProgress) onProgress(progress);
+      },
+    };
+    
     // Race compression against timeout
     let compressedFile: File;
+    const compressionPromise = imageCompression(file, options);
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Compression timeout')), COMPRESSION_TIMEOUT_MS);
+    });
     
-    // NUCLEAR FALLBACK: Wrap everything in try-catch
-    // If ANY error occurs (including "includes" errors from library internals),
-    // skip compression entirely and use original file
     try {
-      // Validate file before compression (use sanitized file!)
-      if (!sanitizedFile || !sanitizedFile.size || sanitizedFile.size === 0) {
-        throw new Error('Invalid file: empty or missing');
-      }
-      
-      // Log file details for debugging Chrome Android issues
-      console.log(`🖼️ File details:`, {
-        name: sanitizedFile.name || 'unnamed',
-        type: sanitizedFile.type || 'unknown',
-        size: sanitizedFile.size,
-        lastModified: sanitizedFile.lastModified
-      });
-      
-      // Mobile-optimized compression settings
-      const options = {
-        // More aggressive for mobile: smaller file size
-        maxSizeMB: isMobile ? 0.3 : 0.5, // 300KB for mobile, 500KB for desktop
-        // Smaller dimensions for mobile to prevent memory issues
-        maxWidthOrHeight: isMobile ? 600 : 800,
-        // DISABLE Web Worker on mobile - causes issues on iOS Safari and some Chrome Android
-        useWebWorker: false, // Always false for maximum compatibility
-        fileType: 'image/jpeg',
-        // Faster compression with fewer iterations for mobile
-        maxIteration: isMobile ? 2 : 4, // Even fewer iterations for reliability
-        // Initial quality for faster compression
-        initialQuality: isMobile ? 0.7 : 0.8,
-        // Always convert to JPEG for consistency
-        alwaysKeepResolution: false,
-        onProgress: (progress: number) => {
-          if (onProgress) onProgress(progress);
-          console.log(`🖼️ Compression progress: ${progress}%`);
-        },
-      };
-      
-      const compressionPromise = imageCompression(sanitizedFile, options);
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Compression timeout')), COMPRESSION_TIMEOUT_MS);
-      });
-      
       compressedFile = await Promise.race([compressionPromise, timeoutPromise]);
-      console.log(`🖼️ Compression completed - New size: ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`);
+      console.log('🖼️ Compression completed within timeout');
     } catch (compressionError: any) {
-      // Log full error for debugging
-      console.error('🖼️ Compression error - using original file:', {
-        message: compressionError?.message || 'Unknown error',
-        name: compressionError?.name || 'Unknown'
-      });
-      
-      // NUCLEAR FALLBACK: Just use sanitized file (skip compression)
-      // ImgBB accepts files up to 32MB, so this is safe
-      console.log('🖼️ NUCLEAR FALLBACK: Using sanitized file without compression');
-      compressedFile = sanitizedFile;
+      if (compressionError.message === 'Compression timeout') {
+        console.warn('⚠️ Compression timed out, using original file');
+        // Try to resize just by reducing quality without full compression
+        compressedFile = file;
+      } else {
+        throw compressionError;
+      }
     }
 
     // Convert compressed file to base64

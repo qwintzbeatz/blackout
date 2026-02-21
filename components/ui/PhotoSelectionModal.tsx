@@ -104,124 +104,44 @@ const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
     }
   }, [handleFileSelect]);
 
-  // Stop camera
-  const stopCamera = useCallback(() => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-      setCameraMode(false);
-    }
-  }, []);
-
-  // Handle close - defined before handleUpload since it's used there
-  const handleClose = useCallback(() => {
-    setSelectedFile(null);
-    setPreviewUrl('');
-    setError(null);
-    setUploadProgress(0);
-    setIsUploading(false);
-    setCameraMode(false);
-    stopCamera();
-    onClose();
-  }, [onClose, stopCamera]);
-
   // Handle upload
   const handleUpload = useCallback(async () => {
     if (!selectedFile) return;
     
     setIsUploading(true);
     setError(null);
-    setUploadProgress(0);
     
     try {
-      // Check file size first
-      const fileSizeMB = selectedFile.size / (1024 * 1024);
-      console.log(`📸 Starting upload - File size: ${fileSizeMB.toFixed(2)}MB`);
-      
-      // Warn about very large files on mobile
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      if (isMobile && fileSizeMB > 10) {
-        console.warn('⚠️ Large file on mobile - upload may take longer');
-      }
-      
-      // Progress simulation
+      // Simulate upload progress
       const progressInterval = setInterval(() => {
-        setUploadProgress(prev => Math.min(prev + 5, 85));
-      }, 200);
+        setUploadProgress(prev => Math.min(prev + 10, 90));
+      }, 100);
       
-      let imageUrl: string;
-      
-      try {
-        // Upload to ImgBB
-        imageUrl = await uploadImageToImgBB(selectedFile, (progress) => {
-          // Map compression progress to 0-50%
-          setUploadProgress(Math.min(progress * 0.5, 50));
-        });
-        console.log('✅ Image uploaded to ImgBB:', imageUrl);
-      } catch (imgbbError: any) {
-        clearInterval(progressInterval);
-        
-        // Provide user-friendly error messages
-        let errorMessage = 'Failed to upload image';
-        
-        if (imgbbError.message?.includes('API key')) {
-          errorMessage = 'Server configuration error. Please contact support.';
-        } else if (imgbbError.message?.includes('timeout')) {
-          errorMessage = 'Upload timed out. Please try a smaller image or check your connection.';
-        } else if (imgbbError.message?.includes('too large')) {
-          errorMessage = imgbbError.message;
-        } else if (imgbbError.message?.includes('network') || imgbbError.message?.includes('fetch')) {
-          errorMessage = 'Network error. Please check your internet connection and try again.';
-        } else {
-          errorMessage = `Upload failed: ${imgbbError.message || 'Unknown error'}`;
-        }
-        
-        throw new Error(errorMessage);
-      }
+      const imageUrl = await uploadImageToImgBB(selectedFile);
       
       // Extract GPS coordinates from EXIF data
-      // Wrapped in extra safety for Chrome Android compatibility
       let location: { lat: number; lng: number } | undefined = undefined;
       
       try {
-        setUploadProgress(90);
+        const exifData = await exifr.gps(selectedFile);
         
-        // Safely check if file is valid before EXIF extraction
-        if (!selectedFile || !(selectedFile instanceof Blob)) {
-          console.log('📍 Invalid file object, skipping EXIF extraction');
+        if (exifData && exifData.latitude !== undefined && exifData.longitude !== undefined) {
+          location = {
+            lat: exifData.latitude,
+            lng: exifData.longitude
+          };
+          console.log('📍 GPS coordinates extracted from photo:', location);
         } else {
-          // Add timeout and safety wrapper for exifr
-          const exifPromise = exifr.gps(selectedFile);
-          const timeoutPromise = new Promise<null>((_, reject) => {
-            setTimeout(() => reject(new Error('EXIF timeout')), 5000);
-          });
-          
-          const exifData = await Promise.race([exifPromise, timeoutPromise]).catch((err) => {
-            console.log('📍 EXIF extraction failed:', err?.message || err);
-            return null;
-          });
-          
-          if (exifData && typeof exifData.latitude === 'number' && typeof exifData.longitude === 'number') {
-            location = {
-              lat: exifData.latitude,
-              lng: exifData.longitude
-            };
-            console.log('📍 GPS coordinates extracted from photo:', location);
-          } else {
-            console.log('📍 No GPS data found in photo EXIF');
-          }
+          console.log('📍 No GPS data found in photo EXIF');
         }
-      } catch (exifError: any) {
-        // Catch any error including "includes" errors from exifr internals
-        console.log('📍 Could not extract EXIF data:', exifError?.message || exifError);
+      } catch (exifError) {
+        console.log('📍 Could not extract EXIF data:', exifError);
         // Continue without location - will use user's current GPS position
       }
       
       clearInterval(progressInterval);
       setUploadProgress(100);
       
-      // Small delay for UX feedback
       setTimeout(() => {
         onPhotoSelect({
           url: imageUrl,
@@ -229,15 +149,14 @@ const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
           location: location
         });
         handleClose();
-      }, 300);
+      }, 500);
       
     } catch (error: any) {
-      console.error('❌ Upload error:', error);
-      setError(error.message || 'Failed to upload image. Please try again.');
+      setError(error.message || 'Failed to upload image');
       setIsUploading(false);
       setUploadProgress(0);
     }
-  }, [selectedFile, onPhotoSelect, handleClose]);
+  }, [selectedFile, onPhotoSelect]);
 
   // Handle camera capture
   const handleCameraCapture = useCallback(async () => {
@@ -337,7 +256,7 @@ const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
           errorMessage = '📷 No camera found. Please use file upload instead.';
         } else if (error.name === 'NotReadableError') {
           errorMessage = '📹 Camera is already in use. Please close other apps using camera.';
-        } else if (error.message?.includes('HTTPS')) {
+        } else if (error.message.includes('HTTPS')) {
           errorMessage = '🔒 Camera requires HTTPS connection. Please use file upload.';
         }
       }
@@ -345,6 +264,28 @@ const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
       setError(errorMessage);
     }
   }, [cameraMode]);
+
+  // Stop camera
+  const stopCamera = useCallback(() => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+      setCameraMode(false);
+    }
+  }, []);
+
+  // Handle close
+  const handleClose = useCallback(() => {
+    setSelectedFile(null);
+    setPreviewUrl('');
+    setError(null);
+    setUploadProgress(0);
+    setIsUploading(false);
+    setCameraMode(false);
+    stopCamera();
+    onClose();
+  }, [onClose, stopCamera]);
 
   // Test camera access with minimal constraints
   const testBasicCamera = useCallback(async () => {
