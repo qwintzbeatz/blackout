@@ -105,6 +105,64 @@ async function resizeImageFallback(file: File, maxDimension: number): Promise<Fi
 }
 
 /**
+ * Sanitize file object for Chrome Android compatibility
+ * Chrome Android camera blobs may be missing type/name properties
+ * This creates a new File with guaranteed properties
+ */
+function sanitizeFile(file: File): File {
+  // Check if file needs sanitization
+  const needsSanitization = 
+    !file.type || 
+    file.type === '' || 
+    !file.name || 
+    file.name === '' ||
+    file.name === 'undefined' ||
+    file.name === 'null';
+  
+  if (!needsSanitization) {
+    return file; // File is fine, return as-is
+  }
+  
+  console.log('🖼️ Sanitizing file for Chrome Android compatibility...');
+  
+  // Determine file type - default to jpeg for camera photos
+  let mimeType = file.type;
+  if (!mimeType || mimeType === '') {
+    // Try to guess from name
+    const ext = file.name?.split('.').pop()?.toLowerCase();
+    if (ext === 'png') mimeType = 'image/png';
+    else if (ext === 'gif') mimeType = 'image/gif';
+    else if (ext === 'webp') mimeType = 'image/webp';
+    else mimeType = 'image/jpeg'; // Default for camera photos
+  }
+  
+  // Create safe filename
+  let safeName = file.name;
+  if (!safeName || safeName === '' || safeName === 'undefined' || safeName === 'null') {
+    const timestamp = Date.now();
+    const ext = mimeType === 'image/png' ? 'png' : 
+                mimeType === 'image/gif' ? 'gif' : 
+                mimeType === 'image/webp' ? 'webp' : 'jpg';
+    safeName = `photo_${timestamp}.${ext}`;
+  }
+  
+  // Create new File object with guaranteed properties
+  const sanitizedFile = new File([file], safeName, {
+    type: mimeType,
+    lastModified: file.lastModified || Date.now()
+  });
+  
+  console.log(`🖼️ Sanitized file:`, {
+    originalName: file.name || 'missing',
+    originalType: file.type || 'missing',
+    sanitizedName: safeName,
+    sanitizedType: mimeType
+  });
+  
+  return sanitizedFile;
+}
+
+/**
  * Compress and upload image to ImgBB
  * @param file - The image file to upload
  * @param onProgress - Optional callback for compression progress (0-100)
@@ -120,10 +178,14 @@ export async function uploadImageToImgBB(
     throw new Error('ImgBB API key is not configured. Please set NEXT_PUBLIC_IMGBB_API_KEY in your environment variables.');
   }
 
-  const isMobile = isMobileDevice();
-  const isHeic = isHeicFile(file);
+  // CRITICAL: Sanitize file FIRST for Chrome Android compatibility
+  // This must happen BEFORE any library tries to access file properties
+  const sanitizedFile = sanitizeFile(file);
   
-  console.log(`🖼️ Upload starting - Mobile: ${isMobile}, HEIC: ${isHeic}, Original size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+  const isMobile = isMobileDevice();
+  const isHeic = isHeicFile(sanitizedFile);
+  
+  console.log(`🖼️ Upload starting - Mobile: ${isMobile}, HEIC: ${isHeic}, Original size: ${(sanitizedFile.size / 1024 / 1024).toFixed(2)}MB`);
 
   // Warn about HEIC format - may need conversion
   if (isHeic) {
@@ -138,17 +200,17 @@ export async function uploadImageToImgBB(
     // If ANY error occurs (including "includes" errors from library internals),
     // skip compression entirely and use original file
     try {
-      // Validate file before compression
-      if (!file || !file.size || file.size === 0) {
+      // Validate file before compression (use sanitized file!)
+      if (!sanitizedFile || !sanitizedFile.size || sanitizedFile.size === 0) {
         throw new Error('Invalid file: empty or missing');
       }
       
       // Log file details for debugging Chrome Android issues
       console.log(`🖼️ File details:`, {
-        name: file.name || 'unnamed',
-        type: file.type || 'unknown',
-        size: file.size,
-        lastModified: file.lastModified
+        name: sanitizedFile.name || 'unnamed',
+        type: sanitizedFile.type || 'unknown',
+        size: sanitizedFile.size,
+        lastModified: sanitizedFile.lastModified
       });
       
       // Mobile-optimized compression settings
@@ -172,7 +234,7 @@ export async function uploadImageToImgBB(
         },
       };
       
-      const compressionPromise = imageCompression(file, options);
+      const compressionPromise = imageCompression(sanitizedFile, options);
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Compression timeout')), COMPRESSION_TIMEOUT_MS);
       });
@@ -186,10 +248,10 @@ export async function uploadImageToImgBB(
         name: compressionError?.name || 'Unknown'
       });
       
-      // NUCLEAR FALLBACK: Just use original file
+      // NUCLEAR FALLBACK: Just use sanitized file (skip compression)
       // ImgBB accepts files up to 32MB, so this is safe
-      console.log('🖼️ NUCLEAR FALLBACK: Using original file without compression');
-      compressedFile = file;
+      console.log('🖼️ NUCLEAR FALLBACK: Using sanitized file without compression');
+      compressedFile = sanitizedFile;
     }
 
     // Convert compressed file to base64
