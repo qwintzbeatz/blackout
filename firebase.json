@@ -1,23 +1,29 @@
 {
   "emulators": {
     "auth": {
-      "port": 9200
+      "port": 9200,
+      "host": "0.0.0.0"
     },
     "firestore": {
-      "port": 8090
+      "port": 8090,
+      "host": "0.0.0.0"
     },
     "hub": {
-      "port": 4410
+      "port": 4410,
+      "host": "0.0.0.0"
     },
     "ui": {
       "enabled": true,
-      "port": 4010
+      "port": 4010,
+      "host": "0.0.0.0"
     },
     "logging": {
-      "port": 4510
+      "port": 4510,
+      "host": "0.0.0.0"
     },
     "database": {
-      "port": 9010
+      "port": 9010,
+      "host": "0.0.0.0"
     },
     "singleProjectMode": true
   }

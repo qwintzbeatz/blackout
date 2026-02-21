@@ -561,6 +561,7 @@ const HomeComponent = () => {
   const [showMusicPanel, setShowMusicPanel] = useState(false);
   const [showBlackbookPanel, setShowBlackbookPanel] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showSatelliteView, setShowSatelliteView] = useState(false);
 
   // Mobile detection state
   const [isMobile, setIsMobile] = useState(false);
@@ -2529,61 +2530,6 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         />
       </div>
       
-      {/* 🆕 Day/Night Time Indicator */}
-      <div style={{
-        position: 'fixed',
-        bottom: '80px',
-        left: '145px',
-        zIndex: 1100,
-        background: isNight ? 'rgba(30, 41, 59, 0.9)' : 'rgba(248, 250, 252, 0.9)',
-        padding: '8px 12px',
-        borderRadius: '8px',
-        border: isNight ? '1px solid rgba(148, 163, 184, 0.3)' : '1px solid rgba(148, 163, 184, 0.3)',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        transition: 'all 0.3s ease'
-      }}>
-        {/* Sun/Moon Icon */}
-        <div style={{
-          fontSize: '20px',
-          animation: isNight ? 'pulse 2s infinite' : 'spin 10s linear infinite'
-        }}>
-          {isNight ? '🌙' : '☀️'}
-        </div>
-        
-        {/* Time Display */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-start'
-        }}>
-          <div style={{
-            fontSize: '14px',
-            fontWeight: 'bold',
-            color: isNight ? '#e2e8f0' : '#1e293b',
-            fontFamily: 'monospace'
-          }}>
-            {timeString}
-          </div>
-          <div style={{
-            fontSize: '10px',
-            color: isNight ? '#94a3b8' : '#64748b',
-            textTransform: 'capitalize'
-          }}>
-            {isNight ? 'Night' : 'Day'} Mode
-          </div>
-        </div>
-      </div>
-      
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
           
       <MapContainer
         center={
@@ -2615,8 +2561,14 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           }
         }}
       >
-        {/* 🆕 Day/Night Tile Layer - Switches based on time */}
-        {isNight ? (
+        {/* 🆕 Tile Layer - Satellite, Day, or Night based on settings */}
+        {showSatelliteView ? (
+          // Satellite view - Esri World Imagery
+          <TileLayer
+            attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          />
+        ) : isNight ? (
           // Night mode - Dark tiles
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/attribution">CARTO</a>'
@@ -3353,46 +3305,6 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         onPhotoSelect={handlePhotoSelect}
       />
 
-      {/* Offline/Online Mode Toggle */}
-      <button
-        onClick={() => {
-          if (!isOfflineMode) {
-            if (gpsPosition) {
-              setLastKnownPosition(gpsPosition);
-              console.log('Switched to offline mode');
-              alert('Switched to offline mode! GPS tracking paused.');
-            } else {
-              alert('No GPS position available. Please get GPS location first before going offline.');
-              return;
-            }
-            setIsOfflineMode(true);
-            stopTracking();
-          } else {
-            setIsOfflineMode(false);
-            if (!isTracking) {
-              startTracking();
-            }
-            console.log('Switched to online mode');
-          }
-        }}
-        style={{
-          position: 'absolute',
-          bottom: 80,
-          left: 300,
-          backgroundColor: isOfflineMode ? '#ef4444' : '#10b981',
-          color: 'white',
-          padding: '10px 15px',
-          borderRadius: '8px',
-          border: 'none',
-          cursor: 'pointer',
-          fontWeight: 'bold',
-          zIndex: 1001,
-          transition: 'all 0.3s ease',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-        }}
-      >
-        {isOfflineMode ? '🔴 OFFLINE' : '🟢 ONLINE'}
-      </button>
 
       {/* Profile Stats Display - Top Right */}
       <ProfileStats
@@ -3980,14 +3892,14 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                 </span>
               </div>
 
-              {/* Center on GPS */}
+              {/* Satellite View Toggle */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                 <button
-                  onClick={centerOnGPS}
+                  onClick={() => setShowSatelliteView(!showSatelliteView)}
                   style={{
-                    backgroundColor: 'rgba(245, 158, 11, 0.2)',
-                    border: '1px solid #f59e0b',
-                    color: '#f59e0b',
+                    backgroundColor: showSatelliteView ? 'rgba(34, 197, 94, 0.2)' : 'rgba(75, 85, 99, 0.5)',
+                    border: showSatelliteView ? '1px solid #22c55e' : '1px solid #6b7280',
+                    color: showSatelliteView ? '#22c55e' : '#cbd5e1',
                     padding: '12px',
                     borderRadius: '8px',
                     cursor: 'pointer',
@@ -3996,10 +3908,10 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     transition: 'all 0.2s ease'
                   }}
                 >
-                  📍 Center on GPS
+                  🛰️ Satellite {showSatelliteView ? 'ON' : 'OFF'}
                 </button>
                 <span style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>
-                  Zoom to your location
+                  Toggle aerial imagery
                 </span>
               </div>
 
@@ -4653,6 +4565,116 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             🎨
           </div>
           Colors
+        </button>
+
+        {/* GPS - Centers map on GPS location */}
+        <button
+          onClick={centerOnGPS}
+          style={{
+            background: 'rgba(15, 23, 42, 0.9)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            color: '#f59e0b',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            fontSize: '11px',
+            gap: '3px',
+            padding: '8px 12px',
+            cursor: 'pointer',
+            borderRadius: '8px',
+            transition: 'all 0.3s ease',
+            minWidth: '60px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+          }}
+        >
+          <div style={{
+            fontSize: '20px'
+          }}>
+            📍
+          </div>
+          GPS
+        </button>
+
+        {/* Time/Weather - Shows current time and day/night status */}
+        <button
+          onClick={() => {
+            // Toggle satellite view as a quick day/night visual override
+            setShowSatelliteView(!showSatelliteView);
+          }}
+          style={{
+            background: isNight ? 'rgba(30, 41, 59, 0.9)' : 'rgba(254, 243, 199, 0.9)',
+            border: isNight ? '1px solid rgba(100, 116, 139, 0.5)' : '1px solid rgba(251, 191, 36, 0.5)',
+            color: isNight ? '#94a3b8' : '#92400e',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            fontSize: '11px',
+            gap: '3px',
+            padding: '8px 12px',
+            cursor: 'pointer',
+            borderRadius: '8px',
+            transition: 'all 0.3s ease',
+            minWidth: '60px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+          }}
+        >
+          <div style={{
+            fontSize: '20px'
+          }}>
+            {isNight ? '🌙' : '☀️'}
+          </div>
+          <div style={{ fontSize: '9px', fontWeight: 'bold' }}>
+            {timeString}
+          </div>
+        </button>
+
+        {/* Online/Offline Mode Toggle */}
+        <button
+          onClick={() => {
+            if (!isOfflineMode) {
+              if (gpsPosition) {
+                setLastKnownPosition(gpsPosition);
+                console.log('Switched to offline mode');
+                alert('Switched to offline mode! GPS tracking paused.');
+              } else {
+                alert('No GPS position available. Please get GPS location first before going offline.');
+                return;
+              }
+              setIsOfflineMode(true);
+              stopTracking();
+            } else {
+              setIsOfflineMode(false);
+              if (!isTracking) {
+                startTracking();
+              }
+              console.log('Switched to online mode');
+            }
+          }}
+          style={{
+            background: isOfflineMode ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+            border: isOfflineMode ? '1px solid rgba(239, 68, 68, 0.5)' : '1px solid rgba(16, 185, 129, 0.5)',
+            color: isOfflineMode ? '#ef4444' : '#10b981',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            fontSize: '11px',
+            gap: '3px',
+            padding: '8px 12px',
+            cursor: 'pointer',
+            borderRadius: '8px',
+            transition: 'all 0.3s ease',
+            minWidth: '60px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+          }}
+        >
+          <div style={{
+            fontSize: '20px'
+          }}>
+            {isOfflineMode ? '🔴' : '🟢'}
+          </div>
+          <div style={{ fontSize: '9px', fontWeight: 'bold' }}>
+            {isOfflineMode ? 'OFFLINE' : 'ONLINE'}
+          </div>
         </button>
       </div>
 

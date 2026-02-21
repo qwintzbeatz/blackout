@@ -289,7 +289,7 @@ const ProfileStats: React.FC<ProfileStatsProps> = ({
           boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
           border: '1px solid rgba(255, 107, 107, 0.3)',
           zIndex: 1000,
-          minWidth: '190px',
+          minWidth: '200px',
           maxWidth: '300px',
           backdropFilter: 'blur(8px)',
           animation: 'slideIn 0.2s ease-out'

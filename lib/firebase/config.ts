@@ -24,15 +24,18 @@ export const realtimeDb = getDatabase(app);
 
 // Connect to emulators – ONLY in development
 if (process.env.NEXT_PUBLIC_USE_EMULATORS === 'true') {
-  // Use 127.0.0.1 instead of localhost to avoid occasional IPv6 resolution issues on Windows/macOS
+  // Use environment variable for host to support mobile device testing
+  // Default to '127.0.0.1' for local development, or set to your computer's local IP for mobile testing
+  const emulatorHost = process.env.NEXT_PUBLIC_EMULATOR_HOST || '127.0.0.1';
+  
   // Firestore: note NO http:// prefix – the function expects host + port separately
-  connectFirestoreEmulator(db, '127.0.0.1', 8090);
+  connectFirestoreEmulator(db, emulatorHost, 8090);
   
   // Auth: needs the http:// prefix because it's a full URL
-  connectAuthEmulator(auth, 'http://127.0.0.1:9200');
+  connectAuthEmulator(auth, `http://${emulatorHost}:9200`);
   
   // Realtime Database: host + port (no http://)
-  connectDatabaseEmulator(realtimeDb, '127.0.0.1', 9010);
+  connectDatabaseEmulator(realtimeDb, emulatorHost, 9010);
 
-  console.log('🔥 Connected to Firebase Emulators (Firestore @8090, Auth @9200, RTDB @9010)');
+  console.log(`🔥 Connected to Firebase Emulators at ${emulatorHost} (Firestore @8090, Auth @9200, RTDB @9010)`);
 }
