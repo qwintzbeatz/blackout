@@ -10,8 +10,12 @@ const COMPRESSION_TIMEOUT_MS = 15000;
  */
 function isMobileDevice(): boolean {
   if (typeof window === 'undefined') return false;
+  if (typeof navigator === 'undefined') return false;
   
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+  // Safe check for userAgent
+  const userAgent = navigator.userAgent || '';
+  
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent) ||
     (window.innerWidth <= 768);
 }
 
@@ -19,6 +23,9 @@ function isMobileDevice(): boolean {
  * Detect HEIC/HEIF format (common on iOS)
  */
 function isHeicFile(file: File): boolean {
+  // Safe check for file and file.name
+  if (!file || !file.name) return false;
+  
   const extension = file.name.toLowerCase().endsWith('.heic') || 
                     file.name.toLowerCase().endsWith('.heif');
   const mimeType = file.type === 'image/heic' || 

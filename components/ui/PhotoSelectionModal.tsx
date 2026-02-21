@@ -29,12 +29,12 @@ const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
 
   // Check browser compatibility and log info
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
       console.log('Browser camera support check:');
       console.log('- navigator.mediaDevices:', !!navigator.mediaDevices);
       console.log('- getUserMedia:', !!navigator.mediaDevices?.getUserMedia);
       console.log('- HTTPS:', location.protocol === 'https:');
-      console.log('- User Agent:', navigator.userAgent);
+      console.log('- User Agent:', navigator.userAgent || 'Unknown');
       
       // HTTPS is required for camera access in most browsers
       if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
@@ -192,13 +192,19 @@ const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
   const startCamera = useCallback(async () => {
     console.log('🎬 Starting camera attempt...');
     
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+      setError('Camera not available in server environment');
+      return;
+    }
+    
     try {
       // Check if getUserMedia is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('Camera API not supported in this browser');
       }
 
-      // HTTPS check
+      // HTTPS check (skip for localhost)
       if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
         throw new Error('Camera requires HTTPS');
       }
@@ -263,7 +269,7 @@ const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
       
       setError(errorMessage);
     }
-  }, [cameraMode]);
+  }, []);
 
   // Stop camera
   const stopCamera = useCallback(() => {
@@ -289,6 +295,8 @@ const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
 
   // Test camera access with minimal constraints
   const testBasicCamera = useCallback(async () => {
+    if (typeof navigator === 'undefined') return false;
+    
     console.log('Testing basic camera access...');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -311,8 +319,10 @@ const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
       }
     };
 
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', handleEscape);
+      return () => window.removeEventListener('keydown', handleEscape);
+    }
   }, [isVisible, handleClose]);
 
   if (!isVisible) return null;
@@ -560,18 +570,20 @@ const PhotoSelectionModalOptimized: React.FC<PhotoSelectionModalProps> = ({
                 console.log('Trying fallback camera...');
                 setError(null);
                 // Try the most basic camera access
-                navigator.mediaDevices?.getUserMedia({ video: true })
-                  .then(stream => {
-                    if (videoRef.current) {
-                      videoRef.current.srcObject = stream;
-                      setCameraMode(true);
-                      console.log('Fallback camera started');
-                    }
-                  })
-                  .catch(err => {
-                    console.log('Fallback also failed:', err);
-                    setError('Camera not available. Please use file upload.');
-                  });
+                if (typeof navigator !== 'undefined') {
+                  navigator.mediaDevices?.getUserMedia({ video: true })
+                    .then(stream => {
+                      if (videoRef.current) {
+                        videoRef.current.srcObject = stream;
+                        setCameraMode(true);
+                        console.log('Fallback camera started');
+                      }
+                    })
+                    .catch(err => {
+                      console.log('Fallback also failed:', err);
+                      setError('Camera not available. Please use file upload.');
+                    });
+                }
               }}
               style={{
                 marginTop: '8px',
