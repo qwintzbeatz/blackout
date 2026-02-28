@@ -74,7 +74,9 @@ export const GRAFFITI_TO_MARKER_DESCRIPTION: Record<GraffitiType, MarkerDescript
   'burner': 'Burner/Heater',
   'roller': 'Roller/Blockbuster',
   'extinguisher': 'Extinguisher',
-  'mural': 'Mural'
+  'mural': 'Mural',
+  'rapel': 'Piece/Bombing', // Rapel is a heaven spot piece
+  'mops': 'Tag/Signature' // Mops are a type of tag
 };
 
 // Migration utilities

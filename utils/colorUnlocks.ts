@@ -85,11 +85,18 @@ export const ALL_COLORS: ColorDefinition[] = [
     crewId: 'dgc'
   },
   
-  // Solo - Grey only
+  // Solo - Grey & Pink
   {
     id: 'grey',
     name: 'Grey',
     hex: '#6B7280',
+    category: 'starter',
+    crewId: 'solo'
+  },
+  {
+    id: 'pink',
+    name: 'Pink',
+    hex: '#EC4899',
     category: 'starter',
     crewId: 'solo'
   },
@@ -111,12 +118,6 @@ export const ALL_COLORS: ColorDefinition[] = [
     id: 'purple',
     name: 'Purple',
     hex: '#8B5CF6',
-    category: 'standard'
-  },
-  {
-    id: 'pink',
-    name: 'Pink',
-    hex: '#EC4899',
     category: 'standard'
   },
   {
@@ -153,6 +154,12 @@ export const ALL_COLORS: ColorDefinition[] = [
     id: 'maroon',
     name: 'Maroon',
     hex: '#800000',
+    category: 'standard'
+  },
+  {
+    id: 'coral',
+    name: 'Coral',
+    hex: '#FF6B6B',
     category: 'standard'
   },
   
@@ -199,7 +206,7 @@ export const ALL_COLORS: ColorDefinition[] = [
  */
 export function getCrewColors(crewId: CrewId | null): ColorDefinition[] {
   if (!crewId) {
-    // Solo players get grey only
+    // Solo players get grey and pink
     return ALL_COLORS.filter(c => c.crewId === 'solo');
   }
   return ALL_COLORS.filter(c => c.crewId === crewId);

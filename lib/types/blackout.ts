@@ -46,7 +46,10 @@ export interface Comment {
 // Re-export surface and graffiti types from constants for consistency
 // Note: These are used throughout the app - import from constants for the actual config
 export type SurfaceType = 'pole' | 'sign' | 'ebox' | 'fence' | 'wall' | 'shutter' | 'sewer' | 'rooftop' | 'ground' | 'train' | 'bridge' | 'traffic_light' | 'truck' | 'van' | 'postbox' | 'speed_camera' | 'bus_stop';
-export type GraffitiType = 'tag' | 'throw_up' | 'piece_bombing' | 'burner_heater' | 'roller_blockbuster' | 'stencil_brand_stamp' | 'paste_up_poster' | 'sticker_slap' | 'etch_scribe_scratch' | 'extinguisher' | 'mural';
+export type GraffitiType = 'sticker' | 'stencil' | 'tag' | 'etch' | 'throwup' | 'pasteup' | 'piece' | 'burner' | 'roller' | 'extinguisher' | 'mural' | 'rapel' | 'mops';
+
+// Special marker effect types
+export type SpecialMarkerType = 'rainbow' | 'glow' | 'metallic' | null;
 
 // User Marker type
 export interface UserMarker {
@@ -68,6 +71,10 @@ export interface UserMarker {
   // New surface and graffiti type fields
   surface?: SurfaceType;
   graffitiType?: GraffitiType;
+  // Special color effect type (rainbow, glow, metallic)
+  specialType?: SpecialMarkerType;
+  // Graffiti style ID (e.g., "bqc-tag-svg-1", "default-tag")
+  styleId?: string;
 }
 
 // Drop type
@@ -144,9 +151,18 @@ export interface UserProfile {
   // Graffiti style unlock fields
   unlockedGraffitiTypes?: string[]; // Array of unlocked graffiti type IDs
   activeGraffitiStyle?: string; // Currently selected active style
+  // Crew style variant unlock fields
+  unlockedStyleVariants?: string[]; // Array of unlocked style variant IDs (e.g., "bqc-tag-1")
+  selectedStyleVariant?: string; // Currently selected style variant ID
+  // Graffiti style unlocks (SVG + Font hybrid system)
+  unlockedGraffitiStyles?: string[]; // Array of unlocked style IDs (e.g., "bqc-tag-svg-1", "bqc-tag-font-2")
+  selectedGraffitiStyle?: string; // Currently selected style ID
+  selectedStyleType?: 'svg' | 'font'; // Currently selected style type
   // Color unlock fields
   unlockedColors?: string[]; // Array of unlocked color IDs
   selectedColor?: string; // Currently selected color hex
+  // Video unlock fields
+  unlockedVideos?: string[]; // Array of unlocked video URLs
 }
 
 // Top Player type

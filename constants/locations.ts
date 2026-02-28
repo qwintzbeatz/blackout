@@ -32,5 +32,5 @@ export const NZ_BOUNDS: [[number, number], [number, number]] = [
 ];
 
 export const NZ_CENTER: [number, number] = [-40.9006, 174.8860];
-export const NZ_DEFAULT_ZOOM = 4;
-export const GPS_DEFAULT_ZOOM = 80;
+export const NZ_DEFAULT_ZOOM = 5;
+export const GPS_DEFAULT_ZOOM = 18;

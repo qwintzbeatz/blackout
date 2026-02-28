@@ -217,7 +217,7 @@ export const ProfilePanel: React.FC<ProfilePanelProps> = React.memo(({
           }}
           onError={(e) => {
             const target = e.target as HTMLImageElement;
-            target.src = generateAvatarUrl(userProfile.uid, userProfile.username, userProfile.gender, 80);
+            target.src = generateAvatarUrl(userProfile.uid, userProfile.username, userProfile.gender, 80, undefined, userProfile.crewId);
           }}
         />
         <div style={{ marginTop: '10px', fontSize: '12px', color: '#94a3b8' }}>

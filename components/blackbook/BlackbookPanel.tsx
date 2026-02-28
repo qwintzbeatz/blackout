@@ -1,9 +1,19 @@
 'use client';
 
-import React, { useMemo, useCallback, useState } from 'react';
-import { GRAFFITI_TYPES, GRAFFITI_LIST } from '@/constants/graffitiTypes';
+import React, { useCallback, useMemo, useState } from 'react';
 import { UserProfile, UserMarker, Drop, TopPlayer, NearbyCrewMember } from '@/lib/types/blackout';
-import { GraffitiStylesSection } from './GraffitiStylesSection';
+import { getCrewTheme } from '@/utils/crewTheme';
+import { doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
+import { 
+  ALL_GRAFFITI_STYLES, 
+  GraffitiStyle, 
+  getDefaultStyleForCrew,
+  isStyleUnlocked,
+  FONT_SIZES
+} from '@/constants/graffitiFonts';
+import { GRAFFITI_TYPES } from '@/constants/graffitiTypes';
+import { CrewId } from '@/constants/crewGraffitiStyles';
 
 interface BlackbookPanelProps {
   userProfile: UserProfile | null;
@@ -25,523 +35,662 @@ interface BlackbookPanelProps {
   onOpenCrewChat: () => void;
 }
 
+// Available font files (checked in public/fonts/)
+const AVAILABLE_FONTS: Record<string, { crewId: string; type: string; hasFont: boolean }> = {
+  'bqc-tag': { crewId: 'bqc', type: 'tag', hasFont: true },
+  'bqc-mops': { crewId: 'bqc', type: 'mops', hasFont: true },
+  'bqc-stencil': { crewId: 'bqc', type: 'stencil', hasFont: true },
+  'bqc-piece': { crewId: 'bqc', type: 'piece', hasFont: true },
+  'bqc-roller': { crewId: 'bqc', type: 'roller', hasFont: true },
+  'bqc-throwup': { crewId: 'bqc', type: 'throwup', hasFont: true },
+  'bqc-etch': { crewId: 'bqc', type: 'etch', hasFont: true },
+};
+
 export const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
   userProfile,
-  userMarkers,
-  drops,
-  topPlayers,
   onClose,
   onProfileUpdate,
-  onCenterMap,
   onRefreshAll,
   isRefreshing,
-  showTopPlayers,
-  onToggleTopPlayers,
-  showOnlyMyDrops,
-  onToggleFilter,
-  onLogout,
-  nearbyCrewMembers,
-  expandedRadius,
-  onOpenCrewChat
+  onLogout
 }) => {
-  const [activeTab, setActiveTab] = useState<'feed' | 'styles' | 'stats'>('feed');
-
-  // Get user's markers
-  const myMarkers = userMarkers.filter(m => m.userId === userProfile?.uid);
+  // Get crew theme
+  const crewTheme = getCrewTheme(userProfile?.crewId);
+  const crewColor = crewTheme.primary;
+  const crewDisplayColor = crewColor === '#000000' ? '#808080' : crewColor;
+  const markerColor = userProfile?.selectedColor || userProfile?.favoriteColor || crewDisplayColor;
+  const playerTagName = userProfile?.username || 'TAG';
   const currentRep = userProfile?.rep || 0;
-
-  // Calculate recent activity (last 7 days)
-  const recentActivity = useMemo(() => {
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    return myMarkers.filter(m => new Date(m.timestamp).getTime() > sevenDaysAgo).length;
-  }, [myMarkers]);
-
-  // Handle setting active graffiti style
-  const handleSetActiveStyle = useCallback((styleId: string) => {
+  const crewId = (userProfile?.crewId || 'bqc') as CrewId;
+  
+  // Current selected style
+  const selectedStyleId = userProfile?.selectedGraffitiStyle || getDefaultStyleForCrew(crewId);
+  
+  // State for tabs
+  const [activeTab, setActiveTab] = useState<'fonts' | 'icons' | 'locked'>('fonts');
+  
+  // Get all available styles for this crew
+  const crewStyles = useMemo(() => {
+    return ALL_GRAFFITI_STYLES.filter(s => s.crewId === crewId);
+  }, [crewId]);
+  
+  // Get unlocked styles (fonts are free, SVGs need REP)
+  const unlockedStyles = useMemo(() => {
+    return crewStyles.filter(style => 
+      isStyleUnlocked(style.id, currentRep, userProfile?.unlockedGraffitiTypes || [])
+    );
+  }, [crewStyles, currentRep, userProfile?.unlockedGraffitiTypes]);
+  
+  // Get locked styles
+  const lockedStyles = useMemo(() => {
+    return crewStyles.filter(style => 
+      !isStyleUnlocked(style.id, currentRep, userProfile?.unlockedGraffitiTypes || [])
+    );
+  }, [crewStyles, currentRep, userProfile?.unlockedGraffitiTypes]);
+  
+  // Separate fonts and icons
+  const unlockedFonts = unlockedStyles.filter(s => s.styleType === 'font');
+  const unlockedIcons = unlockedStyles.filter(s => s.styleType === 'svg');
+  const lockedFonts = lockedStyles.filter(s => s.styleType === 'font');
+  const lockedIcons = lockedStyles.filter(s => s.styleType === 'svg');
+  
+  // Handle style selection
+  const handleSelectStyle = useCallback(async (styleId: string) => {
     if (!userProfile) return;
+    
+    // Update local state immediately for instant feedback
     onProfileUpdate({
       ...userProfile,
-      activeGraffitiStyle: styleId
+      selectedGraffitiStyle: styleId,
+      selectedStyleVariant: styleId,
+      activeGraffitiStyle: styleId.split('-')[1]
     });
+    
+    // Persist to Firestore
+    try {
+      const userRef = doc(db, 'users', userProfile.uid);
+      await updateDoc(userRef, {
+        selectedGraffitiStyle: styleId,
+        selectedStyleVariant: styleId,
+        activeGraffitiStyle: styleId.split('-')[1],
+        lastActive: Timestamp.now()
+      });
+      console.log('✅ Style saved to Firestore:', styleId);
+    } catch (error) {
+      console.error('Error saving style to Firestore:', error);
+    }
   }, [userProfile, onProfileUpdate]);
+
+  // Render a style card
+  const renderStyleCard = (style: GraffitiStyle, isUnlocked: boolean) => {
+    const isSelected = selectedStyleId === style.id;
+    const fontSize = FONT_SIZES[style.graffitiType] || 16;
+    const config = GRAFFITI_TYPES[style.graffitiType];
+    
+    // Check if font file actually exists
+    const fontKey = `${style.crewId}-${style.graffitiType}`;
+    const hasRealFont = AVAILABLE_FONTS[fontKey]?.hasFont;
+    const fontFamily = hasRealFont 
+      ? `${style.crewId.toUpperCase()}_${style.graffitiType}` 
+      : 'var(--font-permanent-marker), "Permanent Marker", cursive';
+    
+    if (style.styleType === 'font') {
+      // FONT STYLE CARD - Full width with horizontal layout, no emojis
+      return (
+        <div
+          key={style.id}
+          onClick={() => isUnlocked && handleSelectStyle(style.id)}
+          style={{
+            background: isSelected 
+              ? `linear-gradient(135deg, ${crewDisplayColor}30, ${crewDisplayColor}10)`
+              : isUnlocked 
+                ? 'rgba(255,255,255,0.05)'
+                : 'rgba(0,0,0,0.3)',
+            borderRadius: '12px',
+            padding: '8px 12px',
+            cursor: isUnlocked ? 'pointer' : 'not-allowed',
+            border: isSelected 
+              ? `2px solid ${crewDisplayColor}`
+              : '1px solid rgba(255,255,255,0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            position: 'relative',
+            opacity: isUnlocked ? 1 : 0.5,
+            transition: 'all 0.2s ease',
+            width: '100%',
+            height: '70px',
+            boxSizing: 'border-box'
+          }}
+        >
+          {/* Type name - Left side (no emoji) */}
+          <div style={{
+            minWidth: '60px',
+            textAlign: 'center'
+          }}>
+            <div style={{
+              fontSize: '12px',
+              color: '#94a3b8',
+              textTransform: 'uppercase',
+              fontWeight: 'bold',
+              letterSpacing: '0.5px'
+            }}>
+              {style.graffitiType}
+            </div>
+          </div>
+          
+          {/* Tag preview - Center (takes remaining space) */}
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            overflow: 'hidden',
+            padding: '0 4px'
+          }}>
+            <div style={{
+              fontFamily: fontFamily,
+              fontSize: `${fontSize}px`,
+              fontWeight: 'bold',
+              color: isUnlocked ? markerColor : '#666',
+              textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
+              letterSpacing: '1px',
+              textAlign: 'center',
+              maxWidth: '100%',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}>
+              {playerTagName.toUpperCase()}
+            </div>
+          </div>
+          
+          {/* Right side - Badges (text only, no emoji) */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            minWidth: '50px',
+            justifyContent: 'flex-end'
+          }}>
+            {/* Free badge */}
+            {isUnlocked && (
+              <div style={{
+                background: '#10b981',
+                borderRadius: '12px',
+                padding: '3px 8px',
+                fontSize: '10px',
+                fontWeight: 'bold',
+                color: 'white',
+                whiteSpace: 'nowrap'
+              }}>
+                FREE
+              </div>
+            )}
+            
+            {/* Selected check (text only) */}
+            {isSelected && (
+              <div style={{
+                width: '22px',
+                height: '22px',
+                background: crewDisplayColor,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '12px',
+                color: 'white',
+                fontWeight: 'bold'
+              }}>
+                ✓
+              </div>
+            )}
+          </div>
+          
+          {/* Locked overlay - text only, no emoji */}
+          {!isUnlocked && (
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(0,0,0,0.7)',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              fontSize: '13px',
+              fontWeight: 'bold'
+            }}>
+              <span style={{ color: '#94a3b8' }}>LOCKED</span>
+              <span style={{ color: crewDisplayColor }}>{style.unlockRep} REP</span>
+            </div>
+          )}
+        </div>
+      );
+    } else {
+      // ICON STYLE CARD - Fixed square dimensions, text only
+      return (
+        <div
+          key={style.id}
+          onClick={() => isUnlocked && handleSelectStyle(style.id)}
+          style={{
+            background: isSelected 
+              ? `${crewDisplayColor}30`
+              : isUnlocked 
+                ? 'rgba(255,255,255,0.05)'
+                : 'rgba(0,0,0,0.3)',
+            borderRadius: '10px',
+            padding: '8px',
+            cursor: isUnlocked ? 'pointer' : 'not-allowed',
+            border: isSelected 
+              ? `2px solid ${crewDisplayColor}`
+              : '1px solid rgba(255,255,255,0.1)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            position: 'relative',
+            opacity: isUnlocked ? 1 : 0.5,
+            width: '100%',
+            aspectRatio: '1',
+            boxSizing: 'border-box'
+          }}
+        >
+          {/* Icon type text instead of emoji */}
+          <div style={{
+            fontSize: '14px',
+            fontWeight: 'bold',
+            color: '#e0e0e0',
+            textTransform: 'uppercase'
+          }}>
+            {style.graffitiType}
+          </div>
+          
+          {/* Variant number */}
+          <div style={{
+            fontSize: '11px',
+            color: '#94a3b8',
+            background: 'rgba(255,255,255,0.1)',
+            padding: '2px 6px',
+            borderRadius: '10px'
+          }}>
+            V{style.variant}
+          </div>
+          
+          {/* Selected check (text only) */}
+          {isSelected && (
+            <div style={{
+              position: 'absolute',
+              bottom: '4px',
+              right: '4px',
+              width: '16px',
+              height: '16px',
+              background: crewDisplayColor,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '10px',
+              color: 'white',
+              fontWeight: 'bold'
+            }}>
+              ✓
+            </div>
+          )}
+          
+          {/* Locked overlay - text only, no emoji */}
+          {!isUnlocked && (
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(0,0,0,0.6)',
+              borderRadius: '10px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              fontSize: '10px',
+              fontWeight: 'bold'
+            }}>
+              <span style={{ color: '#94a3b8' }}>LOCKED</span>
+              <span style={{ color: crewDisplayColor }}>{style.unlockRep} REP</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+  };
 
   return (
     <div style={{
-      ...panelStyle,
-      border: '1px solid #333',
-      display: 'flex',
-      flexDirection: 'column',
-      animation: 'slideInLeft 0.3s ease-out',
-      position: 'relative' as const,
-      width: 'min(100vw, 420px)',
-      maxHeight: '80vh',
-      overflowY: 'auto'
+      backgroundColor: 'rgba(0, 0, 0, 0.95)',
+      color: '#e0e0e0',
+      padding: '20px',
+      borderRadius: '16px',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+      backdropFilter: 'blur(12px)',
+      width: 'min(90vw, 380px)',
+      maxHeight: '70vh',
+      overflowY: 'auto',
+      border: '1px solid rgba(255,255,255,0.1)',
+      zIndex: 1400,
+      position: 'relative'
     }}>
-      {/* Header */}
+      {/* Header - removed emoji */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '12px',
-        paddingBottom: '12px',
-        borderBottom: '1px solid rgba(255,107,107,0.3)'
+        marginBottom: '16px'
       }}>
         <h3 style={{ 
           margin: 0, 
-          color: '#ff6b6b', 
-          fontSize: '18px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
+          color: crewDisplayColor, 
+          fontSize: '20px',
+          fontWeight: 'bold',
+          letterSpacing: '1px'
         }}>
-          <span>📓</span>
-          BLACKBOOK — {userProfile?.username?.toUpperCase() || 'PROFILE'}
+          BLACKBOOK
         </h3>
         <button
           onClick={onClose}
           style={{
-            background: 'rgba(255,107,107,0.2)',
-            border: '1px solid rgba(255,107,107,0.3)',
-            color: '#ff6b6b',
-            width: '28px',
-            height: '28px',
+            background: 'rgba(255,255,255,0.1)',
+            border: 'none',
+            color: 'white',
+            width: '32px',
+            height: '32px',
             borderRadius: '50%',
             cursor: 'pointer',
-            fontSize: '14px',
+            fontSize: '18px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'center',
+            fontWeight: 'bold'
           }}
         >
-          ✕
+          ×
         </button>
       </div>
 
-      {/* Tab Navigation */}
+      {/* CURRENT STYLE PREVIEW - text only */}
+      <div style={{
+        background: `linear-gradient(135deg, ${crewDisplayColor}20, ${crewDisplayColor}05)`,
+        borderRadius: '12px',
+        padding: '16px',
+        textAlign: 'center',
+        border: `1px solid ${crewDisplayColor}30`,
+        marginBottom: '16px'
+      }}>
+        <div style={{
+          fontSize: '10px',
+          color: '#94a3b8',
+          marginBottom: '8px',
+          textTransform: 'uppercase',
+          letterSpacing: '1px'
+        }}>
+          YOUR TAG
+        </div>
+        <div style={{
+          fontFamily: 'var(--font-permanent-marker), "Permanent Marker", cursive',
+          fontSize: '32px',
+          fontWeight: 'bold',
+          color: markerColor,
+          textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
+          letterSpacing: '2px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
+        }}>
+          {playerTagName.toUpperCase()}
+        </div>
+      </div>
+
+      {/* Tabs - text only */}
       <div style={{
         display: 'flex',
         gap: '4px',
-        marginBottom: '16px'
-      }}>
-        {[
-          { id: 'feed', label: '📰 Feed', icon: '📰' },
-          { id: 'styles', label: '🎨 Styles', icon: '🎨' },
-          { id: 'stats', label: '📊 Stats', icon: '📊' }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as typeof activeTab)}
-            style={{
-              flex: 1,
-              padding: '10px',
-              background: activeTab === tab.id 
-                ? 'rgba(255, 107, 107, 0.2)' 
-                : 'rgba(255,255,255,0.05)',
-              border: activeTab === tab.id 
-                ? '1px solid rgba(255, 107, 107, 0.4)' 
-                : '1px solid #333',
-              borderRadius: '8px',
-              color: activeTab === tab.id ? '#ff6b6b' : '#aaa',
-              cursor: 'pointer',
-              fontSize: '12px',
-              fontWeight: 'bold',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Profile Info Card - Always Visible */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
         marginBottom: '16px',
-        padding: '12px',
-        background: 'rgba(255,255,255,0.05)',
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        padding: '4px',
         borderRadius: '8px'
       }}>
-        <img
-          src={userProfile?.profilePicUrl}
-          alt="Profile"
-          style={{
-            width: '56px',
-            height: '56px',
-            borderRadius: '50%',
-            border: '2px solid #ff6b6b',
-            objectFit: 'cover'
-          }}
-        />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{userProfile?.username}</div>
-          <div style={{ color: '#ff6b6b', fontSize: '13px' }}>{userProfile?.rank} • Lv {userProfile?.level}</div>
-          <div style={{ fontSize: '12px', color: '#aaa' }}>REP: {currentRep}</div>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '11px', color: '#4dabf7' }}>{myMarkers.length} drops</div>
-          <div style={{ fontSize: '10px', color: '#666' }}>{userMarkers.length} total visible</div>
-        </div>
+        {(['fonts', 'icons', 'locked'] as const).map(tab => {
+          const count = tab === 'fonts' ? unlockedFonts.length : 
+                       tab === 'icons' ? unlockedIcons.length : 
+                       lockedIcons.length + lockedFonts.length;
+          
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                flex: 1,
+                padding: '8px 4px',
+                background: activeTab === tab ? crewDisplayColor : 'transparent',
+                border: 'none',
+                color: activeTab === tab ? '#ffffff' : '#b0b0b0',
+                borderRadius: '6px',
+                fontSize: '12px',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                fontWeight: activeTab === tab ? 'bold' : 'normal',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}
+            >
+              {tab}
+              <span style={{ 
+                marginLeft: '6px',
+                fontSize: '10px',
+                opacity: 0.8,
+                backgroundColor: activeTab === tab ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)',
+                padding: '1px 6px',
+                borderRadius: '10px'
+              }}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Tab Content */}
-      {activeTab === 'feed' && (
-        <>
-          {/* Quick Stats */}
+      {/* FONTS TAB - 1 column, text only */}
+      {activeTab === 'fonts' && unlockedFonts.length > 0 && (
+        <div style={{ marginBottom: '16px' }}>
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '8px',
-            marginBottom: '16px'
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '12px',
+            padding: '0 4px'
           }}>
-            <div style={{
-              background: 'rgba(255,255,255,0.06)',
-              padding: '10px',
-              borderRadius: '8px',
-              border: '1px solid #444',
-              textAlign: 'center'
-            }}>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#ff6b6b' }}>
-                {myMarkers.length}
-              </div>
-              <div style={{ fontSize: '10px', color: '#aaa' }}>Your Tags</div>
-            </div>
-            <div style={{
-              background: 'rgba(255,255,255,0.06)',
-              padding: '10px',
-              borderRadius: '8px',
-              border: '1px solid #444',
-              textAlign: 'center'
-            }}>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#4ecdc4' }}>
-                {currentRep}
-              </div>
-              <div style={{ fontSize: '10px', color: '#aaa' }}>REP</div>
-            </div>
-            <div style={{
-              background: 'rgba(255,255,255,0.06)',
-              padding: '10px',
-              borderRadius: '8px',
-              border: '1px solid #444',
-              textAlign: 'center'
-            }}>
-              <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#fbbf24' }}>
-                {recentActivity}
-              </div>
-              <div style={{ fontSize: '10px', color: '#aaa' }}>This Week</div>
-            </div>
+            <span style={{ fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+              Font Styles
+            </span>
+            <span style={{ fontSize: '11px', color: '#10b981' }}>
+              {unlockedFonts.length} unlocked
+            </span>
           </div>
-
-          {/* Crew Status */}
           <div style={{
-            background: 'rgba(255,255,255,0.06)',
-            padding: '12px',
-            borderRadius: '8px',
-            border: '1px solid #444',
-            marginBottom: '12px'
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
           }}>
-            <div style={{
-              fontSize: '13px',
-              fontWeight: 'bold',
-              color: '#4dabf7',
-              marginBottom: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}>
-              {userProfile?.isSolo ? '🎯 Solo Player' : userProfile?.crewName ? `👥 ${userProfile.crewName}` : '👥 No Crew'}
-            </div>
-            
-            {nearbyCrewMembers.length > 0 && (
-              <div style={{
-                fontSize: '11px',
-                color: '#10b981',
-                marginBottom: '8px',
-                padding: '6px',
-                background: 'rgba(16,185,129,0.1)',
-                borderRadius: '4px'
-              }}>
-                ✨ {nearbyCrewMembers.length} crew member{nearbyCrewMembers.length > 1 ? 's' : ''} nearby! Radius: {expandedRadius}m
-              </div>
-            )}
-
-            {userProfile?.crewId && !userProfile.isSolo && (
-              <button
-                onClick={onOpenCrewChat}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  background: '#10b981',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 'bold',
-                  marginTop: '8px'
-                }}
-              >
-                💬 Open Crew Chat
-              </button>
-            )}
-          </div>
-
-          {/* Filter Toggle */}
-          <button
-            onClick={onToggleFilter}
-            style={{
-              background: showOnlyMyDrops ? '#10b981' : '#6b7280',
-              color: 'white',
-              border: 'none',
-              padding: '10px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              marginBottom: '12px',
-              width: '100%',
-              fontSize: '14px',
-              fontWeight: 'bold'
-            }}
-          >
-            {showOnlyMyDrops ? '👤 Showing Only YOUR Drops' : '🌍 Showing ALL Drops'}
-          </button>
-
-          {/* Top Players */}
-          {topPlayers.length > 0 && (
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{
-                fontSize: '15px',
-                fontWeight: 'bold',
-                color: '#fbbf24',
-                marginBottom: '8px',
-                borderBottom: '1px solid #444',
-                paddingBottom: '4px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}>
-                <span>👑 TOP WRITERS</span>
-                <button
-                  onClick={onToggleTopPlayers}
-                  style={{
-                    background: showTopPlayers ? '#10b981' : '#6b7280',
-                    color: 'white',
-                    border: 'none',
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '10px'
-                  }}
-                >
-                  {showTopPlayers ? 'ON' : 'OFF'}
-                </button>
-              </div>
-              
-              {showTopPlayers && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {topPlayers.map((player, index) => (
-                    <div 
-                      key={player.uid}
-                      onClick={() => player.position && onCenterMap(player.position, 15)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        padding: '8px',
-                        background: 'rgba(255,255,255,0.04)',
-                        borderRadius: '6px',
-                        border: '1px solid #444',
-                        cursor: player.position ? 'pointer' : 'default',
-                        opacity: player.position ? 1 : 0.6
-                      }}
-                    >
-                      <div style={{
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '50%',
-                        background: index === 0 ? '#fbbf24' : index === 1 ? '#cbd5e1' : '#d97706',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '14px'
-                      }}>
-                        {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '13px', fontWeight: 'bold' }}>{player.username}</div>
-                        <div style={{ fontSize: '10px', color: '#aaa' }}>
-                          {player.rank} • {player.rep} REP
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Actions */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: 'auto' }}>
-            <button
-              onClick={onRefreshAll}
-              disabled={isRefreshing}
-              style={{
-                background: '#4dabf7',
-                color: 'white',
-                border: 'none',
-                padding: '10px',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                opacity: isRefreshing ? 0.7 : 1
-              }}
-            >
-              {isRefreshing ? '🔄 Refreshing...' : '🔄 Refresh All'}
-            </button>
-
-            <button
-              onClick={onLogout}
-              style={{
-                background: '#444',
-                color: '#ff6b6b',
-                border: 'none',
-                padding: '10px',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
-            >
-              Sign Out
-            </button>
-          </div>
-        </>
-      )}
-
-      {activeTab === 'styles' && (
-        <GraffitiStylesSection
-          userProfile={userProfile}
-          onSetActiveStyle={handleSetActiveStyle}
-          onProfileUpdate={onProfileUpdate}
-        />
-      )}
-
-      {activeTab === 'stats' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {/* Detailed Stats */}
-          <div style={{
-            background: 'rgba(255,255,255,0.05)',
-            padding: '14px',
-            borderRadius: '10px',
-            border: '1px solid #444'
-          }}>
-            <h4 style={{ margin: '0 0 12px 0', color: '#4dabf7', fontSize: '15px' }}>
-              📊 Your Statistics
-            </h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <div>
-                <div style={{ fontSize: '11px', color: '#888' }}>Total Markers</div>
-                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#ff6b6b' }}>{myMarkers.length}</div>
-              </div>
-              <div>
-                <div style={{ fontSize: '11px', color: '#888' }}>Photo Drops</div>
-                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#4dabf7' }}>
-                  {drops.filter(d => d.photoUrl && d.createdBy === userProfile?.uid).length}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: '11px', color: '#888' }}>Music Drops</div>
-                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#8b5cf6' }}>
-                  {drops.filter(d => d.trackUrl && d.createdBy === userProfile?.uid).length}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: '11px', color: '#888' }}>This Week</div>
-                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#10b981' }}>{recentActivity}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Rank Progress */}
-          <div style={{
-            background: 'rgba(255,255,255,0.05)',
-            padding: '14px',
-            borderRadius: '10px',
-            border: '1px solid #444'
-          }}>
-            <h4 style={{ margin: '0 0 12px 0', color: '#fbbf24', fontSize: '15px' }}>
-              🏆 Rank Progress
-            </h4>
-            <div style={{ marginBottom: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                <span style={{ color: '#aaa' }}>Current Rank</span>
-                <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>{userProfile?.rank}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                <span style={{ color: '#aaa' }}>Next Rank</span>
-                <span style={{ color: '#10b981' }}>{100 - (currentRep % 100)} REP to go</span>
-              </div>
-            </div>
-            <div style={{
-              height: '8px',
-              background: '#333',
-              borderRadius: '4px',
-              overflow: 'hidden'
-            }}>
-              <div style={{
-                width: `${Math.min(currentRep % 100, 100)}%`,
-                height: '100%',
-                background: 'linear-gradient(90deg, #fbbf24, #10b981)',
-                borderRadius: '4px'
-              }} />
-            </div>
-          </div>
-
-          {/* Unlocked Content */}
-          <div style={{
-            background: 'rgba(255,255,255,0.05)',
-            padding: '14px',
-            borderRadius: '10px',
-            border: '1px solid #444'
-          }}>
-            <h4 style={{ margin: '0 0 12px 0', color: '#8b5cf6', fontSize: '15px' }}>
-              🎵 Unlocked Music
-            </h4>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#8b5cf6' }}>
-              {userProfile?.unlockedTracks?.length || 1}
-            </div>
-            <div style={{ fontSize: '11px', color: '#888' }}>tracks unlocked</div>
-          </div>
-
-          {/* Graffiti Styles Unlocked */}
-          <div style={{
-            background: 'rgba(255,255,255,0.05)',
-            padding: '14px',
-            borderRadius: '10px',
-            border: '1px solid #444'
-          }}>
-            <h4 style={{ margin: '0 0 12px 0', color: '#ff6b6b', fontSize: '15px' }}>
-              🎨 Graffiti Styles
-            </h4>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ff6b6b' }}>
-              {(userProfile?.unlockedGraffitiTypes?.length || 2)}
-            </div>
-            <div style={{ fontSize: '11px', color: '#888' }}>styles unlocked</div>
+            {unlockedFonts.map(style => renderStyleCard(style, true))}
           </div>
         </div>
       )}
+
+      {/* ICONS TAB - 4 columns, text only */}
+      {activeTab === 'icons' && unlockedIcons.length > 0 && (
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '12px',
+            padding: '0 4px'
+          }}>
+            <span style={{ fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+              Icon Styles
+            </span>
+            <span style={{ fontSize: '11px', color: '#10b981' }}>
+              {unlockedIcons.length} unlocked
+            </span>
+          </div>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '8px'
+          }}>
+            {unlockedIcons.map(style => renderStyleCard(style, true))}
+          </div>
+        </div>
+      )}
+
+      {/* LOCKED TAB - 4 columns, text only */}
+      {activeTab === 'locked' && (lockedFonts.length > 0 || lockedIcons.length > 0) && (
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '12px',
+            padding: '0 4px'
+          }}>
+            <span style={{ fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+              Locked Styles
+            </span>
+            <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+              unlock with REP
+            </span>
+          </div>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '8px'
+          }}>
+            {/* Show both locked icons and fonts, but prioritize icons for display */}
+            {[...lockedIcons, ...lockedFonts].slice(0, 8).map(style => renderStyleCard(style, false))}
+          </div>
+        </div>
+      )}
+
+      {/* REP INFO - text only */}
+      <div style={{
+        padding: '12px',
+        background: 'rgba(255,255,255,0.03)',
+        borderRadius: '8px',
+        textAlign: 'center',
+        marginBottom: '16px'
+      }}>
+        <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+          YOUR REP: <span style={{ color: '#10b981', fontWeight: 'bold' }}>{currentRep}</span>
+        </span>
+      </div>
+
+      {/* Actions - text only */}
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button
+          onClick={onRefreshAll}
+          disabled={isRefreshing}
+          style={{
+            flex: 1,
+            background: '#4dabf7',
+            color: 'white',
+            border: 'none',
+            padding: '12px',
+            borderRadius: '8px',
+            cursor: isRefreshing ? 'not-allowed' : 'pointer',
+            fontSize: '13px',
+            fontWeight: 'bold',
+            opacity: isRefreshing ? 0.7 : 1,
+            transition: 'all 0.2s',
+            boxShadow: '0 4px 12px rgba(77, 171, 247, 0.3)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px'
+          }}
+          onMouseEnter={(e) => {
+            if (!isRefreshing) {
+              e.currentTarget.style.backgroundColor = '#3b82f6';
+              e.currentTarget.style.transform = 'translateY(-1px)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!isRefreshing) {
+              e.currentTarget.style.backgroundColor = '#4dabf7';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }
+          }}
+        >
+          {isRefreshing ? 'Refreshing...' : 'Refresh'}
+        </button>
+        <button
+          onClick={onLogout}
+          style={{
+            flex: 1,
+            background: 'rgba(239, 68, 68, 0.2)',
+            color: '#ef4444',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            padding: '12px',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '13px',
+            fontWeight: 'bold',
+            transition: 'all 0.2s',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
+            e.currentTarget.style.transform = 'translateY(-1px)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+            e.currentTarget.style.transform = 'translateY(0)';
+          }}
+        >
+          Sign Out
+        </button>
+      </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.7; transform: scale(0.95); }
+        }
+
+        @keyframes popUp {
+          0% { transform: scale(0.8); opacity: 0; }
+          70% { transform: scale(1.05); }
+          100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Custom scrollbar for panel */
+        div::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        div::-webkit-scrollbar-track {
+          background: rgba(255,255,255,0.05);
+          border-radius: 3px;
+        }
+
+        div::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.2);
+          border-radius: 3px;
+        }
+
+        div::-webkit-scrollbar-thumb:hover {
+          background: rgba(255,255,255,0.3);
+        }
+      `}</style>
     </div>
   );
-};
-
-// Panel style constant
-const panelStyle: React.CSSProperties = {
-  backgroundColor: 'rgba(0, 0, 0, 0.92)',
-  color: '#e0e0e0',
-  padding: '16px',
-  borderRadius: '12px',
-  boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
-  backdropFilter: 'blur(8px)',
-  zIndex: 1200
 };
 
 BlackbookPanel.displayName = 'BlackbookPanel';

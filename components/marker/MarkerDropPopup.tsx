@@ -10,6 +10,8 @@ import { getTimeAgo } from '@/lib/utils/dropHelpers';
 import { SurfaceGraffitiSelector } from '@/components/ui/SurfaceGraffitiSelector';
 import { SurfaceType, GraffitiType } from '@/types';
 import { SURFACE_TO_MARKER_NAME, GRAFFITI_TO_MARKER_DESCRIPTION } from '@/utils/typeMapping';
+import { getStyleById } from '@/constants/graffitiFonts';
+import { GRAFFITI_TYPES } from '@/constants/graffitiTypes';
 
 interface MarkerDropPopupProps {
   drop: Drop;
@@ -477,6 +479,37 @@ const MarkerDropPopup: React.FC<MarkerDropPopupProps> = ({
             <div style={{ fontSize: '12px', color: '#94a3b8' }}>
               Surface: <span style={{ color: '#e0e0e0' }}>{(drop as any).surface || 'Wall'}</span>
             </div>
+            
+            {/* Style Variant Display */}
+            {(drop as any).styleVariantId && (() => {
+              const style = getStyleById((drop as any).styleVariantId);
+              if (!style) return null;
+              const graffitiConfig = GRAFFITI_TYPES[style.graffitiType];
+              return (
+                <div style={{
+                  marginTop: '8px',
+                  padding: '8px',
+                  background: `${drop.color || '#4dabf7'}10`,
+                  borderRadius: '6px',
+                  border: `1px solid ${drop.color || '#4dabf7'}30`
+                }}>
+                  <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '4px' }}>
+                    🎨 Style Variant
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '16px' }}>{graffitiConfig?.icon || '🎨'}</span>
+                    <div>
+                      <div style={{ fontSize: '12px', fontWeight: 'bold', color: drop.color || '#4dabf7' }}>
+                        {style.name}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#94a3b8' }}>
+                        {graffitiConfig?.label} • Variant {style.variant}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Owner Actions */}

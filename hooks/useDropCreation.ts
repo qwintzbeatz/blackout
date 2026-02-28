@@ -26,6 +26,7 @@ export interface UseDropCreationOptions {
   selectedSurface?: string;
   selectedGraffitiType?: string;
   selectedMarkerColor?: string;
+  selectedGraffitiStyle?: string;
   expandedRadius?: number;
   onSuccess?: (type: 'marker' | 'photo' | 'music', repEarned: number) => void;
   onError?: (error: string) => void;
@@ -58,6 +59,7 @@ export function useDropCreation(options: UseDropCreationOptions): UseDropCreatio
     selectedSurface = 'wall',
     selectedGraffitiType = 'tag',
     selectedMarkerColor = '#10b981',
+    selectedGraffitiStyle,
     expandedRadius = 50,
     onSuccess,
     onError
@@ -112,12 +114,18 @@ export function useDropCreation(options: UseDropCreationOptions): UseDropCreatio
         }
       );
 
-      // Create marker in Firestore
+      // Create marker in Firestore - include ALL style info for font rendering
       const markerDoc = {
         position: [lat, lng] as [number, number],
         color: selectedMarkerColor,
         surface: selectedSurface,
         graffitiType: selectedGraffitiType,
+        // CRITICAL FIX: Include all style properties
+        styleId: selectedGraffitiStyle || userProfile.selectedGraffitiStyle || `${userProfile.crewId || 'bqc'}-tag`,
+        styleType: (selectedGraffitiStyle || userProfile.selectedGraffitiStyle || '').includes('svg') ? 'svg' : 'font',
+        playerTagName: userProfile.username || null,
+        crewId: userProfile.crewId || 'bqc',
+        variant: selectedGraffitiStyle || userProfile.selectedGraffitiStyle || `${userProfile.crewId || 'bqc'}-tag`,
         userId: user.uid,
         username: userProfile.username,
         userProfilePic: userProfile.profilePicUrl,

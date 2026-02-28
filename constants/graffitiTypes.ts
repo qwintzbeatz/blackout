@@ -98,6 +98,22 @@ export const GRAFFITI_TYPES: Record<string, GraffitiTypeConfig> = {
     baseRep: 25,
     difficulty: 'expert',
     family: 'mural'
+  },
+  rapel: {
+    id: 'rapel',
+    label: 'Rapel/Heaven Spot',
+    icon: '🧗',
+    baseRep: 30,
+    difficulty: 'expert',
+    family: 'mural'
+  },
+  mops: {
+    id: 'mops',
+    label: 'Mop/Dirty',
+    icon: '🧹',
+    baseRep: 7,
+    difficulty: 'easy',
+    family: 'tag'
   }
 };
 
@@ -131,13 +147,13 @@ export function getDifficultyMultiplier(type: GraffitiType): number {
 
 // Graffiti families for grouping
 export const GRAFFITI_FAMILIES = {
-  tag: ['tag', 'etch'],
+  tag: ['tag', 'etch', 'mops'],
   throw: ['throwup', 'extinguisher'],
   piece: ['piece', 'burner'],
   stencil: ['stencil'],
   paste: ['sticker', 'pasteup'],
   roller: ['roller'],
-  mural: ['mural']
+  mural: ['mural', 'rapel']
 };
 
 // Get types by family

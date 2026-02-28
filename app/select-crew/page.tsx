@@ -114,12 +114,12 @@ export default function SelectCrewPage() {
     return () => unsubscribe();
   }, []);
   
-  // Update avatar preview when username or gender changes
+  // Update avatar preview when username, gender, or selected crew changes
   useEffect(() => {
     if (user && username) {
-      setProfilePicUrl(generateAvatarUrl(user.uid, username, gender, 100));
+      setProfilePicUrl(generateAvatarUrl(user.uid, username, gender, 100, undefined, selectedCrew || null));
     }
-  }, [username, gender, user]);
+  }, [username, gender, user, selectedCrew]);
   
   const handleSelectCrew = (crew: CrewData) => {
     setSelectedCrew(crew.id);
@@ -155,8 +155,8 @@ export default function SelectCrewPage() {
         throw new Error('Invalid crew selection');
       }
       
-      // Generate profile picture if not already set
-      const finalProfilePicUrl = profilePicUrl || generateAvatarUrl(user.uid, username.trim(), gender, 100);
+      // Generate profile picture with crew color
+      const finalProfilePicUrl = generateAvatarUrl(user.uid, username.trim(), gender, 100, undefined, selectedCrew);
       
       // Initialize unlocked colors based on crew selection
       const unlockedColors = initializeUnlockedColors(selectedCrew as CrewId);
@@ -274,7 +274,8 @@ export default function SelectCrewPage() {
     setError(null);
     
     try {
-      const finalProfilePicUrl = profilePicUrl || generateAvatarUrl(user.uid, username.trim(), gender, 100);
+      // Generate profile picture for solo player (amber background)
+      const finalProfilePicUrl = generateAvatarUrl(user.uid, username.trim(), gender, 100, undefined, null);
       
       // Solo players get grey only
       const soloUnlockedColors = initializeUnlockedColors(null); // null = solo

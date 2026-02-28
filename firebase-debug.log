@@ -58,3 +58,69 @@ Java(TM) SE Runtime Environment (build 25.0.2+10-LTS-69)
 
 Issues? Report them at https://github.com/firebase/firebase-tools/issues and attach the *-debug.log files.
  
+[debug] [2026-02-26T03:34:40.774Z] ----------------------------------------------------------------------
+[debug] [2026-02-26T03:34:40.777Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\hoody\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js emulators:start --project blackout-3a073
+[debug] [2026-02-26T03:34:40.777Z] CLI Version:   15.6.0
+[debug] [2026-02-26T03:34:40.777Z] Platform:      win32
+[debug] [2026-02-26T03:34:40.777Z] Node Version:  v24.13.0
+[debug] [2026-02-26T03:34:40.777Z] Time:          Thu Feb 26 2026 16:34:40 GMT+1300 (New Zealand Daylight Time)
+[debug] [2026-02-26T03:34:40.777Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-02-26T03:34:42.651Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-26T03:34:42.652Z] > authorizing via signed-in user (hoodytai@gmail.com)
+[debug] [2026-02-26T03:34:42.825Z] java version "25.0.2" 2026-01-20 LTS
+Java(TM) SE Runtime Environment (build 25.0.2+10-LTS-69)
+
+[debug] [2026-02-26T03:34:42.829Z] Java HotSpot(TM) 64-Bit Server VM (build 25.0.2+10-LTS-69, mixed mode, sharing)
+
+[debug] [2026-02-26T03:34:42.842Z] Parsed Java major version: 25
+[info] i  emulators: Starting emulators: auth, firestore, database {"metadata":{"emulator":{"name":"hub"},"message":"Starting emulators: auth, firestore, database"}}
+[debug] [2026-02-26T03:34:42.853Z] assigned listening specs for emulators {"user":{"hub":[{"address":"0.0.0.0","family":"IPv4","port":4410}],"ui":[{"address":"0.0.0.0","family":"IPv4","port":4010}],"logging":[{"address":"0.0.0.0","family":"IPv4","port":4510}],"auth":[{"address":"0.0.0.0","family":"IPv4","port":9200}],"firestore":[{"address":"0.0.0.0","family":"IPv4","port":8090}],"firestore.websocket":[{"address":"0.0.0.0","family":"IPv4","port":9150}],"database":[{"address":"0.0.0.0","family":"IPv4","port":9010}]},"metadata":{"message":"assigned listening specs for emulators"}}
+[debug] [2026-02-26T03:34:42.858Z] Found emulator hub locator: {"version":"15.6.0","origins":["http://127.0.0.1:4410"],"pid":28504}
+[debug] [2026-02-26T03:34:42.858Z] Write emulator hub locator at C:\Users\hoody\AppData\Local\Temp\hub-blackout-3a073.json
+[warn] !  firestore: Cloud Firestore Emulator does not support multiple databases yet. {"metadata":{"emulator":{"name":"firestore"},"message":"Cloud Firestore Emulator does not support multiple databases yet."}}
+[warn] !  firestore: Did not find a Cloud Firestore rules file specified in a firebase.json config file. {"metadata":{"emulator":{"name":"firestore"},"message":"Did not find a Cloud Firestore rules file specified in a firebase.json config file."}}
+[warn] !  firestore: The emulator will default to allowing all reads and writes. Learn more about this option: https://firebase.google.com/docs/emulator-suite/install_and_configure#security_rules_configuration. {"metadata":{"emulator":{"name":"firestore"},"message":"The emulator will default to allowing all reads and writes. Learn more about this option: https://firebase.google.com/docs/emulator-suite/install_and_configure#security_rules_configuration."}}
+[debug] [2026-02-26T03:34:42.866Z] Ignoring unsupported arg: auto_download {"metadata":{"emulator":{"name":"firestore"},"message":"Ignoring unsupported arg: auto_download"}}
+[debug] [2026-02-26T03:34:42.866Z] Ignoring unsupported arg: single_project_mode_error {"metadata":{"emulator":{"name":"firestore"},"message":"Ignoring unsupported arg: single_project_mode_error"}}
+[debug] [2026-02-26T03:34:42.867Z] Starting Firestore Emulator with command {"binary":"java","args":["-Dgoogle.cloud_firestore.debug_log_level=FINE","-Duser.language=en","-jar","C:\\Users\\hoody\\.cache\\firebase\\emulators\\cloud-firestore-emulator-v1.20.2.jar","--host","0.0.0.0","--port",8090,"--websocket_port",9150,"--project_id","blackout-3a073","--single_project_mode",true],"optionalArgs":["port","webchannel_port","host","rules","websocket_port","functions_emulator","seed_from_export","project_id","single_project_mode"],"joinArgs":false,"shell":false,"port":8090} {"metadata":{"emulator":{"name":"firestore"},"message":"Starting Firestore Emulator with command {\"binary\":\"java\",\"args\":[\"-Dgoogle.cloud_firestore.debug_log_level=FINE\",\"-Duser.language=en\",\"-jar\",\"C:\\\\Users\\\\hoody\\\\.cache\\\\firebase\\\\emulators\\\\cloud-firestore-emulator-v1.20.2.jar\",\"--host\",\"0.0.0.0\",\"--port\",8090,\"--websocket_port\",9150,\"--project_id\",\"blackout-3a073\",\"--single_project_mode\",true],\"optionalArgs\":[\"port\",\"webchannel_port\",\"host\",\"rules\",\"websocket_port\",\"functions_emulator\",\"seed_from_export\",\"project_id\",\"single_project_mode\"],\"joinArgs\":false,\"shell\":false,\"port\":8090}"}}
+[info] i  firestore: Firestore Emulator logging to firestore-debug.log {"metadata":{"emulator":{"name":"firestore"},"message":"Firestore Emulator logging to \u001b[1mfirestore-debug.log\u001b[22m"}}
+[info] +  firestore: Firestore Emulator UI websocket is running on 9150. {"metadata":{"emulator":{"name":"firestore"},"message":"Firestore Emulator UI websocket is running on 9150."}}
+[debug] [2026-02-26T03:34:45.389Z] Checked if tokens are valid: false, expires at: 1772068820513
+[debug] [2026-02-26T03:34:45.389Z] Checked if tokens are valid: false, expires at: 1772068820513
+[debug] [2026-02-26T03:34:45.389Z] > refreshing access token with scopes: []
+[debug] [2026-02-26T03:34:45.391Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-02-26T03:34:45.391Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-02-26T03:34:45.753Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-02-26T03:34:45.753Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-02-26T03:34:45.760Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/blackout-3a073 [none]
+[debug] [2026-02-26T03:34:46.363Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/blackout-3a073 200
+[debug] [2026-02-26T03:34:46.363Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/blackout-3a073 {"projectId":"blackout-3a073","projectNumber":"57457821601","displayName":"blackout","name":"projects/blackout-3a073","resources":{"hostingSite":"blackout-3a073","realtimeDatabaseInstance":"blackout-3a073-default-rtdb"},"state":"ACTIVE","etag":"1_0781ad24-9742-4cfa-8c2e-2c7a5e5995d5"}
+[debug] [2026-02-26T03:34:46.364Z] database rules config:  []
+[warn] !  database: Did not find a Realtime Database rules file specified in a firebase.json config file. The emulator will default to allowing all reads and writes. Learn more about this option: https://firebase.google.com/docs/emulator-suite/install_and_configure#security_rules_configuration. {"metadata":{"emulator":{"name":"database"},"message":"Did not find a Realtime Database rules file specified in a firebase.json config file. The emulator will default to allowing all reads and writes. Learn more about this option: https://firebase.google.com/docs/emulator-suite/install_and_configure#security_rules_configuration."}}
+[debug] [2026-02-26T03:34:46.366Z] Ignoring unsupported arg: projectId {"metadata":{"emulator":{"name":"database"},"message":"Ignoring unsupported arg: projectId"}}
+[debug] [2026-02-26T03:34:46.366Z] Ignoring unsupported arg: auto_download {"metadata":{"emulator":{"name":"database"},"message":"Ignoring unsupported arg: auto_download"}}
+[debug] [2026-02-26T03:34:46.366Z] Ignoring unsupported arg: rules {"metadata":{"emulator":{"name":"database"},"message":"Ignoring unsupported arg: rules"}}
+[debug] [2026-02-26T03:34:46.366Z] Starting Database Emulator with command {"binary":"java","args":["-Duser.language=en","-jar","C:\\Users\\hoody\\.cache\\firebase\\emulators\\firebase-database-emulator-v4.11.2.jar","--host","0.0.0.0","--port",9010,"--single_project_mode","Warning"],"optionalArgs":["port","host","functions_emulator_port","functions_emulator_host","single_project_mode"],"joinArgs":false,"shell":false,"port":9010} {"metadata":{"emulator":{"name":"database"},"message":"Starting Database Emulator with command {\"binary\":\"java\",\"args\":[\"-Duser.language=en\",\"-jar\",\"C:\\\\Users\\\\hoody\\\\.cache\\\\firebase\\\\emulators\\\\firebase-database-emulator-v4.11.2.jar\",\"--host\",\"0.0.0.0\",\"--port\",9010,\"--single_project_mode\",\"Warning\"],\"optionalArgs\":[\"port\",\"host\",\"functions_emulator_port\",\"functions_emulator_host\",\"single_project_mode\"],\"joinArgs\":false,\"shell\":false,\"port\":9010}"}}
+[info] i  database: Database Emulator logging to database-debug.log {"metadata":{"emulator":{"name":"database"},"message":"Database Emulator logging to \u001b[1mdatabase-debug.log\u001b[22m"}}
+[debug] [2026-02-26T03:34:55.573Z] Could not find VSCode notification endpoint: FetchError: request to http://localhost:40001/vscode/notify failed, reason: . If you are not running the Firebase Data Connect VSCode extension, this is expected and not an issue.
+[info] 
+┌─────────────────────────────────────────────────────────────┐
+│ ✔  All emulators ready! It is now safe to connect your app. │
+│ i  View Emulator UI at http://127.0.0.1:4010/               │
+└─────────────────────────────────────────────────────────────┘
+
+┌────────────────┬──────────────┬─────────────────────────────────┐
+│ Emulator       │ Host:Port    │ View in Emulator UI             │
+├────────────────┼──────────────┼─────────────────────────────────┤
+│ Authentication │ 0.0.0.0:9200 │ http://127.0.0.1:4010/auth      │
+├────────────────┼──────────────┼─────────────────────────────────┤
+│ Firestore      │ 0.0.0.0:8090 │ http://127.0.0.1:4010/firestore │
+├────────────────┼──────────────┼─────────────────────────────────┤
+│ Database       │ 0.0.0.0:9010 │ http://127.0.0.1:4010/database  │
+└────────────────┴──────────────┴─────────────────────────────────┘
+  Emulator Hub host: 127.0.0.1 port: 4410
+  Other reserved ports: 4510, 9150
+
+Issues? Report them at https://github.com/firebase/firebase-tools/issues and attach the *-debug.log files.
+ 

@@ -1,9 +1,12 @@
+import { getCrewColor, CrewId } from '@/utils/crewTheme';
+
 export const generateAvatarUrl = (
   userId: string,
   username: string,
   gender?: 'male' | 'female' | 'other' | 'prefer-not-to-say',
   size: number = 60,
-  backgroundColor?: string
+  backgroundColor?: string,
+  crewId?: CrewId | string | null
 ): string => {
   // Create VERY different seeds for different genders
   let seed = username || userId;
@@ -19,25 +22,31 @@ export const generateAvatarUrl = (
     seed = `default-${seed}`; // "default-" prefix
   }
   
-  // Set color based on gender
+  // Set color based on priority: explicit backgroundColor > crew color > gender default
   let selectedColor = backgroundColor;
   
   if (!selectedColor) {
-    switch (gender) {
-      case 'male':
-        selectedColor = '4dabf7'; // Blue
-        break;
-      case 'female':
-        selectedColor = 'ec4899'; // Pink
-        break;
-      case 'other':
-        selectedColor = '10b981'; // Green
-        break;
-      case 'prefer-not-to-say':
-        selectedColor = '6b7280'; // Grey
-        break;
-      default:
-        selectedColor = '6b7280'; // Grey
+    // If crewId is provided, use crew color as background
+    if (crewId) {
+      selectedColor = getCrewColor(crewId);
+    } else {
+      // Fall back to gender-based colors
+      switch (gender) {
+        case 'male':
+          selectedColor = '4dabf7'; // Blue
+          break;
+        case 'female':
+          selectedColor = 'ec4899'; // Pink
+          break;
+        case 'other':
+          selectedColor = '10b981'; // Green
+          break;
+        case 'prefer-not-to-say':
+          selectedColor = '6b7280'; // Grey
+          break;
+        default:
+          selectedColor = '6b7280'; // Grey
+      }
     }
   }
   

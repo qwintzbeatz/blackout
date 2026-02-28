@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase/config';
 import { UserProfile } from '@/lib/types/blackout';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { uploadImageToImgBB } from '@/lib/services/imgbb';
+import { getCrewTheme, getCrewColor } from '@/utils/crewTheme';
 
 // Only show cheat menu in development mode
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -29,6 +30,10 @@ interface ProfileStatsProps {
   onAddRep?: (amount: number) => void;
   onMaxRep?: () => void;
   onMaxEverything?: () => void;
+  // Video unlock callbacks
+  onUnlockRandomVideo?: () => void;
+  onUnlockAllVideos?: () => void;
+  onResetVideos?: () => void;
 }
 
 const ProfileStats: React.FC<ProfileStatsProps> = ({
@@ -48,25 +53,22 @@ const ProfileStats: React.FC<ProfileStatsProps> = ({
   onResetGraffiti,
   onAddRep,
   onMaxRep,
-  onMaxEverything
+  onMaxEverything,
+  onUnlockRandomVideo,
+  onUnlockAllVideos,
+  onResetVideos
 }) => {
   const [showSettings, setShowSettings] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Determine crew color for styling
-  const getCrewColor = () => {
-    if (userProfile?.isSolo) return '#f59e0b'; // Amber for solo
-    switch (userProfile?.crewId) {
-      case 'bqc': return '#ef4444'; // Red
-      case 'sps': return '#4dabf7'; // Blue
-      case 'lzt': return '#10b981'; // Green
-      case 'dgc': return '#8b5cf6'; // Purple
-      default: return '#9ca3af'; // Gray
-    }
-  };
-
-  const crewColor = getCrewColor();
+  // Use centralized crew theme
+  const crewTheme = getCrewTheme(userProfile?.crewId);
+  const crewColor = crewTheme.primary;
+  const crewGlow = crewTheme.glow;
   const displayName = userProfile?.isSolo ? 'ONE' : (userProfile?.crewId?.toUpperCase() || 'SOLO');
+  
+  // For better visibility with black color
+  const crewDisplayColor = crewColor === '#000000' ? '#808080' : crewColor;
 
   // Handle profile picture upload
   const handleProfilePicUpload = async (file: File) => {
@@ -240,7 +242,7 @@ const ProfileStats: React.FC<ProfileStatsProps> = ({
               style={{
                 width: '40px',
                 height: '40px',
-                border: `3px solid ${userProfile.isSolo ? '#f59e0b' : '#ff6b6b'}`,
+                border: `3px solid ${crewDisplayColor}`,
                 borderRadius: '0',
                 objectFit: 'cover',
               }}
@@ -441,6 +443,41 @@ const ProfileStats: React.FC<ProfileStatsProps> = ({
                   onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
                 >
                   🧹 Reset Songs
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* 🎬 VIDEO CHEATS - Development Only */}
+          {isDevelopment && (
+            <>
+              <div style={sectionHeaderStyle}>
+                🎬 VIDEO CHEATS
+              </div>
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '4px' }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onUnlockRandomVideo?.(); }}
+                  style={{ ...cheatButtonStyle, borderColor: 'rgba(139, 92, 246, 0.4)', color: '#8b5cf6' }}
+                  onMouseOver={(e) => e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)'}
+                  onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+                >
+                  🎬 +Video
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onUnlockAllVideos?.(); }}
+                  style={{ ...cheatButtonStyle, borderColor: 'rgba(236, 72, 153, 0.4)', color: '#ec4899' }}
+                  onMouseOver={(e) => e.currentTarget.style.background = 'rgba(236, 72, 153, 0.15)'}
+                  onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+                >
+                  🔓 All
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onResetVideos?.(); }}
+                  style={{ ...cheatButtonStyle, borderColor: 'rgba(239, 68, 68, 0.4)', color: '#ef4444' }}
+                  onMouseOver={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'}
+                  onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+                >
+                  🧹 Reset
                 </button>
               </div>
             </>

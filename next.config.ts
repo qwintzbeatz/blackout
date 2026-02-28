@@ -1,5 +1,6 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
   typescript: {
     // This ignores the Leaflet and UserProfile errors you saw
     ignoreBuildErrors: true,
@@ -11,7 +12,7 @@ const nextConfig = {
   },
   // Bundle analysis for production builds
   experimental: {
-    optimizePackageImports: ['firebase', 'leaflet', 'mapbox-gl', 'framer-motion'],
+    optimizePackageImports: ['firebase', 'leaflet'],
   },
 };
 

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { getCrewTheme, getCrewGlow } from '@/utils/crewTheme';
 
 interface BottomNavigationProps {
   // Panel visibility states
@@ -21,6 +22,9 @@ interface BottomNavigationProps {
   // Unread notifications
   hasUnreadMessages: boolean;
   unreadCount: number;
+  
+  // Crew theming
+  crewId?: string | null;
 }
 
 const BottomNavigation: React.FC<BottomNavigationProps> = ({
@@ -34,8 +38,38 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
   onToggleCrewChat,
   onCloseAllPanels,
   hasUnreadMessages,
-  unreadCount
+  unreadCount,
+  crewId
 }) => {
+  // Get crew theme colors
+  const crewTheme = getCrewTheme(crewId);
+  const crewGlow = getCrewGlow(crewId);
+  const crewColor = crewTheme.primary;
+  
+  // Get crew-specific SVG file
+  const getCrewSvg = () => {
+    switch (crewId) {
+      case 'bqc': return 'bobottomnav1.svg';
+      case 'sps': return 'bobottomnav2.svg';
+      case 'lzt': return 'bobottomnav3.svg';
+      case 'dgc': return 'bobottomnav4.svg';
+      default: return 'bobottomnav1.svg'; // Solo/default
+    }
+  };
+  
+  const crewSvg = getCrewSvg();
+  
+  // Parse crew color for rgba usage
+  const getCrewColorRgba = (opacity: number) => {
+    if (crewColor === '#000000') {
+      return `rgba(128, 128, 128, ${opacity})`; // Gray for black
+    }
+    const r = parseInt(crewColor.slice(1, 3), 16);
+    const g = parseInt(crewColor.slice(3, 5), 16);
+    const b = parseInt(crewColor.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  };
+  
   const handleButtonClick = (toggleFn: () => void) => {
     onCloseAllPanels();
     toggleFn();
@@ -82,7 +116,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
           zIndex: 1,
         }} />
         
-        {/* Active Button Glow Layer */}
+        {/* Active Button Glow Layer - Crew Themed */}
         <div style={{
           position: 'absolute',
           width: '100%',
@@ -92,62 +126,62 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
           pointerEvents: 'none',
           zIndex: 1,
         }}>
-          {/* Map Button Glow */}
+          {/* Map Button Glow - Crew Themed */}
           <div style={{
             opacity: showMapPanel ? 1 : 0,
             transition: 'opacity 0.3s ease',
-            background: 'radial-gradient(circle at center, rgba(77, 171, 247, 1) 0%, rgba(77, 171, 247, 0.7) 50%, transparent 85%)',
+            background: `radial-gradient(circle at center, ${getCrewColorRgba(1)} 0%, ${getCrewColorRgba(0.7)} 50%, transparent 85%)`,
             boxShadow: `
-              inset 0 0 80px rgba(77, 171, 247, 0.9),
-              0 0 120px rgba(77, 171, 247, 0.8),
-              0 0 180px rgba(77, 171, 247, 0.6)
+              inset 0 0 80px ${getCrewColorRgba(0.9)},
+              0 0 120px ${getCrewColorRgba(0.8)},
+              0 0 180px ${getCrewColorRgba(0.6)}
             `,
             filter: 'blur(1px)',
           }} />
           
-          {/* Blackbook Button Glow */}
+          {/* Blackbook Button Glow - Crew Themed */}
           <div style={{
             opacity: showProfilePanel ? 1 : 0,
             transition: 'opacity 0.3s ease',
-            background: 'radial-gradient(circle at center, rgba(77, 171, 247, 1) 0%, rgba(77, 171, 247, 0.7) 50%, transparent 85%)',
+            background: `radial-gradient(circle at center, ${getCrewColorRgba(1)} 0%, ${getCrewColorRgba(0.7)} 50%, transparent 85%)`,
             boxShadow: `
-              inset 0 0 80px rgba(77, 171, 247, 0.9),
-              0 0 120px rgba(77, 171, 247, 0.8),
-              0 0 180px rgba(77, 171, 247, 0.6)
+              inset 0 0 80px ${getCrewColorRgba(0.9)},
+              0 0 120px ${getCrewColorRgba(0.8)},
+              0 0 180px ${getCrewColorRgba(0.6)}
             `,
             filter: 'blur(1px)',
           }} />
           
-          {/* Camera Button Glow */}
+          {/* Camera Button Glow - Crew Themed */}
           <div style={{
             opacity: showPhotosPanel ? 1 : 0,
             transition: 'opacity 0.3s ease',
-            background: 'radial-gradient(circle at center, rgba(77, 171, 247, 1) 0%, rgba(77, 171, 247, 0.7) 50%, transparent 85%)',
+            background: `radial-gradient(circle at center, ${getCrewColorRgba(1)} 0%, ${getCrewColorRgba(0.7)} 50%, transparent 85%)`,
             boxShadow: `
-              inset 0 0 80px rgba(77, 171, 247, 0.9),
-              0 0 120px rgba(77, 171, 247, 0.8),
-              0 0 180px rgba(77, 171, 247, 0.6)
+              inset 0 0 80px ${getCrewColorRgba(0.9)},
+              0 0 120px ${getCrewColorRgba(0.8)},
+              0 0 180px ${getCrewColorRgba(0.6)}
             `,
             filter: 'blur(1px)',
           }} />
           
-          {/* Crew Chat Glow */}
+          {/* Crew Chat Glow - Crew Themed */}
           <div style={{
             opacity: showCrewChat ? 1 : 0,
             transition: 'opacity 0.3s ease',
-            background: 'radial-gradient(circle at center, rgba(77, 171, 247, 1) 0%, rgba(77, 171, 247, 0.7) 50%, transparent 85%)',
+            background: `radial-gradient(circle at center, ${getCrewColorRgba(1)} 0%, ${getCrewColorRgba(0.7)} 50%, transparent 85%)`,
             boxShadow: `
-              inset 0 0 80px rgba(77, 171, 247, 0.9),
-              0 0 120px rgba(77, 171, 247, 0.8),
-              0 0 180px rgba(77, 171, 247, 0.6)
+              inset 0 0 80px ${getCrewColorRgba(0.9)},
+              0 0 120px ${getCrewColorRgba(0.8)},
+              0 0 180px ${getCrewColorRgba(0.6)}
             `,
             filter: 'blur(1px)',
           }} />
         </div>
 
-        {/* SVG Background */}
+        {/* SVG Background - Crew Themed */}
         <img 
-          src="bobottomnav1.svg" 
+          src={crewSvg} 
           alt="Bottom Navigation"
           style={{
             position: 'absolute',

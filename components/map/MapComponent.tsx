@@ -215,6 +215,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
             onGoTo={onGoToMarker || (() => {})}
             gpsPosition={gpsPosition}
             userRank={userRank}
+            currentUserId={undefined}
           />
         ))}
       </MapContainer>

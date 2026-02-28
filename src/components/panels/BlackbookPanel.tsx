@@ -2,6 +2,10 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { UserMarker, MarkerName, MarkerDescription } from '@/lib/utils/types';
+import { getCrewTheme } from '@/utils/crewTheme';
+import { getStyleById, getDefaultStyleForCrew, getFontStyle, getSVGStyles, isStyleUnlocked } from '@/constants/graffitiFonts';
+import { GRAFFITI_TYPES, GRAFFITI_LIST, GraffitiType } from '@/constants/graffitiTypes';
+import { CrewId } from '@/constants/crewGraffitiStyles';
 
 interface BlackbookPanelProps {
   userMarkers: UserMarker[];
@@ -9,13 +13,18 @@ interface BlackbookPanelProps {
   onDeleteAllMarkers: () => void;
   onClose: () => void;
   userProfile: {
+    uid?: string;
     username: string;
     profilePicUrl: string;
     rank: string;
     level: number;
     rep: number;
     totalMarkers: number;
+    crewId?: string | null;
+    selectedColor?: string;
+    selectedGraffitiStyle?: string;
   };
+  onProfileUpdate?: (profile: any) => void;
 }
 
 const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
@@ -23,10 +32,40 @@ const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
   onDeleteMarker,
   onDeleteAllMarkers,
   onClose,
-  userProfile
+  userProfile,
+  onProfileUpdate
 }) => {
   const [selectedMarker, setSelectedMarker] = useState<UserMarker | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | 'all' | null>(null);
+  const [selectedType, setSelectedType] = useState<GraffitiType>('tag');
+  
+  // Get crew theme
+  const crewTheme = getCrewTheme(userProfile?.crewId);
+  const crewColor = crewTheme.primary;
+  const crewDisplayColor = crewColor === '#000000' ? '#808080' : crewColor;
+  const markerColor = userProfile?.selectedColor || crewDisplayColor;
+  const playerTagName = userProfile?.username || 'TAG';
+  const currentRep = userProfile?.rep || 0;
+  const crewId = (userProfile?.crewId || 'bqc') as CrewId;
+  
+  // Get styles
+  const fontStyle = getFontStyle(crewId, selectedType);
+  const svgStyles = getSVGStyles(crewId, selectedType);
+  
+  // Current active style
+  const activeStyleId = userProfile?.selectedGraffitiStyle || getDefaultStyleForCrew(crewId);
+  const activeStyle = getStyleById(activeStyleId);
+  
+  // Handle style selection
+  const handleSelectStyle = useCallback((styleId: string) => {
+    if (!onProfileUpdate || !userProfile) return;
+    onProfileUpdate({
+      ...userProfile,
+      selectedGraffitiStyle: styleId,
+      selectedStyleVariant: styleId,
+      activeGraffitiStyle: styleId.split('-')[1]
+    });
+  }, [userProfile, onProfileUpdate]);
 
   // Calculate marker statistics
   const markerStats = useMemo(() => {
@@ -38,23 +77,19 @@ const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
       topLocations: [] as Array<{lat: number; lng: number; count: number}>
     };
 
-    // Count marker types and descriptions
     userMarkers.forEach(marker => {
       stats.markerTypes[marker.name] = (stats.markerTypes[marker.name] || 0) + 1;
       stats.markerDescriptions[marker.description] = (stats.markerDescriptions[marker.description] || 0) + 1;
     });
 
-    // Group nearby markers (approximate location clustering)
     const locationMap = new Map<string, number>();
     userMarkers.forEach(marker => {
-      // Round coordinates to create location clusters
       const latKey = Math.round(marker.position[0] * 100) / 100;
       const lngKey = Math.round(marker.position[1] * 100) / 100;
       const key = `${latKey},${lngKey}`;
       locationMap.set(key, (locationMap.get(key) || 0) + 1);
     });
 
-    // Convert to array and sort by count
     stats.topLocations = Array.from(locationMap.entries())
       .map(([key, count]) => {
         const [lat, lng] = key.split(',').map(Number);
@@ -66,39 +101,21 @@ const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
     return stats;
   }, [userMarkers]);
 
-  // Handle delete marker
   const handleDeleteMarker = useCallback((markerId: string) => {
     onDeleteMarker(markerId);
     setShowDeleteConfirm(null);
     setSelectedMarker(null);
   }, [onDeleteMarker]);
 
-  // Handle delete all markers
   const handleDeleteAllMarkers = useCallback(() => {
     onDeleteAllMarkers();
     setShowDeleteConfirm(null);
   }, [onDeleteAllMarkers]);
 
-  // Format date
   const formatDate = (timestamp: any) => {
     if (!timestamp) return 'Unknown';
-    const date = timestamp instanceof Date ? timestamp : timestamp.toDate();
+    const date = timestamp instanceof Date ? timestamp : timestamp.toDate?.() || new Date(timestamp);
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const panelStyle = {
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    color: '#e0e0e0',
-    padding: '20px',
-    borderRadius: '12px',
-    boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
-    width: 'min(110vw, 500px)',
-    maxHeight: '85vh',
-    overflowY: 'auto' as const,
-    border: '1px solid rgba(255,255,255,0.15)',
-    backdropFilter: 'blur(8px)',
-    zIndex: 1500,
-    position: 'relative' as const
   };
 
   return (
@@ -109,397 +126,381 @@ const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
       transform: 'translate(-50%, -50%)',
       zIndex: 1500
     }}>
-      <div style={panelStyle}>
+      <div style={{
+        backgroundColor: 'rgba(0, 0, 0, 0.95)',
+        color: '#e0e0e0',
+        padding: '16px',
+        borderRadius: '16px',
+        boxShadow: '0 8px 30px rgba(0,0,0,0.6)',
+        backdropFilter: 'blur(12px)',
+        width: 'min(100vw, 400px)',
+        maxHeight: '90vh',
+        overflowY: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px'
+      }}>
         {/* Header */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '20px',
-          borderBottom: '2px solid rgba(255,255,255,0.1)',
-          paddingBottom: '15px'
+          alignItems: 'center'
         }}>
-          <div>
-            <h2 style={{ color: '#e0e0e0', margin: 0, fontSize: '24px' }}>📓 Blackbook</h2>
-            <p style={{ color: '#b0b0b0', margin: '5px 0 0', fontSize: '14px' }}>
-              Your graffiti collection & statistics
-            </p>
-          </div>
+          <h3 style={{ 
+            margin: 0, 
+            color: crewDisplayColor, 
+            fontSize: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            📓 BLACKBOOK
+          </h3>
           <button
             onClick={onClose}
             style={{
-              background: 'none',
+              background: 'rgba(255,255,255,0.1)',
               border: 'none',
-              color: '#e0e0e0',
-              fontSize: '24px',
+              color: 'white',
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
               cursor: 'pointer',
-              padding: '5px',
-              borderRadius: '5px',
-              transition: 'background 0.2s'
+              fontSize: '16px'
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
           >
             ✕
           </button>
         </div>
 
-        {/* User Stats Overview */}
+        {/* CURRENT STYLE PREVIEW - BIG */}
         <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '15px',
-          padding: '15px',
-          backgroundColor: 'rgba(255,255,255,0.05)',
-          borderRadius: '10px',
-          marginBottom: '20px'
+          background: `linear-gradient(135deg, ${crewDisplayColor}30, ${crewDisplayColor}10)`,
+          borderRadius: '16px',
+          padding: '20px',
+          textAlign: 'center',
+          border: `2px solid ${crewDisplayColor}50`
         }}>
-          <img
-            src={userProfile.profilePicUrl}
-            alt={userProfile.username}
-            style={{
-              width: '50px',
-              height: '50px',
-              borderRadius: '50%',
-              border: `3px solid #10b981`
-            }}
-          />
-          <div style={{ flex: 1 }}>
-            <div style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '16px' }}>
-              {userProfile.username}
-            </div>
-            <div style={{ color: '#b0b0b0', fontSize: '12px' }}>
-              {userProfile.rank} • Level {userProfile.level} • {userProfile.rep} REP
-            </div>
-          </div>
           <div style={{
-            textAlign: 'center',
-            padding: '10px',
-            backgroundColor: '#10b981',
-            borderRadius: '10px',
-            color: 'white'
+            fontSize: '10px',
+            color: '#94a3b8',
+            marginBottom: '12px',
+            textTransform: 'uppercase',
+            letterSpacing: '2px'
           }}>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{markerStats.totalMarkers}</div>
-            <div style={{ fontSize: '10px' }}>MARKERS</div>
+            YOUR TAG
+          </div>
+          
+          {/* TAG NAME IN FONT */}
+          <div style={{
+            fontFamily: activeStyle?.fontFamily || 'sans-serif',
+            fontSize: '40px',
+            fontWeight: 'bold',
+            color: markerColor,
+            textShadow: '3px 3px 6px rgba(0,0,0,0.5)',
+            letterSpacing: '4px',
+            marginBottom: '12px'
+          }}>
+            {playerTagName.toUpperCase()}
+          </div>
+
+          {/* Current Style Info */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px'
+          }}>
+            <span style={{ fontSize: '20px' }}>
+              {GRAFFITI_TYPES[activeStyle?.graffitiType || 'tag']?.icon}
+            </span>
+            <span style={{ fontSize: '14px', fontWeight: 'bold' }}>
+              {activeStyle?.name || 'Tag Font'}
+            </span>
+            {activeStyle?.styleType === 'font' && (
+              <span style={{
+                padding: '2px 8px',
+                background: '#10b981',
+                borderRadius: '4px',
+                color: 'white',
+                fontSize: '10px',
+                fontWeight: 'bold'
+              }}>
+                FREE
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Enhanced Statistics Grid */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '15px',
-          marginBottom: '20px'
-        }}>
-          {/* Total Markers */}
+        {/* SELECT GRAFFITI TYPE */}
+        <div>
           <div style={{
-            backgroundColor: 'rgba(79, 172, 254, 0.1)',
-            border: '1px solid rgba(79, 172, 254, 0.3)',
-            padding: '15px',
-            borderRadius: '10px',
-            textAlign: 'center'
+            fontSize: '11px',
+            color: '#94a3b8',
+            marginBottom: '8px',
+            textTransform: 'uppercase',
+            letterSpacing: '1px'
           }}>
-            <div style={{ 
-              fontSize: '28px', 
-              fontWeight: 'bold', 
-              color: '#4dabf7',
-              marginBottom: '5px' 
-            }}>
-              {markerStats.totalMarkers}
-            </div>
-            <div style={{ color: '#b0b0b0', fontSize: '12px' }}>
-              Total Markers
-            </div>
+            Select Type
           </div>
-
-          {/* Marker Types */}
           <div style={{
-            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-            border: '1px solid rgba(16, 185, 129, 0.3)',
-            padding: '15px',
-            borderRadius: '10px'
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '6px'
           }}>
-            <h3 style={{ color: '#10b981', margin: '0 0 10px', fontSize: '14px' }}>Top Types</h3>
-            <div style={{ fontSize: '12px' }}>
-              {Object.entries(markerStats.markerTypes)
-                .sort(([,a], [,b]) => b - a)
-                .slice(0, 3)
-                .map(([type, count]) => (
-                  <div key={type} style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between',
-                    marginBottom: '5px',
-                    color: '#e0e0e0'
-                  }}>
-                    <span>{type}</span>
-                    <span style={{ color: '#10b981', fontWeight: 'bold' }}>{count}</span>
-                  </div>
-                ))}
-            </div>
-          </div>
-
-          {/* Marker Descriptions */}
-          <div style={{
-            backgroundColor: 'rgba(255, 107, 53, 0.1)',
-            border: '1px solid rgba(255, 107, 53, 0.3)',
-            padding: '15px',
-            borderRadius: '10px'
-          }}>
-            <h3 style={{ color: '#ff6b35', margin: '0 0 10px', fontSize: '14px' }}>Top Styles</h3>
-            <div style={{ fontSize: '12px' }}>
-              {Object.entries(markerStats.markerDescriptions)
-                .sort(([,a], [,b]) => b - a)
-                .slice(0, 3)
-                .map(([desc, count]) => (
-                  <div key={desc} style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between',
-                    marginBottom: '5px',
-                    color: '#e0e0e0'
-                  }}>
-                    <span style={{ fontSize: '10px' }}>{desc}</span>
-                    <span style={{ color: '#ff6b35', fontWeight: 'bold' }}>{count}</span>
-                  </div>
-                ))}
-            </div>
+            {GRAFFITI_LIST.map(type => {
+              const config = GRAFFITI_TYPES[type];
+              const isActive = selectedType === type;
+              return (
+                <button
+                  key={type}
+                  onClick={() => setSelectedType(type)}
+                  style={{
+                    padding: '8px 12px',
+                    background: isActive ? `${crewDisplayColor}30` : 'rgba(255,255,255,0.05)',
+                    border: isActive ? `2px solid ${crewDisplayColor}` : '2px solid transparent',
+                    borderRadius: '8px',
+                    color: isActive ? crewDisplayColor : '#e0e0e0',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: isActive ? 'bold' : 'normal',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <span>{config.icon}</span>
+                  <span>{config.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Location Statistics */}
-        {markerStats.topLocations.length > 0 && (
-          <div style={{
-            backgroundColor: 'rgba(156, 39, 176, 0.1)',
-            border: '1px solid rgba(156, 39, 176, 0.3)',
-            padding: '15px',
-            borderRadius: '10px',
-            marginBottom: '20px'
-          }}>
-            <h3 style={{ color: '#9c27b0', margin: '0 0 10px', fontSize: '14px' }}>📍 Top Locations</h3>
+        {/* FONT STYLE - FREE */}
+        {fontStyle && (
+          <div>
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '10px',
-              fontSize: '12px'
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '8px'
             }}>
-              {markerStats.topLocations.map((location, index) => (
-                <div key={index} style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '8px',
-                  backgroundColor: 'rgba(255,255,255,0.05)',
-                  borderRadius: '6px',
-                  color: '#e0e0e0'
+              <span style={{ fontSize: '14px' }}>🔤</span>
+              <span style={{ fontSize: '13px', fontWeight: 'bold' }}>FONT STYLE</span>
+              <span style={{
+                padding: '2px 6px',
+                background: '#10b981',
+                borderRadius: '4px',
+                color: 'white',
+                fontSize: '9px',
+                fontWeight: 'bold'
+              }}>
+                FREE
+              </span>
+            </div>
+            
+            <div
+              onClick={() => handleSelectStyle(fontStyle.id)}
+              style={{
+                background: activeStyleId === fontStyle.id 
+                  ? `${crewDisplayColor}20`
+                  : 'rgba(255,255,255,0.05)',
+                borderRadius: '12px',
+                padding: '16px',
+                cursor: 'pointer',
+                border: activeStyleId === fontStyle.id 
+                  ? `2px solid ${crewDisplayColor}`
+                  : '2px solid transparent',
+                textAlign: 'center'
+              }}
+            >
+              <div style={{
+                fontFamily: fontStyle.fontFamily || 'sans-serif',
+                fontSize: '28px',
+                fontWeight: 'bold',
+                color: markerColor,
+                textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
+                letterSpacing: '2px'
+              }}>
+                {playerTagName.toUpperCase()}
+              </div>
+              {activeStyleId === fontStyle.id && (
+                <div style={{
+                  marginTop: '8px',
+                  fontSize: '11px',
+                  color: '#10b981',
+                  fontWeight: 'bold'
                 }}>
-                  <span>Location {index + 1}</span>
-                  <span style={{ 
-                    color: '#9c27b0', 
-                    fontWeight: 'bold' 
-                  }}>
-                    {location.count} markers
-                  </span>
+                  ✓ SELECTED
                 </div>
-              ))}
+              )}
             </div>
           </div>
         )}
 
-        {/* Visual Gallery */}
-        <div style={{ marginBottom: '20px' }}>
-          <h3 style={{ color: '#e0e0e0', margin: '0 0 15px', fontSize: '16px' }}>🎨 Marker Gallery</h3>
-          {userMarkers.length > 0 ? (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
-              gap: '10px',
-              maxHeight: '250px',
-              overflowY: 'auto',
-              padding: '5px',
-              backgroundColor: 'rgba(255,255,255,0.03)',
-              borderRadius: '10px'
-            }}>
-              {userMarkers.map((marker, index) => (
+        {/* ICON STYLES - UNLOCKABLE */}
+        <div>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '8px'
+          }}>
+            <span style={{ fontSize: '14px' }}>🎨</span>
+            <span style={{ fontSize: '13px', fontWeight: 'bold' }}>ICON STYLES</span>
+            <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+              ({svgStyles.filter(s => isStyleUnlocked(s.id, currentRep, [])).length}/{svgStyles.length} unlocked)
+            </span>
+          </div>
+          
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(5, 1fr)',
+            gap: '8px'
+          }}>
+            {svgStyles.map(style => {
+              const isUnlocked = isStyleUnlocked(style.id, currentRep, []);
+              const isActive = activeStyleId === style.id;
+              
+              return (
                 <div
-                  key={marker.id || index}
+                  key={style.id}
+                  onClick={() => isUnlocked && handleSelectStyle(style.id)}
                   style={{
+                    aspectRatio: '1',
+                    background: isActive 
+                      ? `${crewDisplayColor}30`
+                      : isUnlocked 
+                        ? 'rgba(255,255,255,0.08)'
+                        : 'rgba(0,0,0,0.5)',
+                    borderRadius: '10px',
+                    border: isActive 
+                      ? `2px solid ${crewDisplayColor}`
+                      : '1px solid rgba(255,255,255,0.1)',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
-                    padding: '10px',
-                    backgroundColor: 'rgba(255,255,255,0.08)',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    border: `2px solid ${marker.color}40`,
-                    position: 'relative'
-                  }}
-                  onClick={() => setSelectedMarker(marker)}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)';
-                    e.currentTarget.style.transform = 'scale(1.05)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)';
-                    e.currentTarget.style.transform = 'scale(1)';
+                    justifyContent: 'center',
+                    cursor: isUnlocked ? 'pointer' : 'not-allowed',
+                    position: 'relative',
+                    opacity: isUnlocked ? 1 : 0.5
                   }}
                 >
-                  {/* Marker Preview */}
-                  <div style={{
-                    width: '40px',
-                    height: '40px',
-                    backgroundColor: marker.color,
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '18px',
-                    marginBottom: '8px',
-                    boxShadow: `0 2px 8px ${marker.color}60`
-                  }}>
-                    📍
-                  </div>
-                  
-                  {/* Marker Info */}
-                  <div style={{
-                    textAlign: 'center',
-                    width: '100%'
-                  }}>
+                  {!isUnlocked && (
                     <div style={{
-                      color: '#ffffff',
-                      fontSize: '11px',
-                      fontWeight: 'bold',
-                      marginBottom: '2px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {marker.name}
-                    </div>
-                    <div style={{
-                      color: '#b0b0b0',
-                      fontSize: '9px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {marker.description}
-                    </div>
-                    <div style={{
-                      color: '#666',
-                      fontSize: '8px',
-                      marginTop: '4px'
-                    }}>
-                      {formatDate(marker.timestamp).split(' ')[0]}
-                    </div>
-                  </div>
-                  
-                  {/* Delete Button */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowDeleteConfirm(marker.id || `${index}`);
-                    }}
-                    style={{
                       position: 'absolute',
-                      top: '2px',
-                      right: '2px',
-                      background: 'rgba(239, 68, 68, 0.9)',
-                      border: 'none',
-                      color: '#ffffff',
-                      fontSize: '10px',
-                      cursor: 'pointer',
+                      inset: 0,
+                      background: 'rgba(0,0,0,0.6)',
+                      borderRadius: '10px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '2px'
+                    }}>
+                      <span style={{ fontSize: '12px' }}>🔒</span>
+                      <span style={{ fontSize: '8px', color: '#94a3b8' }}>{style.unlockRep}</span>
+                    </div>
+                  )}
+                  <span style={{ fontSize: '18px' }}>
+                    {GRAFFITI_TYPES[selectedType]?.icon}
+                  </span>
+                  {isActive && (
+                    <div style={{
+                      position: 'absolute',
+                      bottom: '4px',
+                      right: '4px',
+                      width: '12px',
+                      height: '12px',
+                      background: crewDisplayColor,
                       borderRadius: '50%',
-                      width: '18px',
-                      height: '18px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      opacity: 0,
-                      transition: 'opacity 0.2s ease'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0'}
-                  >
-                    ✕
-                  </button>
+                      fontSize: '8px',
+                      color: 'white'
+                    }}>
+                      ✓
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{
-              textAlign: 'center',
-              padding: '30px 20px',
-              backgroundColor: 'rgba(255,255,255,0.05)',
-              borderRadius: '10px',
-              color: '#666'
-            }}>
-              <div style={{ fontSize: '32px', marginBottom: '10px' }}>🎨</div>
-              <div style={{ fontSize: '14px' }}>No markers in your gallery</div>
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-                Start placing markers to build your collection
-              </div>
-            </div>
-          )}
+              );
+            })}
+          </div>
         </div>
 
-        {/* Actions */}
+        {/* REP INFO */}
         <div style={{
-          display: 'flex',
-          gap: '10px',
-          marginBottom: '20px'
+          padding: '10px',
+          background: 'rgba(255,255,255,0.03)',
+          borderRadius: '8px',
+          textAlign: 'center'
         }}>
-          <button
-            onClick={() => setShowDeleteConfirm('all')}
-            disabled={userMarkers.length === 0}
-            style={{
-              flex: 1,
-              padding: '10px',
-              backgroundColor: '#ef4444',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: userMarkers.length > 0 ? 'pointer' : 'not-allowed',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              opacity: userMarkers.length > 0 ? 1 : 0.5
-            }}
-          >
-            🗑️ Clear All Markers
-          </button>
-          <button
-            onClick={() => {
-              // Export markers functionality
-              const dataStr = JSON.stringify(userMarkers, null, 2);
-              const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-              const exportFileDefaultName = `${userProfile.username}_blackbook.json`;
-              const linkElement = document.createElement('a');
-              linkElement.setAttribute('href', dataUri);
-              linkElement.setAttribute('download', exportFileDefaultName);
-              linkElement.click();
-            }}
-            disabled={userMarkers.length === 0}
-            style={{
-              flex: 1,
-              padding: '10px',
-              backgroundColor: '#4dabf7',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: userMarkers.length > 0 ? 'pointer' : 'not-allowed',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              opacity: userMarkers.length > 0 ? 1 : 0.5
-            }}
-          >
-            📥 Export Data
-          </button>
+          <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+            Your REP: <span style={{ color: '#10b981', fontWeight: 'bold' }}>{currentRep}</span>
+            {' • '}
+            Unlock icons with REP!
+          </span>
         </div>
 
-        {/* Recent Markers */}
-        <div>
-          <h3 style={{ color: '#e0e0e0', margin: '0 0 15px', fontSize: '16px' }}>📍 Recent Activity</h3>
-          {markerStats.recentMarkers.length > 0 ? (
-            <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+        {/* MARKER STATS */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '10px'
+        }}>
+          <div style={{
+            background: 'rgba(79, 172, 254, 0.1)',
+            border: '1px solid rgba(79, 172, 254, 0.3)',
+            padding: '12px',
+            borderRadius: '8px',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#4dabf7' }}>
+              {markerStats.totalMarkers}
+            </div>
+            <div style={{ fontSize: '10px', color: '#b0b0b0' }}>Markers</div>
+          </div>
+          <div style={{
+            background: 'rgba(16, 185, 129, 0.1)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            padding: '12px',
+            borderRadius: '8px',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#10b981' }}>
+              {userProfile.level}
+            </div>
+            <div style={{ fontSize: '10px', color: '#b0b0b0' }}>Level</div>
+          </div>
+          <div style={{
+            background: 'rgba(255, 107, 53, 0.1)',
+            border: '1px solid rgba(255, 107, 53, 0.3)',
+            padding: '12px',
+            borderRadius: '8px',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ff6b35' }}>
+              {userProfile.rank}
+            </div>
+            <div style={{ fontSize: '10px', color: '#b0b0b0' }}>Rank</div>
+          </div>
+        </div>
+
+        {/* RECENT MARKERS */}
+        {markerStats.recentMarkers.length > 0 && (
+          <div>
+            <div style={{
+              fontSize: '11px',
+              color: '#94a3b8',
+              marginBottom: '8px',
+              textTransform: 'uppercase',
+              letterSpacing: '1px'
+            }}>
+              Recent Markers
+            </div>
+            <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
               {markerStats.recentMarkers.map((marker, index) => (
                 <div
                   key={marker.id || index}
@@ -507,105 +508,38 @@ const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    padding: '10px',
-                    backgroundColor: 'rgba(255,255,255,0.05)',
-                    borderRadius: '8px',
-                    marginBottom: '10px',
-                    cursor: 'pointer',
-                    transition: 'background 0.2s'
+                    padding: '8px',
+                    background: 'rgba(255,255,255,0.03)',
+                    borderRadius: '6px',
+                    marginBottom: '4px',
+                    fontSize: '12px'
                   }}
-                  onClick={() => setSelectedMarker(marker)}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'}
                 >
-                  <div style={{ flex: 1 }}>
-                    <div style={{ color: '#ffffff', fontSize: '14px', fontWeight: 'bold' }}>
-                      {marker.name}
-                    </div>
-                    <div style={{ color: '#b0b0b0', fontSize: '12px' }}>
-                      {marker.description} • {formatDate(marker.timestamp)}
-                    </div>
-                    <div style={{ color: '#666', fontSize: '10px', marginTop: '2px' }}>
-                      📍 {marker.position[0].toFixed(4)}, {marker.position[1].toFixed(4)}
-                    </div>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowDeleteConfirm(marker.id || `${index}`);
-                    }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#ef4444',
-                      fontSize: '16px',
-                      cursor: 'pointer',
-                      padding: '5px',
-                      borderRadius: '5px',
-                      transition: 'background 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                  >
-                    🗑️
-                  </button>
+                  <span>{marker.name}</span>
+                  <span style={{ color: '#666' }}>{formatDate(marker.timestamp).split(' ')[0]}</span>
                 </div>
               ))}
             </div>
-          ) : (
-            <div style={{
-              textAlign: 'center',
-              padding: '40px 20px',
-              backgroundColor: 'rgba(255,255,255,0.05)',
-              borderRadius: '10px',
-              color: '#666'
-            }}>
-              <div style={{ fontSize: '24px', marginBottom: '10px' }}>📍</div>
-              <div style={{ fontSize: '14px' }}>No recent activity</div>
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-                Start placing markers to build your blackbook
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Selected Marker Details */}
-        {selectedMarker && (
-          <div style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            backgroundColor: 'rgba(0, 0, 0, 0.9)',
-            padding: '20px',
-            borderRadius: '12px',
-            border: '1px solid rgba(255,255,255,0.2)',
-            zIndex: 1600,
-            minWidth: '300px'
-          }}>
-            <h3 style={{ color: '#4dabf7', margin: '0 0 15px' }}>Marker Details</h3>
-            <div style={{ fontSize: '14px', lineHeight: '1.5' }}>
-              <div><strong>Type:</strong> {selectedMarker.name}</div>
-              <div><strong>Style:</strong> {selectedMarker.description}</div>
-              <div><strong>Location:</strong> {selectedMarker.position[0].toFixed(6)}, {selectedMarker.position[1].toFixed(6)}</div>
-              <div><strong>Placed:</strong> {formatDate(selectedMarker.timestamp)}</div>
-            </div>
-            <button
-              onClick={() => setSelectedMarker(null)}
-              style={{
-                marginTop: '15px',
-                padding: '8px 16px',
-                backgroundColor: '#666',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                width: '100%'
-              }}
-            >
-              Close
-            </button>
           </div>
+        )}
+
+        {/* DELETE ALL BUTTON */}
+        {userMarkers.length > 0 && (
+          <button
+            onClick={() => setShowDeleteConfirm('all')}
+            style={{
+              padding: '10px',
+              background: 'rgba(239, 68, 68, 0.2)',
+              color: '#ef4444',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 'bold'
+            }}
+          >
+            🗑️ Clear All Markers ({userMarkers.length})
+          </button>
         )}
 
         {/* Delete Confirmation Modal */}
@@ -615,18 +549,18 @@ const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
-            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            backgroundColor: 'rgba(0, 0, 0, 0.95)',
             padding: '20px',
             borderRadius: '12px',
             border: '1px solid rgba(239, 68, 68, 0.3)',
             zIndex: 1600,
-            minWidth: '300px'
+            minWidth: '280px'
           }}>
             <h3 style={{ color: '#ef4444', margin: '0 0 15px' }}>⚠️ Confirm Delete</h3>
-            <p style={{ color: '#e0e0e0', marginBottom: '20px' }}>
+            <p style={{ color: '#e0e0e0', marginBottom: '20px', fontSize: '14px' }}>
               {showDeleteConfirm === 'all' 
-                ? 'Are you sure you want to delete ALL markers? This action cannot be undone.'
-                : 'Are you sure you want to delete this marker? This action cannot be undone.'
+                ? `Delete ALL ${userMarkers.length} markers? This cannot be undone.`
+                : 'Delete this marker? This cannot be undone.'
               }
             </p>
             <div style={{ display: 'flex', gap: '10px' }}>
@@ -635,7 +569,7 @@ const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
                 style={{
                   flex: 1,
                   padding: '10px',
-                  backgroundColor: '#666',
+                  background: '#333',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
@@ -655,7 +589,7 @@ const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
                 style={{
                   flex: 1,
                   padding: '10px',
-                  backgroundColor: '#ef4444',
+                  background: '#ef4444',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',

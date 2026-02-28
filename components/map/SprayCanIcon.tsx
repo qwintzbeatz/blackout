@@ -1,79 +1,144 @@
-'use client';
+import React from 'react';
 
-import { useMemo } from 'react';
-
-interface SprayCanIconProps {
-  color: string;
-  size?: number;
-  withDrip?: boolean;
-}
-
-export function createSprayCanSVG(color: string, size: number = 40, withDrip: boolean = true): string {
-  const padding = 4;
-  const dripHeight = withDrip ? 25 : 0;
-  const width = size + padding * 2;
-  const height = size + padding * 2 + dripHeight;
+/**
+ * Creates a spray can tag marker icon HTML string
+ * Used for graffiti markers on the map
+ */
+export const createSprayCanIcon = (
+  color: string = '#ff6b6b',
+  specialType?: 'rainbow' | 'glow' | 'metallic' | null
+): string => {
+  // Handle special color effects
+  let markerColor = color;
+  let additionalStyles = '';
   
-  // Splash blob path - organic irregular shape
-  const splashPath = `M 20,5 C 25,3 30,5 33,8 C 37,4 40,7 40,12 C 42,15 40,20 38,22 C 41,25 40,30 37,33 C 35,38 38,40 32,40 C 28,42 22,40 18,38 C 12,40 8,37 7,32 C 4,28 5,22 8,18 C 3,15 2,10 8,7 C 12,4 16,6 20,5 Z`;
-  
-  // Splatter dots
-  const splatterDots = `<circle cx="8" cy="3" r="2" fill="${color}"/><circle cx="42" cy="18" r="1.5" fill="${color}"/><circle cx="3" cy="25" r="1.8" fill="${color}"/><circle cx="15" cy="42" r="2" fill="${color}"/><circle cx="35" cy="3" r="1.5" fill="${color}"/><circle cx="5" cy="12" r="1.2" fill="${color}"/><circle cx="28" cy="43" r="1.8" fill="${color}"/><circle cx="45" cy="30" r="1.5" fill="${color}"/>`;
-  
-  // Drip lines
-  const drip1 = withDrip ? `<path d="M 14,40 Q 12,50 14,55 Q 16,50 14,40" fill="${color}"/>` : '';
-  const drip2 = withDrip ? `<path d="M 22,40 Q 20,52 22,60 Q 24,52 22,40" fill="${color}"/>` : '';
-  const drip3 = withDrip ? `<path d="M 30,40 Q 28,48 30,53 Q 32,48 30,40" fill="${color}"/>` : '';
-  
-  // Shadow
-  const shadow = `<ellipse cx="20" cy="62" rx="12" ry="4" fill="rgba(0,0,0,0.3)"/>`;
-  
-  // Inner highlight
-  const highlight = `<ellipse cx="16" cy="18" rx="6" ry="5" fill="rgba(255,255,255,0.25)"/>`;
-  
-  // Combine all
-  const content = shadow + drip1 + drip2 + drip3 + splatterDots + `<path d="${splashPath}" fill="${color}"/>` + highlight;
-  
-  // Return compact SVG
-  return `<svg width="${width}" height="${height}" viewBox="0 0 ${40 + padding * 2} ${60 + padding * 2}" xmlns="http://www.w3.org/2000/svg"><g transform="translate(${padding}, ${padding})">${content}</g></svg>`;
-}
-
-// Dynamic import for Leaflet to avoid SSR issues
-let L: any;
-let isLeafletLoaded = false;
-
-function getLeaflet() {
-  if (typeof window === 'undefined') {
-    return null;
+  if (specialType === 'rainbow') {
+    markerColor = 'transparent';
+    additionalStyles = `
+      background: linear-gradient(135deg, #ff6b6b, #fbbf24, #10b981, #4dabf7, #8b5cf6) !important;
+      animation: rainbowShift 3s ease infinite;
+    `;
+  } else if (specialType === 'glow') {
+    additionalStyles = `
+      box-shadow: 0 0 15px ${color}, 0 0 30px ${color}80 !important;
+      animation: glowPulse 1.5s ease infinite;
+    `;
+  } else if (specialType === 'metallic') {
+    additionalStyles = `
+      background: linear-gradient(135deg, #c0c0c0 0%, ${color} 50%, #808080 100%) !important;
+      box-shadow: inset 0 2px 4px rgba(255,255,255,0.5), inset 0 -2px 4px rgba(0,0,0,0.3) !important;
+    `;
   }
-  if (!isLeafletLoaded) {
-    L = require('leaflet');
-    isLeafletLoaded = true;
-  }
-  return L;
-}
 
-export function createSprayCanIcon(color: string, size: number = 40) {
-  if (typeof window === 'undefined') {
-    return null;
-  }
+  // Create a spray can style marker
+  const iconHtml = `
+    <div style="
+      position: relative;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    ">
+      <!-- Spray paint splatter background -->
+      <div style="
+        position: absolute;
+        width: 24px;
+        height: 24px;
+        background-color: ${markerColor};
+        ${additionalStyles}
+        border-radius: 50%;
+        opacity: 0.7;
+        filter: blur(1px);
+      "></div>
+      
+      <!-- Main marker body -->
+      <div style="
+        position: relative;
+        width: 20px;
+        height: 20px;
+        background-color: ${markerColor};
+        ${additionalStyles}
+        border: 2px solid white;
+        border-radius: 50%;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <!-- Spray nozzle detail -->
+        <div style="
+          width: 6px;
+          height: 6px;
+          background-color: rgba(255,255,255,0.8);
+          border-radius: 50%;
+        "></div>
+      </div>
+      
+      <!-- Drip effect -->
+      <div style="
+        position: absolute;
+        bottom: -4px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 4px;
+        height: 8px;
+        background-color: ${markerColor};
+        border-radius: 0 0 4px 4px;
+        opacity: 0.8;
+      "></div>
+    </div>
+  `;
+
+  return iconHtml;
+};
+
+/**
+ * Creates a Leaflet DivIcon for spray can markers
+ */
+export const createSprayCanDivIcon = (
+  color: string = '#ff6b6b',
+  specialType?: 'rainbow' | 'glow' | 'metallic' | null
+) => {
+  if (typeof window === 'undefined') return undefined;
   
-  const L = getLeaflet();
-  if (!L) return null;
+  const L = require('leaflet');
+  const iconHtml = createSprayCanIcon(color, specialType);
   
-  const svg = createSprayCanSVG(color, size, true);
-  
-  return L.divIcon({
-    html: svg,
-    className: 'spray-can-icon',
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size],
-    popupAnchor: [0, -size],
+  return new L.DivIcon({
+    html: iconHtml,
+    iconSize: [28, 32],
+    iconAnchor: [14, 16],
+    popupAnchor: [0, -16],
+    className: 'spray-can-marker'
   });
+};
+
+// Add CSS for animations
+if (typeof document !== 'undefined') {
+  const styleId = 'spray-can-icon-styles';
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      @keyframes rainbowShift {
+        0% { filter: hue-rotate(0deg); }
+        50% { filter: hue-rotate(180deg); }
+        100% { filter: hue-rotate(360deg); }
+      }
+      
+      @keyframes glowPulse {
+        0%, 100% { opacity: 1; box-shadow: 0 0 15px currentColor, 0 0 30px currentColor; }
+        50% { opacity: 0.8; box-shadow: 0 0 20px currentColor, 0 0 40px currentColor; }
+      }
+      
+      .spray-can-marker {
+        background: transparent !important;
+        border: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
 }
 
-// React component version for inline use
-export default function SprayCanIcon({ color, size = 40, withDrip = true }: SprayCanIconProps) {
-  const svg = useMemo(() => createSprayCanSVG(color, size, withDrip), [color, size, withDrip]);
-  return <div dangerouslySetInnerHTML={{ __html: svg }} style={{ display: 'inline-block' }} />;
-}
+export default createSprayCanIcon;

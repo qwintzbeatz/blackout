@@ -51,7 +51,7 @@ export const ProfileSetupSticker: React.FC<ProfileSetupStickerProps> = ({
   const [gender, setGender] = useState<'male' | 'female' | 'other' | 'prefer-not-to-say'>('prefer-not-to-say');
 
   const avatarUrl = username 
-    ? generateAvatarUrl(user.uid, username, gender)
+    ? generateAvatarUrl(user.uid, username, gender, 60, undefined, selectedCrew || null)
     : '';
 
   const handleSubmit = async () => {

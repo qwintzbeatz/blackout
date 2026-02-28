@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { UserMarker, MARKER_NAMES, MARKER_DESCRIPTIONS } from '@/lib/utils/types';
-import { createSprayCanIcon } from './SprayCanIcon';
+import { getLayeredIconForMarker } from './LayeredMarkerIcon';
 
 const Marker = dynamic(
   () => import('react-leaflet').then((mod) => mod.Marker),
@@ -22,6 +22,7 @@ interface UserMarkerComponentProps {
   onGoTo: (marker: UserMarker) => void;
   gpsPosition: [number, number] | null;
   userRank: string;
+  currentUserId?: string;
 }
 
 const UserMarkerComponent: React.FC<UserMarkerComponentProps> = ({
@@ -31,35 +32,35 @@ const UserMarkerComponent: React.FC<UserMarkerComponentProps> = ({
   onGoTo,
   gpsPosition,
   userRank,
+  currentUserId,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(marker.name);
   const [editedDescription, setEditedDescription] = useState(marker.description);
   const [leafletLoaded, setLeafletLoaded] = useState(false);
+  const [icon, setIcon] = useState<any>(null);
 
   const markerColor = marker.color || '#ff6b6b';
 
-  const sprayIcon = useMemo(() => {
-    return createSprayCanIcon(markerColor, 45);
-  }, [markerColor]);
-
+  // Create icon with style info
   useEffect(() => {
     if (typeof window !== 'undefined') {
       import('leaflet').then(() => {
-        const style = document.createElement('style');
-        style.textContent = `
-          .spray-can-icon {
-            background: transparent !important;
-          }
-          .spray-can-icon svg {
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
-          }
-        `;
-        document.head.appendChild(style);
+        // Use the new layered icon system that supports fonts
+        const newIcon = getLayeredIconForMarker({
+          surface: (marker as any).surface,
+          graffitiType: (marker as any).graffitiType,
+          repEarned: (marker as any).repEarned,
+          color: markerColor,
+          styleId: (marker as any).styleId,
+          playerTagName: marker.username,
+          isOwn: marker.userId === currentUserId,
+        });
+        setIcon(newIcon);
         setLeafletLoaded(true);
       });
     }
-  }, []);
+  }, [marker, markerColor, currentUserId]);
 
   const distanceToGPS = gpsPosition ? calculateDistance(
     marker.position[0],
@@ -94,12 +95,12 @@ const UserMarkerComponent: React.FC<UserMarkerComponentProps> = ({
     onGoTo(marker);
   };
 
-  if (!leafletLoaded) {
+  if (!leafletLoaded || !icon) {
     return null;
   }
 
   return (
-    <Marker position={marker.position} icon={sprayIcon}>
+    <Marker position={marker.position} icon={icon}>
       <Popup>
         <div style={{ minWidth: '200px' }}>
           {isEditing ? (
@@ -131,6 +132,21 @@ const UserMarkerComponent: React.FC<UserMarkerComponentProps> = ({
             <div>
               <h3 style={{ margin: '0 0 10px 0', color: markerColor }}>{marker.name}</h3>
               <p style={{ margin: '0 0 10px 0', fontSize: '14px' }}>{marker.description}</p>
+              
+              {/* Show style info */}
+              {(marker as any).styleId && (
+                <div style={{ 
+                  fontSize: '12px', 
+                  color: '#8b5cf6', 
+                  marginBottom: '8px',
+                  padding: '4px 8px',
+                  background: 'rgba(139, 92, 246, 0.1)',
+                  borderRadius: '4px'
+                }}>
+                  🎨 Custom Style: {(marker as any).styleId.split('-')[1]}
+                </div>
+              )}
+              
               <div style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>
                 <div>Placed: {formattedDate} at {formattedTime}</div>
                 {marker.username && <div>By: {marker.username}</div>}

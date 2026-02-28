@@ -1470,13 +1470,18 @@ const HomeComponent = () => {
             }}
             onClose={() => setActivePanel(null)}
             userProfile={{
+              uid: userProfile?.uid,
               username: userProfile?.username || 'Player',
               profilePicUrl: userProfile?.profilePicUrl || '',
               rank: userProfile?.rank || 'TOY',
               level: userProfile?.level || 1,
               rep: userProfile?.rep || 0,
-              totalMarkers: userProfile?.totalMarkers || 0
+              totalMarkers: userProfile?.totalMarkers || 0,
+              crewId: userProfile?.crewId,
+              selectedColor: userProfile?.selectedColor,
+              selectedGraffitiStyle: (userProfile as any)?.selectedGraffitiStyle
             }}
+            onProfileUpdate={updateUserProfile}
           />
         )}
 

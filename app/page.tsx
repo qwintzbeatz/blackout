@@ -1,8 +1,6 @@
 'use client';
 
-import { StoryManagerProvider } from '@/components/story/StoryManager';
-import StoryPanel from '@/components/story/StoryPanel';
-import { useMissionTriggers } from '@/hooks/useMissionTriggers';
+import CrewBioPanel from '@/components/CrewBioPanel';
 import { useTimeOfDay } from '@/hooks/useTimeOfDay';
 import useCrewChatUnreadTracker from '@/hooks/useCrewChatUnreadTracker';
 import useStoryNotificationTracker from '@/hooks/useStoryNotificationTracker';
@@ -26,7 +24,7 @@ import {
   serverTimestamp as firestoreServerTimestamp 
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase/config';
-import { characters } from '@/data/characters'; // New import
+import { characters } from '@/data/characters';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -48,7 +46,6 @@ import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import React from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
-import { createSprayCanIcon } from '@/components/map/SprayCanIcon';
 
 import PhotoSelectionModal from '@/components/ui/PhotoSelectionModal';
 import DropPopup from '@/components/map/DropPopup';
@@ -79,11 +76,16 @@ import ProfileSetupSticker from '@/components/ProfileSetupSticker';
 import { SurfaceGraffitiSelector } from '@/components/ui/SurfaceGraffitiSelector';
 import { RepNotification } from '@/components/ui/RepNotification';
 import SongUnlockModal from '@/components/ui/SongUnlockModal';
+import VideoUnlockModal from '@/components/ui/VideoUnlockModal';
 import { SPOTIFY_TRACKS, UNLOCKABLE_TRACKS, DEFAULT_TRACK, isSpotifyUrl, getTrackName, getSpotifyTrackName } from '@/constants/all_tracks';
+import { FACEBOOK_VIDEOS, getVideoName, getFacebookEmbedUrl, getRandomVideo } from '@/constants/videos';
 import { HIPHOP_TRACKS } from '@/constants/tracks';
 import { fullScreenStyle, loadingSpinnerStyle, panelBaseStyle, buttonBaseStyle, primaryButtonStyle, secondaryButtonStyle, successButtonStyle, dangerButtonStyle, inputBaseStyle, flexCenterStyle, flexBetweenStyle, flexColumnStyle, titleTextStyle, subtitleTextStyle, colors, gradients } from './pageStyles';
 import { MarkerName, MarkerDescription, Gender, MARKER_COLORS, MARKER_NAMES, MARKER_DESCRIPTIONS, CrewId } from '@/constants/markers';
 import { SurfaceType, GraffitiType } from '@/types';
+import { createSprayCanDivIcon } from '@/components/map/SprayCanIcon';
+import { getLayeredIconForMarker } from '@/components/map/LayeredMarkerIcon';
+import { getCrewColor } from '@/utils/crewTheme';
 import { 
   migrateMarkerNameToSurface, 
   migrateMarkerDescriptionToGraffiti,
@@ -343,7 +345,7 @@ const generateAvatarUrl = (userId: string, username: string, gender?: Gender): s
   
     switch (avatarStyle) {
     case 'adventurer': // Male (boyish)
-      url = `https://api.dicebear.com/7.x/adventurer/svg?seed=${seed}&backgroundColor=${selectedColor}`;
+      url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}`;
       break;
       
     case 'avataaars': // Female (girlish)
@@ -351,11 +353,11 @@ const generateAvatarUrl = (userId: string, username: string, gender?: Gender): s
       break;
       
     case 'bottts': // Other (alien/robot)
-      url = `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}&backgroundColor=${selectedColor}`;
+      url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}`;
       break;
       
     case 'identicon': // Prefer not to say (android/geometric)
-      url = `https://api.dicebear.com/7.x/identicon/svg?seed=${seed}&backgroundColor=${selectedColor}`;
+      url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}`;
       break;
       
     default: // open-peeps as fallback
@@ -400,6 +402,7 @@ interface FirestoreMarker {
   createdAt: Timestamp;
   distanceFromCenter: number | null;
   repEarned: number;
+  specialType?: 'rainbow' | 'glow' | 'metallic' | null;
 }
 
 // Custom hook for performance monitoring
@@ -428,17 +431,27 @@ const usePerformanceMonitor = () => {
 
 // Memoized Marker Component
 
-const MemoizedMarker = React.memo(({ marker, user, onClick }: {
+// Memoized Marker - Uses layered icon with font support for graffiti markers
+const MemoizedMarker = React.memo(({ marker, user, onClick, crewId }: {
   marker: UserMarker,
   user: FirebaseUser | null,
-  onClick: (marker: UserMarker) => void
+  onClick: (marker: UserMarker) => void,
+  crewId?: string | null
 }) => {
   const customIcon = useMemo(() => {
     if (typeof window === 'undefined') return undefined;
     
-    const markerColor = marker.color || '#ff6b6b';
-    return createSprayCanIcon(markerColor, 36);
-  }, [marker.color]);
+    // Use the new layered icon system with font support
+    return getLayeredIconForMarker({
+      color: marker.color,
+      styleId: marker.styleId,
+      playerTagName: marker.username,
+      surface: marker.surface,
+      graffitiType: marker.graffitiType,
+      specialType: marker.specialType,
+      crewId: crewId
+    });
+  }, [marker.color, marker.styleId, marker.username, marker.surface, marker.graffitiType, marker.specialType, crewId]);
   
   return (
     <Marker 
@@ -460,7 +473,7 @@ const HomeComponent = () => {
   
   // ========== STATE DECLARATIONS ==========
   const [mapReady, setMapReady] = useState(false);
-  const [zoom, setZoom] = useState<number>(4);
+  const [zoom, setZoom] = useState<number>(5);
   
   const [showStoryPanel, setShowStoryPanel] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
@@ -503,6 +516,7 @@ const HomeComponent = () => {
   
   // Marker color states
   const [selectedMarkerColor, setSelectedMarkerColor] = useState('#10b981');
+  const [selectedSpecialType, setSelectedSpecialType] = useState<'rainbow' | 'glow' | 'metallic' | null>(null);
   
   // Surface and graffiti type states (new)
   const [selectedSurface, setSelectedSurface] = useState<SurfaceType>('wall');
@@ -600,6 +614,13 @@ const HomeComponent = () => {
     source: string;
   } | null>(null);
   
+  // 🆕 Video Unlock Modal state
+  const [videoUnlockModal, setVideoUnlockModal] = useState<{
+    isOpen: boolean;
+    videoUrl: string;
+    source: string;
+  } | null>(null);
+  
   // 🆕 Recently unlocked track state - displayed prominently in music panel
   const [recentlyUnlocked, setRecentlyUnlocked] = useState<{
     url: string;
@@ -612,6 +633,57 @@ const HomeComponent = () => {
   
   // 🆕 Song selection modal state
   const [showSongSelection, setShowSongSelection] = useState(false);
+  
+  // 🆕 GPS Scan animation state
+  const [isScanning, setIsScanning] = useState(false);
+  
+  // ========== UNIFIED PANEL TOGGLE FUNCTION ==========
+  const togglePanel = useCallback((panel: 'profile' | 'photos' | 'messages' | 'map' | 'music' | 'story' | 'colorpicker' | 'crewchat' | 'none') => {
+    // First, close all panels
+    setShowProfilePanel(false);
+    setShowPhotosPanel(false);
+    setShowMessagesPanel(false);
+    setShowMapPanel(false);
+    setShowMusicPanel(false);
+    setShowStoryPanel(false);
+    setShowColorPicker(false);
+    setShowCrewChat(false);
+    
+    // Then open the requested panel (if not 'none')
+    if (panel !== 'none') {
+      switch (panel) {
+        case 'profile':
+          setShowProfilePanel(true);
+          break;
+        case 'photos':
+          setShowPhotosPanel(true);
+          break;
+        case 'messages':
+          setShowMessagesPanel(true);
+          break;
+        case 'map':
+          setShowMapPanel(true);
+          break;
+        case 'music':
+          setShowMusicPanel(true);
+          break;
+        case 'story':
+          setShowStoryPanel(true);
+          break;
+        case 'colorpicker':
+          setShowColorPicker(true);
+          break;
+        case 'crewchat':
+          setShowCrewChat(true);
+          break;
+      }
+    }
+  }, []);
+
+  // Convenience function to close all panels
+  const closeAllPanels = useCallback(() => {
+    togglePanel('none');
+  }, [togglePanel]);
   
   // ========== PROFILE PICTURE UPLOAD ==========
   const handleProfilePicUpload = async (file: File) => {
@@ -704,19 +776,6 @@ const {
   stopTracking
 } = useGPSTracker();
 
-  // 🆕 MISSION TRIGGERS HOOK
-  const {
-    triggerDisappearance,
-    checkMissionCompletion,
-    triggerMissionEvent,
-    triggerMessagingEvent,
-    activeMissions,
-    completedMissions
-  } = useMissionTriggers({
-    userMarkers,
-    gpsPosition,
-    userProfile
-  });
 
   // 🆕 TIME OF DAY HOOK - Day/Night weather system
   const { 
@@ -766,6 +825,13 @@ const {
       });
     };
   }, [crewDetectionEnabled, userProfile?.crewId]);
+
+  // ========== ADD THIS NEW USEEFFECT RIGHT HERE ==========
+  useEffect(() => {
+    // Component mounted successfully
+    console.log('Map component initialized');
+  }, []);
+
 
   // ========== MOBILE DETECTION & RESPONSIVE IFRAME ==========
   useEffect(() => {
@@ -818,13 +884,12 @@ const {
     }
   }, [userProfile?.favoriteColor]);
 
-  // Fix marker colors on page refresh - ensure all markers use correct colors
+  // Fix marker colors on page refresh - only apply favoriteColor to markers without an explicit color
   useEffect(() => {
     if (userProfile?.favoriteColor && userMarkers.length > 0) {
-      // Update any markers that might have wrong colors
+      // Only fix markers that have NO color set (undefined/null), preserve individual colors
       const updatedMarkers = userMarkers.map(marker => {
-        // Only update markers that belong to the current user and have wrong color
-        if (marker.userId === user?.uid && marker.color !== userProfile.favoriteColor) {
+        if (marker.userId === user?.uid && !marker.color) {
           return {
             ...marker,
             color: userProfile.favoriteColor || '#10b981'
@@ -837,7 +902,7 @@ const {
         setUserMarkers(updatedMarkers);
       }
     }
-  }, [userProfile?.favoriteColor, userMarkers, user?.uid]);
+  }, [userProfile?.favoriteColor, user?.uid]);
 
   useEffect(() => {
     if (repNotification) {
@@ -921,7 +986,8 @@ const {
           userProfilePic: data.userProfilePic || generateAvatarUrl(data.userId, data.username),
           distanceFromCenter: data.distanceFromCenter ?? undefined,
           repEarned: data.repEarned || 0,
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date()
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+          specialType: data.specialType || null
         });
       });
       
@@ -1175,7 +1241,7 @@ const {
   const handleLogout = async (): Promise<void> => {
     try {
       setIsPlaying(false);
-      
+      closeAllPanels(); // Close all panels on logout
       await signOut(auth);
     } catch (error: any) {
       setAuthError(error.message);
@@ -1340,7 +1406,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         setNextMarkerNumber(1);
         setLoadingUserProfile(false);
         setIsPlaying(false);
-
+        closeAllPanels(); // Close all panels when logged out
       }
     });
     
@@ -1522,7 +1588,9 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         // New surface and graffiti type fields
         surface: (marker.surface ?? migrateMarkerNameToSurface(marker.name)) as SurfaceType | undefined,
         graffitiType: (marker.graffitiType ?? migrateMarkerDescriptionToGraffiti(marker.description)) as GraffitiType | undefined,
-        repBreakdown: repResult.breakdown
+        repBreakdown: repResult.breakdown,
+        // Special color effect (rainbow, glow, metallic)
+        specialType: marker.specialType || null
       };
       
       const docRef = await addDoc(collection(db, 'markers'), markerData);
@@ -1895,6 +1963,10 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         // New surface and graffiti type fields
         surface: selectedSurface,
         graffitiType: selectedGraffitiType,
+        // Special color effect
+        specialType: selectedSpecialType,
+        // Selected graffiti style from Blackbook
+        styleId: userProfile.selectedGraffitiStyle || undefined,
       };
 
       const markerId = await saveMarkerToFirestore(markerData);
@@ -1982,12 +2054,12 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     setShowPhotoModal(true);
   }, []);
 
-  const handleMusicDrop = useCallback(async () => {
+  const handleMusicDrop = useCallback(async (trackUrl?: string) => {
     if (!user || !userProfile || !pendingDropPosition) return;
     const tracks = userProfile.unlockedTracks ?? unlockedTracks;
     if (tracks.length === 0) return;
 
-    const trackToDrop = selectedTrackForMusicDrop || tracks[0];
+    const trackToDrop = trackUrl || selectedTrackForMusicDrop || tracks[0];
     try {
       const newDrop: Drop = {
         lat: pendingDropPosition.lat,
@@ -2159,9 +2231,17 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
   const centerOnGPS = useCallback(() => {
     if (gpsPosition && mapRef.current) {
+      // Trigger the futuristic scan animation
+      setIsScanning(true);
+      
       setMapCenter(gpsPosition);
-      setZoom(17);
-      mapRef.current.setView(gpsPosition, 17);
+      setZoom(18);
+      mapRef.current.setView(gpsPosition, 18);
+      
+      // Stop the scan animation after 2.5 seconds
+      setTimeout(() => {
+        setIsScanning(false);
+      }, 2500);
     } else {
       alert('GPS location not available. Please enable location services.');
     }
@@ -2249,68 +2329,6 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       setIsRefreshing(false);
     }
   };
-
-  // ========== MISSION TRIGGERS ==========
-  // Trigger missions when markers are placed
-  useEffect(() => {
-    try {
-      if (userProfile && userProfile.markersPlaced && triggerMissionEvent) {
-        // Trigger missions based on markers placed
-        if (userProfile.markersPlaced >= 3) {
-          triggerMissionEvent('place_3_markers', {
-            count: userProfile.markersPlaced,
-            timestamp: new Date()
-          });
-        }
-        
-        if (userProfile.markersPlaced >= 10) {
-          triggerMissionEvent('place_10_markers', {
-            count: userProfile.markersPlaced,
-            timestamp: new Date()
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Mission trigger error:', error);
-    }
-  }, [userProfile?.markersPlaced, triggerMissionEvent]);
-
-  // Trigger missions when REP increases
-  useEffect(() => {
-    try {
-      if (userProfile?.rep && triggerMissionEvent) {
-        if (userProfile.rep >= 50) {
-          triggerMissionEvent('reach_50_rep', {
-            rep: userProfile.rep,
-            timestamp: new Date()
-          });
-        }
-        
-        if (userProfile.rep >= 100) {
-          triggerMissionEvent('reach_100_rep', {
-            rep: userProfile.rep,
-            timestamp: new Date()
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Mission trigger error:', error);
-    }
-  }, [userProfile?.rep, triggerMissionEvent]);
-
-  // The useMissionTriggers hook should be integrated
-  // with marker placement and REP gains
-  useEffect(() => {
-    try {
-      if (userProfile?.markersPlaced) {
-        triggerMissionEvent('markers_placed', {
-          count: userProfile.markersPlaced
-        });
-      }
-    } catch (error) {
-      console.error('Mission trigger error:', error);
-    }
-  }, [userProfile?.markersPlaced]);
 
   // ========== AUTH LOADING CHECK ==========
   if (loadingAuth) {
@@ -2429,7 +2447,6 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
   }
 
   return (
-    <StoryManagerProvider user={user} userProfile={userProfile}>
       <div style={{ height: '100vh', width: '100vw', position: 'relative' as const }}>
         {/* REP Notification */}
         <RepNotification
@@ -2448,6 +2465,16 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             isOpen={songUnlockModal.isOpen}
             onClose={() => setSongUnlockModal(null)}
             unlockSource={songUnlockModal.source}
+          />
+        )}
+
+        {/* 🎬 Video Unlock Modal - Full screen celebration when unlocking videos */}
+        {videoUnlockModal && (
+          <VideoUnlockModal
+            videoUrl={videoUnlockModal.videoUrl}
+            isOpen={videoUnlockModal.isOpen}
+            onClose={() => setVideoUnlockModal(null)}
+            unlockSource={videoUnlockModal.source}
           />
         )}
 
@@ -2544,7 +2571,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         scrollWheelZoom={true}
         maxBounds={NZ_BOUNDS}
         maxBoundsViscosity={1.0}
-        minZoom={5}
+        minZoom={4}
         maxZoom={18}
         ref={(mapInstance: L.Map | null) => {
           if (mapInstance) {
@@ -2588,7 +2615,52 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         {/* User GPS Marker */}
         {gpsPosition && (
           <>
-            <Marker position={gpsPosition}>
+            <Marker 
+              position={gpsPosition}
+              icon={(() => {
+                if (typeof window === 'undefined') return undefined;
+                const crewColor = getCrewColor(userProfile?.crewId);
+                return new (require('leaflet').DivIcon)({
+                  html: `
+                    <div style="
+                      position: relative;
+                      width: 24px;
+                      height: 24px;
+                    ">
+                      <div style="
+                        position: absolute;
+                        width: 24px;
+                        height: 24px;
+                        background-color: ${crewColor};
+                        border: 3px solid white;
+                        border-radius: 50%;
+                        box-shadow: 0 0 10px ${crewColor}, 0 2px 8px rgba(0,0,0,0.4);
+                        animation: gpsPulse 2s infinite;
+                      "></div>
+                      <div style="
+                        position: absolute;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        width: 8px;
+                        height: 8px;
+                        background-color: white;
+                        border-radius: 50%;
+                      "></div>
+                    </div>
+                    <style>
+                      @keyframes gpsPulse {
+                        0%, 100% { transform: scale(1); opacity: 1; }
+                        50% { transform: scale(1.2); opacity: 0.8; }
+                      }
+                    </style>
+                  `,
+                  iconSize: [24, 24],
+                  iconAnchor: [12, 12],
+                  popupAnchor: [0, -12]
+                });
+              })()}
+            >
               <Popup>
                 <div style={{ textAlign: 'center', minWidth: '200px' }}>
                   <strong>📍 Your Location</strong>
@@ -2628,63 +2700,132 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               </Popup>
             </Marker>
 
-            {/* Radius circle (expands with crew members) */}
-            {show50mRadius && (
-              <Circle
-                center={isOfflineMode && lastKnownPosition ? lastKnownPosition : gpsPosition}
-                radius={expandedRadius}
-                pathOptions={{
-                  color: isOfflineMode ? '#ef4444' : '#10b981',
-                  fillColor: isOfflineMode ? '#ef4444' : '#10b981',
-                  fillOpacity: 0.1,
-                  weight: 2,
-                  opacity: 0.7
-                }}
-                eventHandlers={{
-                  click: isOfflineMode ? undefined : (e) => handleMapClick(e)
-                }}
-              >
-                <Popup>
-                  <div style={{ textAlign: 'center' }}>
-                    <strong>
-                      {isOfflineMode
-                        ? `🔴 Offline Mode: ${expandedRadius}m Radius`
-                        : `🟢 Online Mode: ${expandedRadius}m Radius`}
-                    </strong>
-                    {isOfflineMode && (
-                      <div style={{ fontSize: '12px', color: '#ef4444', marginTop: '5px', fontWeight: 'bold' }}>
-                        📍 GPS tracking paused (Offline Mode)
+            {/* Radius GRID pattern - GREEN when online, RED when offline */}
+            {show50mRadius && (() => {
+              const circleCenter = isOfflineMode && lastKnownPosition ? lastKnownPosition : gpsPosition;
+              const gridColor = isOfflineMode ? '#ef4444' : '#10b981'; // Red when offline, Green when online
+              const gridFillOpacity = isOfflineMode ? 0.12 : 0.08;
+              const gridOpacity = isOfflineMode ? 0.7 : 0.6;
+              
+              return (
+              <>
+                {/* Main background circle */}
+                <Circle
+                  center={circleCenter}
+                  radius={expandedRadius}
+                  pathOptions={{
+                    color: gridColor,
+                    fillColor: gridColor,
+                    fillOpacity: gridFillOpacity,
+                    weight: 2,
+                    opacity: gridOpacity,
+                  }}
+                  eventHandlers={{
+                    click: isOfflineMode ? undefined : (e) => handleMapClick(e)
+                  }}
+                >
+                  <Popup>
+                    <div style={{ textAlign: 'center' }}>
+                      <strong style={{ color: gridColor }}>
+                        {isOfflineMode
+                          ? `🔴 Offline Mode: ${expandedRadius}m Radius`
+                          : `🟢 Online Mode: ${expandedRadius}m Radius`}
+                      </strong>
+                      {isOfflineMode && (
+                        <div style={{ fontSize: '12px', color: '#ef4444', marginTop: '5px', fontWeight: 'bold' }}>
+                          📍 GPS tracking paused (Offline Mode)
+                        </div>
+                      )}
+                      {!isOfflineMode && nearbyCrewMembers.length > 0 && (
+                        <div style={{ fontSize: '12px', color: '#10b981', marginTop: '5px', fontWeight: 'bold' }}>
+                          👥 {nearbyCrewMembers.length} crew member{nearbyCrewMembers.length > 1 ? 's' : ''} nearby!
+                          <br />
+                          <span style={{ fontSize: '11px', fontWeight: 'normal' }}>
+                            Radius expanded to {expandedRadius}m
+                          </span>
+                        </div>
+                      )}
+                      <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                        {isOfflineMode
+                          ? 'Use joystick to explore the map'
+                          : 'Click inside this circle to place drops within ' + expandedRadius + 'm'
+                        }
                       </div>
-                    )}
-                    {!isOfflineMode && nearbyCrewMembers.length > 0 && (
-                      <div style={{ fontSize: '12px', color: '#10b981', marginTop: '5px', fontWeight: 'bold' }}>
-                        👥 {nearbyCrewMembers.length} crew member{nearbyCrewMembers.length > 1 ? 's' : ''} nearby!
-                        <br />
-                        <span style={{ fontSize: '11px', fontWeight: 'normal' }}>
-                          Radius expanded to {expandedRadius}m
-                        </span>
-                      </div>
-                    )}
-                    <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-                      {isOfflineMode
-                        ? 'Use joystick to explore the map'
-                        : 'Click inside this circle to place drops within ' + expandedRadius + 'm'
-                      }
+                      {nearbyCrewMembers.length > 0 && !isOfflineMode && (
+                        <div style={{ fontSize: '11px', color: '#666', marginTop: '8px', textAlign: 'left' }}>
+                          <strong>Nearby crew:</strong>
+                          {nearbyCrewMembers.map((member, idx) => (
+                            <div key={member.uid} style={{ marginTop: '4px' }}>
+                              👤 {member.username} ({member.distance}m away)
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    {nearbyCrewMembers.length > 0 && !isOfflineMode && (
-                      <div style={{ fontSize: '11px', color: '#666', marginTop: '8px', textAlign: 'left' }}>
-                        <strong>Nearby crew:</strong>
-                        {nearbyCrewMembers.map((member, idx) => (
-                          <div key={member.uid} style={{ marginTop: '4px' }}>
-                            👤 {member.username} ({member.distance}m away)
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </Popup>
-              </Circle>
-            )}
+                  </Popup>
+                </Circle>
+                
+                {/* Concentric circles for grid effect */}
+                {[10, 20, 30, 40, 50].map((radius) => (
+                  radius <= expandedRadius && (
+                    <Circle
+                      key={`grid-circle-${radius}`}
+                      center={circleCenter}
+                      radius={radius}
+                      pathOptions={{
+                        color: gridColor,
+                        fillColor: 'transparent',
+                        fillOpacity: 0,
+                        weight: 1,
+                        opacity: gridOpacity * 0.5,
+                      }}
+                      interactive={false}
+                    />
+                  )
+                ))}
+                
+                {/* Radial lines for grid effect - 12 lines every 30 degrees */}
+                {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((angle) => {
+                  // Calculate endpoint for radial line
+                  const R = 6371000; // Earth's radius in meters
+                  const bearingRad = (angle * Math.PI) / 180;
+                  const latRad = (circleCenter[0] * Math.PI) / 180;
+                  const lngRad = (circleCenter[1] * Math.PI) / 180;
+                  const angularDist = expandedRadius / R;
+                  
+                  const endLatRad = Math.asin(
+                    Math.sin(latRad) * Math.cos(angularDist) +
+                    Math.cos(latRad) * Math.sin(angularDist) * Math.cos(bearingRad)
+                  );
+                  const endLngRad = lngRad + Math.atan2(
+                    Math.sin(bearingRad) * Math.sin(angularDist) * Math.cos(latRad),
+                    Math.cos(angularDist) - Math.sin(latRad) * Math.sin(endLatRad)
+                  );
+                  
+                  const endPoint: [number, number] = [
+                    (endLatRad * 180) / Math.PI,
+                    (endLngRad * 180) / Math.PI
+                  ];
+                  
+                  return (
+                    <Circle
+                      key={`grid-line-${angle}`}
+                      center={endPoint}
+                      radius={1}
+                      pathOptions={{
+                        color: 'transparent',
+                        fillColor: 'transparent',
+                        fillOpacity: 0,
+                        weight: 0,
+                        opacity: 0,
+                      }}
+                      interactive={false}
+                    />
+                  );
+                })}
+              </>
+              );
+            })()}
 
             {/* GPS Accuracy Circle */}
             {accuracy && accuracy > 50 && (
@@ -2950,6 +3091,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               marker={marker}
               user={user}
               onClick={setSelectedMarker}
+              crewId={userProfile?.crewId}
             />
           ))
         }
@@ -3100,23 +3242,18 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           const musicIcon = typeof window !== 'undefined' ?
             new (require('leaflet').DivIcon)({
               html: `
-                <div style="
-                  width: 28px;
-                  height: 28px;
-                  background-color: #8a2be2;
-                  border: 3px solid white;
-                  border-radius: 50%;
-                  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-                  display: flex;
-                  align-items: center;
-                  justifyContent: 'center';
-                ">
-                  🎵
+                <div style="position:relative;width:32px;height:32px;">
+                  <div style="position:absolute;top:2px;left:2px;width:28px;height:28px;background:linear-gradient(135deg,#9333ea,#8b5cf6);border:3px solid white;border-radius:50%;box-shadow:0 0 15px rgba(147,51,234,0.8),0 0 30px rgba(147,51,234,0.5);display:flex;align-items:center;justify-content:center;z-index:10;animation:musicPulse 1.5s ease-in-out infinite;">
+                    <span style="filter:brightness(0) invert(1);font-size:14px;">🎵</span>
+                  </div>
+                  <div style="position:absolute;top:16px;left:16px;width:24px;height:24px;border:3px solid rgba(147,51,234,0.8);border-radius:50%;box-shadow:0 0 10px rgba(147,51,234,0.6);animation:radioWave1 2s ease-out infinite;pointer-events:none;"></div>
+                  <div style="position:absolute;top:16px;left:16px;width:40px;height:40px;border:3px solid rgba(147,51,234,0.6);border-radius:50%;box-shadow:0 0 15px rgba(147,51,234,0.4);animation:radioWave2 2s ease-out infinite;pointer-events:none;"></div>
+                  <div style="position:absolute;top:16px;left:16px;width:56px;height:56px;border:3px solid rgba(147,51,234,0.4);border-radius:50%;box-shadow:0 0 20px rgba(147,51,234,0.3);animation:radioWave3 2s ease-out infinite;pointer-events:none;"></div>
                 </div>`,
               className: 'music-marker-icon',
-              iconSize: [28, 28],
-              iconAnchor: [14, 14],
-              popupAnchor: [0, -14]
+              iconSize: [32, 32],
+              iconAnchor: [16, 16],
+              popupAnchor: [0, -16]
             }) : undefined;
 
           return (
@@ -3285,11 +3422,10 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         onClose={() => setShowSongSelection(false)}
         tracks={unlockedTracks}
         onSelectTrack={async (trackUrl: string) => {
-          setSelectedTrackForMusicDrop(trackUrl);
           setShowSongSelection(false);
           setIsCreatingDrop(true);
           try {
-            await handleMusicDrop();
+            await handleMusicDrop(trackUrl);
           } finally {
             setIsCreatingDrop(false);
           }
@@ -3617,6 +3753,70 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             alert('❌ Reset failed: ' + err.message);
           }
         }}
+        onUnlockRandomVideo={() => {
+          if (!user || !userProfile) return;
+          const unlockVideoAsync = async () => {
+            try {
+              const currentVideos = userProfile.unlockedVideos || [];
+              const availableVideos = FACEBOOK_VIDEOS.filter(v => !currentVideos.includes(v));
+              
+              if (availableVideos.length === 0) {
+                alert('⚠️ All videos already unlocked!');
+                return;
+              }
+              
+              const randomVideo = availableVideos[Math.floor(Math.random() * availableVideos.length)];
+              const newVideos = [...currentVideos, randomVideo];
+              
+              const userRef = doc(db, 'users', user.uid);
+              await updateDoc(userRef, {
+                unlockedVideos: newVideos,
+                lastActive: Timestamp.now()
+              });
+              
+              setUserProfile(prev => prev ? {
+                ...prev,
+                unlockedVideos: newVideos
+              } : null);
+              
+              // Show video unlock modal
+              setVideoUnlockModal({
+                isOpen: true,
+                videoUrl: randomVideo,
+                source: 'CHEAT MENU'
+              });
+            } catch (error) {
+              console.error('Cheat unlock video error:', error);
+              alert('Failed to unlock video');
+            }
+          };
+          unlockVideoAsync();
+        }}
+        onUnlockAllVideos={() => {
+          if (!user || !userProfile) return;
+          const unlockAllVideosAsync = async () => {
+            try {
+              const allVideoUrls = [...FACEBOOK_VIDEOS]; // Already an array of strings
+              
+              const userRef = doc(db, 'users', user.uid);
+              await updateDoc(userRef, {
+                unlockedVideos: allVideoUrls,
+                lastActive: Timestamp.now()
+              });
+              
+              setUserProfile(prev => prev ? {
+                ...prev,
+                unlockedVideos: allVideoUrls
+              } : null);
+              
+              alert('✅ All videos unlocked!');
+            } catch (error) {
+              console.error('Cheat unlock all videos error:', error);
+              alert('Failed to unlock all videos');
+            }
+          };
+          unlockAllVideosAsync();
+        }}
       />
 
       {/* ========== DUAL CONTROL PANELS ========== */}
@@ -3629,36 +3829,35 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             zIndex: 1200,
             maxHeight: '80vh'
           }}>
-        {/* Left Panel - Blackbook (New Feed-Style Layout) */}
-        {showProfilePanel && userProfile && (
-          <BlackbookPanel
-            userProfile={userProfile}
-            userMarkers={userMarkers}
-            drops={drops}
-            topPlayers={topPlayers}
-            onClose={() => setShowProfilePanel(false)}
-            onProfileUpdate={(updatedProfile) => setUserProfile(updatedProfile)}
-            onCenterMap={centerMap}
-            onRefreshAll={handleRefreshAll}
-            isRefreshing={isRefreshing}
-            showTopPlayers={showTopPlayers}
-            onToggleTopPlayers={() => setShowTopPlayers(!showTopPlayers)}
-            showOnlyMyDrops={showOnlyMyDrops}
-            onToggleFilter={() => setShowOnlyMyDrops(!showOnlyMyDrops)}
-            onLogout={handleLogout}
-            nearbyCrewMembers={nearbyCrewMembers}
-            expandedRadius={expandedRadius}
-            onOpenCrewChat={() => {
-              setShowCrewChat(true);
-              setShowProfilePanel(false);
-              setShowPhotosPanel(false);
-              setShowMessagesPanel(false);
-              setShowMapPanel(false);
-              setShowMusicPanel(false);
-              setShowStoryPanel(false);
-            }}
-          />
-        )}
+
+          {/* Left Panel - Blackbook (New Feed-Style Layout) */}
+          {showProfilePanel && userProfile && (
+            <div style={{
+              animation: 'slideInLeft 0.3s ease-out'
+            }}>
+              <BlackbookPanel
+                userProfile={userProfile}
+                userMarkers={userMarkers}
+                drops={drops}
+                topPlayers={topPlayers}
+                onClose={() => togglePanel('none')}
+                onProfileUpdate={(updatedProfile) => setUserProfile(updatedProfile)}
+                onCenterMap={centerMap}
+                onRefreshAll={handleRefreshAll}
+                isRefreshing={isRefreshing}
+                showTopPlayers={showTopPlayers}
+                onToggleTopPlayers={() => setShowTopPlayers(!showTopPlayers)}
+                showOnlyMyDrops={showOnlyMyDrops}
+                onToggleFilter={() => setShowOnlyMyDrops(!showOnlyMyDrops)}
+                onLogout={handleLogout}
+                nearbyCrewMembers={nearbyCrewMembers}
+                expandedRadius={expandedRadius}
+                onOpenCrewChat={() => {
+                  togglePanel('crewchat');
+                }}
+              />
+            </div>
+          )}
 
         {/* Right Panel - Photos & Gallery (Camera) */}
         {showPhotosPanel && (() => {
@@ -3698,7 +3897,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                 PHOTO GALLERY
               </h3>
               <button
-                onClick={() => setShowPhotosPanel(false)}
+                onClick={() => togglePanel('none')}
                 style={{
                   background: 'rgba(59,130,246,0.2)',
                   border: '1px solid rgba(59,130,246,0.3)',
@@ -3849,7 +4048,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                       key={drop.id || drop.firestoreId || index}
                       onClick={() => {
                         setSelectedPhotoDrop(drop);
-                        setShowPhotosPanel(false);
+                        togglePanel('none');
                         if (mapRef.current) {
                           mapRef.current.setView([drop.lat, drop.lng], 17);
                         }
@@ -3914,7 +4113,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     }
                     setPendingDropPosition({ lat: gpsPosition[0], lng: gpsPosition[1] });
                     setShowPhotoModal(true);
-                    setShowPhotosPanel(false);
+                    togglePanel('none');
                   }}
                   style={{
                     background: 'rgba(16, 185, 129, 0.2)',
@@ -3949,7 +4148,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                       const maxLng = Math.max(...bounds.map(b => b[1]));
                       mapRef.current.fitBounds([[minLat, minLng], [maxLat, maxLng]], { padding: [50, 50] });
                     }
-                    setShowPhotosPanel(false);
+                    togglePanel('none');
                   }}
                   style={{
                     background: 'rgba(139, 92, 246, 0.1)',
@@ -4043,7 +4242,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             }}>
               <h3 style={{ margin: 0, color: '#4dabf7', fontSize: '18px' }}>🗺️ MAP CONTROLS</h3>
               <button
-                onClick={() => setShowMapPanel(false)}
+                onClick={() => togglePanel('none')}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -4431,7 +4630,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     MUSIC COLLECTION
                   </h3>
                   <button
-                    onClick={() => setShowMusicPanel(false)}
+                    onClick={() => togglePanel('none')}
                     style={{
                       background: 'rgba(138, 43, 226, 0.2)',
                       border: '1px solid rgba(138, 43, 226, 0.3)',
@@ -4459,6 +4658,94 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                 }}>
                 </div>
 
+
+                {/* Unlocked Videos Section */}
+                <div style={{ marginBottom: '15px' }}>
+                  <div style={{ fontSize: '14px', color: '#ec4899', marginBottom: '10px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>🎬</span>
+                    VIDEO COLLECTION
+                    <span style={{ fontSize: '11px', color: '#666', fontWeight: 'normal' }}>
+                      ({userProfile?.unlockedVideos?.length || 0}/{FACEBOOK_VIDEOS.length})
+                    </span>
+                  </div>
+
+                  {(userProfile?.unlockedVideos?.length || 0) === 0 ? (
+                    <div style={{
+                      textAlign: 'center',
+                      padding: '20px',
+                      background: 'rgba(255,255,255,0.03)',
+                      borderRadius: '8px',
+                      border: '1px dashed #444'
+                    }}>
+                      <div style={{ fontSize: '28px', marginBottom: '8px' }}>🎬</div>
+                      <div style={{ color: '#aaa', fontSize: '12px' }}>
+                        No videos unlocked yet
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                        Use cheat menu to unlock videos!
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {(userProfile?.unlockedVideos || []).map((videoUrl, index) => {
+                        const videoName = getVideoName(videoUrl);
+                        return (
+                          <div
+                            key={index}
+                            onClick={() => {
+                              setVideoUnlockModal({
+                                isOpen: true,
+                                videoUrl: videoUrl,
+                                source: 'COLLECTION'
+                              });
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '10px',
+                              padding: '10px',
+                              background: 'rgba(236, 72, 153, 0.1)',
+                              borderRadius: '6px',
+                              border: '1px solid rgba(236, 72, 153, 0.3)',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            <div style={{
+                              fontSize: '18px',
+                              minWidth: '24px',
+                              textAlign: 'center'
+                            }}>
+                              🎬
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{
+                                fontSize: '13px',
+                                fontWeight: 'bold',
+                                color: '#ec4899'
+                              }}>
+                                {videoName}
+                              </div>
+                              <div style={{
+                                fontSize: '11px',
+                                color: '#1877f2',
+                                marginTop: '2px'
+                              }}>
+                                Facebook Video
+                              </div>
+                            </div>
+                            <div style={{
+                              fontSize: '12px',
+                              color: '#ec4899'
+                            }}>
+                              ▶️
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
 
                 {/* Unlocked Tracks List */}
                 <div style={{ flex: 1, overflowY: 'auto', marginBottom: '15px' }}>
@@ -4560,6 +4847,24 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
 
               </div>
+
+        {/* Color Picker Panel - Slide-in like Music Panel */}
+        {userProfile && (
+          <ColorPickerPanel
+            isOpen={showColorPicker}
+            unlockedColors={userProfile.unlockedColors || []}
+            selectedColor={selectedMarkerColor}
+            selectedSpecialType={selectedSpecialType}
+            onColorSelect={(colorId, colorHex, specialType) => {
+              setSelectedMarkerColor(colorHex);
+              setSelectedSpecialType(specialType || null);
+              saveFavoriteColor(colorHex);
+            }}
+            onClose={() => togglePanel('none')}
+            crewId={userProfile.crewId}
+            isSolo={userProfile.isSolo}
+          />
+        )}
       </div>
 
       {/* ========== END DUAL CONTROL PANELS ========== */}
@@ -4570,7 +4875,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         {showMessagesPanel && userProfile && (
           <DirectMessaging
             isOpen={showMessagesPanel}
-            onClose={() => setShowMessagesPanel(false)}
+            onClose={() => togglePanel('none')}
             userProfile={userProfile}
             gpsPosition={gpsPosition}
           />
@@ -4581,7 +4886,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           <CrewChatPanel 
             crewId={userProfile.crewId} 
             onClose={() => {
-              setShowCrewChat(false);
+              togglePanel('none');
               markCrewChatAsRead(); // Mark as read when closing
             }}
             userProfile={userProfile}
@@ -4589,104 +4894,28 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           />
         )}
 
-        {/* Story Panel - Separate from other panels */}
+        {/* Story/Crew Bio Panel - Separate from other panels */}
         {showStoryPanel && (
-          <div style={{
-            ...panelStyle,
-            position: 'absolute',
-            top: 0,
-            left: 10,
-            border: '1px solid #8b5cf6',
-            animation: 'slideInLeft 0.3s ease-out',
-            minWidth: '350px',
-            maxHeight: '80vh',
-            zIndex: 1300
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '15px',
-              paddingBottom: '10px',
-              borderBottom: '1px solid rgba(139, 92, 246, 0.3)'
-            }}>
-              <h3 style={{ 
-                margin: 0, 
-                color: '#8b5cf6', 
-                fontSize: '18px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <span>📖</span>
-                BLACKOUT STORY
-              </h3>
-              <button
-                onClick={() => setShowStoryPanel(false)}
-                style={{
-                  background: 'rgba(139, 92, 246, 0.2)',
-                  border: '1px solid rgba(139, 92, 246, 0.3)',
-                  color: '#8b5cf6',
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                ✕
-              </button>
-            </div>
-            <div style={{ maxHeight: 'calc(80vh - 60px)', overflowY: 'auto' }}>
-              <StoryPanel markStoryContentAsViewed={markStoryContentAsViewed} />
-            </div>
-          </div>
+          <CrewBioPanel
+            userCrewId={userProfile?.crewId}
+            onClose={() => togglePanel('none')}
+          />
         )}
 
-      {/* Bottom Navigation */}
+      {/* Bottom Navigation - Crew Themed */}
       <BottomNavigation
         showMapPanel={showMapPanel}
         showProfilePanel={showProfilePanel}
         showPhotosPanel={showPhotosPanel}
         showCrewChat={showCrewChat}
-        onToggleMapPanel={() => {
-          setShowMapPanel(!showMapPanel);
-          setShowProfilePanel(false);
-          setShowPhotosPanel(false);
-          setShowCrewChat(false);
-          setShowMusicPanel(false);
-          setShowStoryPanel(false);
-        }}
-        onToggleProfilePanel={() => {
-          setShowProfilePanel(!showProfilePanel);
-          setShowPhotosPanel(false);
-          setShowCrewChat(false);
-          setShowMapPanel(false);
-          setShowMusicPanel(false);
-          setShowStoryPanel(false);
-        }}
-        onTogglePhotosPanel={() => {
-          setShowPhotosPanel(!showPhotosPanel);
-          setShowProfilePanel(false);
-          setShowCrewChat(false);
-          setShowMapPanel(false);
-          setShowMusicPanel(false);
-          setShowStoryPanel(false);
-        }}
-        onToggleCrewChat={() => {
-          setShowCrewChat(!showCrewChat);
-          setShowProfilePanel(false);
-          setShowPhotosPanel(false);
-          setShowMapPanel(false);
-          setShowMusicPanel(false);
-          setShowStoryPanel(false);
-        }}
-        onCloseAllPanels={() => {}}
+        onToggleMapPanel={() => togglePanel('map')}
+        onToggleProfilePanel={() => togglePanel('profile')}
+        onTogglePhotosPanel={() => togglePanel('photos')}
+        onToggleCrewChat={() => togglePanel('crewchat')}
+        onCloseAllPanels={() => togglePanel('none')}
         hasUnreadMessages={hasUnreadMessages}
         unreadCount={unreadCount}
+        crewId={userProfile?.crewId}
       />
 
       {/* Secondary Controls - Under Online Button */}
@@ -4702,12 +4931,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         {/* Story Button */}
         <button
           onClick={() => {
-            setShowStoryPanel(!showStoryPanel);
-            setShowProfilePanel(false);
-            setShowPhotosPanel(false);
-            setShowMessagesPanel(false);
-            setShowMapPanel(false);
-            setShowMusicPanel(false);
+            togglePanel('story');
+            markStoryContentAsViewed(); // Mark as viewed when opening
           }}
           style={{
             background: showStoryPanel ? 'rgba(139, 92, 246, 0.2)' : 'rgba(15, 23, 42, 0.9)',
@@ -4758,15 +4983,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
         {/* Music - Toggles Music Panel */}
         <button
-          onClick={() => {
-            setShowMusicPanel(!showMusicPanel);
-            setShowProfilePanel(false);
-            setShowPhotosPanel(false);
-            setShowMessagesPanel(false);
-            setShowMapPanel(false);
-            setShowStoryPanel(false);
-            setShowColorPicker(false);
-          }}
+          onClick={() => togglePanel('music')}
           style={{
             background: showMusicPanel ? 'rgba(138, 43, 226, 0.2)' : 'rgba(15, 23, 42, 0.9)',
             border: showMusicPanel ? '1px solid rgba(138, 43, 226, 0.3)' : '1px solid rgba(255,255,255,0.1)',
@@ -4795,15 +5012,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
         {/* Colors - Toggles Color Picker Panel */}
         <button
-          onClick={() => {
-            setShowColorPicker(!showColorPicker);
-            setShowProfilePanel(false);
-            setShowPhotosPanel(false);
-            setShowMessagesPanel(false);
-            setShowMapPanel(false);
-            setShowStoryPanel(false);
-            setShowMusicPanel(false);
-          }}
+          onClick={() => togglePanel('colorpicker')}
           style={{
             background: showColorPicker ? 'rgba(255, 107, 107, 0.2)' : 'rgba(15, 23, 42, 0.9)',
             border: showColorPicker ? '1px solid rgba(255, 107, 107, 0.3)' : '1px solid rgba(255,255,255,0.1)',
@@ -4941,37 +5150,223 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         </button>
       </div>
 
-      {/* Color Picker Panel */}
-      {showColorPicker && userProfile && (
-        <ColorPickerPanel
-          isOpen={showColorPicker}
-          unlockedColors={userProfile.unlockedColors || []}
-          selectedColor={selectedMarkerColor}
-          onColorSelect={(colorId, colorHex) => {
-            setSelectedMarkerColor(colorHex);
-            saveFavoriteColor(colorHex);
-          }}
-          onClose={() => setShowColorPicker(false)}
-          crewId={userProfile.crewId}
-          isSolo={userProfile.isSolo}
+        {/* Legend */}
+        <LegendPanel
+          isVisible={showLegend}
+          isOfflineMode={isOfflineMode}
+          showTopPlayers={showTopPlayers}
+          selectedMarkerColor={selectedMarkerColor}
+          userMarkersCount={userMarkers.length}
+          unlockedTracksCount={unlockedTracks.length}
+          gpsStatus={gpsStatus}
+          gpsPosition={gpsPosition}
+          gpsError={gpsError}
+          userProfile={userProfile}
         />
+
+      {/* 🔮 FUTURISTIC GPS SCAN ANIMATION */}
+      {isScanning && gpsPosition && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          pointerEvents: 'none',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden'
+        }}>
+          {/* Grid Overlay */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: `
+              linear-gradient(rgba(0, 255, 200, 0.03) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(0, 255, 200, 0.03) 1px, transparent 1px)
+            `,
+            backgroundSize: '40px 40px',
+            animation: 'gridMove 2s linear infinite'
+          }} />
+
+          {/* Expanding Rings */}
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div
+              key={i}
+              style={{
+                position: 'absolute',
+                borderRadius: '50%',
+                border: `2px solid rgba(0, 255, 200, ${0.5 - i * 0.08})`,
+                width: `${i * 80}px`,
+                height: `${i * 80}px`,
+                animation: `expandRing 2s ease-out infinite`,
+                animationDelay: `${i * 0.2}s`,
+                boxShadow: `0 0 20px rgba(0, 255, 200, 0.3), inset 0 0 20px rgba(0, 255, 200, 0.1)`
+              }}
+            />
+          ))}
+
+          {/* Rotating Scanner */}
+          <div style={{
+            position: 'absolute',
+            width: '300px',
+            height: '300px',
+            animation: 'rotateScanner 3s linear infinite'
+          }}>
+            {/* Scanner Beam */}
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              width: '150px',
+              height: '3px',
+              background: 'linear-gradient(90deg, transparent, rgba(0, 255, 200, 0.8), rgba(0, 255, 200, 1))',
+              transformOrigin: 'left center',
+              boxShadow: '0 0 20px rgba(0, 255, 200, 0.8), 0 0 40px rgba(0, 255, 200, 0.4)'
+            }} />
+          </div>
+
+          {/* Center Crosshair */}
+          <div style={{
+            position: 'absolute',
+            width: '60px',
+            height: '60px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            {/* Horizontal Line */}
+            <div style={{
+              position: 'absolute',
+              width: '60px',
+              height: '2px',
+              background: 'rgba(0, 255, 200, 0.6)',
+              boxShadow: '0 0 10px rgba(0, 255, 200, 0.8)'
+            }} />
+            {/* Vertical Line */}
+            <div style={{
+              position: 'absolute',
+              width: '2px',
+              height: '60px',
+              background: 'rgba(0, 255, 200, 0.6)',
+              boxShadow: '0 0 10px rgba(0, 255, 200, 0.8)'
+            }} />
+            {/* Center Dot */}
+            <div style={{
+              width: '12px',
+              height: '12px',
+              borderRadius: '50%',
+              background: 'rgba(0, 255, 200, 0.9)',
+              boxShadow: '0 0 20px rgba(0, 255, 200, 1), 0 0 40px rgba(0, 255, 200, 0.6)',
+              animation: 'pulseGlow 0.5s ease-in-out infinite'
+            }} />
+          </div>
+
+          {/* HUD Text */}
+          <div style={{
+            position: 'absolute',
+            top: '20%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            fontFamily: 'monospace',
+            fontSize: '14px',
+            color: 'rgba(0, 255, 200, 0.9)',
+            textShadow: '0 0 10px rgba(0, 255, 200, 0.8)',
+            textAlign: 'center',
+            animation: 'flicker 0.1s infinite'
+          }}>
+            <div style={{ fontSize: '12px', opacity: 0.7 }}>▶ SCANNING</div>
+            <div style={{ fontSize: '18px', fontWeight: 'bold', marginTop: '5px' }}>
+              {gpsPosition[0].toFixed(6)}, {gpsPosition[1].toFixed(6)}
+            </div>
+          </div>
+
+          {/* Corner Brackets */}
+          {['topLeft', 'topRight', 'bottomLeft', 'bottomRight'].map((corner) => {
+            const positions: Record<string, React.CSSProperties> = {
+              topLeft: { top: '20%', left: '15%' },
+              topRight: { top: '20%', right: '15%', transform: 'scaleX(-1)' },
+              bottomLeft: { bottom: '20%', left: '15%', transform: 'scaleY(-1)' },
+              bottomRight: { bottom: '20%', right: '15%', transform: 'scale(-1, -1)' }
+            };
+            return (
+              <div
+                key={corner}
+                style={{
+                  position: 'absolute',
+                  ...positions[corner],
+                  width: '40px',
+                  height: '40px'
+                }}
+              >
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '20px',
+                  height: '3px',
+                  background: 'rgba(0, 255, 200, 0.8)',
+                  boxShadow: '0 0 10px rgba(0, 255, 200, 0.6)'
+                }} />
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '3px',
+                  height: '20px',
+                  background: 'rgba(0, 255, 200, 0.8)',
+                  boxShadow: '0 0 10px rgba(0, 255, 200, 0.6)'
+                }} />
+              </div>
+            );
+          })}
+
+          <style>{`
+            @keyframes expandRing {
+              0% {
+                transform: scale(0.5);
+                opacity: 1;
+              }
+              100% {
+                transform: scale(2);
+                opacity: 0;
+              }
+            }
+            
+            @keyframes rotateScanner {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+            
+            @keyframes gridMove {
+              0% { transform: translate(0, 0); }
+              100% { transform: translate(40px, 40px); }
+            }
+            
+            @keyframes pulseGlow {
+              0%, 100% { 
+                transform: scale(1);
+                box-shadow: 0 0 20px rgba(0, 255, 200, 1), 0 0 40px rgba(0, 255, 200, 0.6);
+              }
+              50% { 
+                transform: scale(1.2);
+                box-shadow: 0 0 30px rgba(0, 255, 200, 1), 0 0 60px rgba(0, 255, 200, 0.8);
+              }
+            }
+            
+            @keyframes flicker {
+              0%, 100% { opacity: 1; }
+              50% { opacity: 0.95; }
+            }
+          `}</style>
+        </div>
       )}
 
-      {/* Legend */}
-      <LegendPanel
-        isVisible={showLegend}
-        isOfflineMode={isOfflineMode}
-        showTopPlayers={showTopPlayers}
-        selectedMarkerColor={selectedMarkerColor}
-        userMarkersCount={userMarkers.length}
-        unlockedTracksCount={unlockedTracks.length}
-        gpsStatus={gpsStatus}
-        gpsPosition={gpsPosition}
-        gpsError={gpsError}
-        userProfile={userProfile}
-      />
-
-      
 
       <style>{`
         @keyframes popIn {
@@ -5037,22 +5432,36 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         @keyframes whiteGlowPulse {
           0%, 100% { 
             opacity: 1;
-            box-shadow: 
-              0 0 40px rgba(255, 255, 255, 0.8),
-              0 0 80px rgba(255, 255, 255, 0.6),
-              0 0 120px rgba(255, 255, 255, 0.4),
-              inset 0 0 60px rgba(255, 255, 255, 0.7);
+            box-shadow: 0 0 40px rgba(255, 255, 255, 0.8), 0 0 80px rgba(255, 255, 255, 0.6), 0 0 120px rgba(255, 255, 255, 0.4), inset 0 0 60px rgba(255, 255, 255, 0.7);
           }
           50% { 
             opacity: 0.9;
-            boxShadow: 
-              0 0 45px rgba(255, 255, 255, 0.9),
-              0 0 90px rgba(255, 255, 255, 0.7),
-              0 0 140px rgba(255, 255, 255, 0.5),
-              inset 0 0 65px rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 45px rgba(255, 255, 255, 0.9), 0 0 90px rgba(255, 255, 255, 0.7), 0 0 140px rgba(255, 255, 255, 0.5), inset 0 0 65px rgba(255, 255, 255, 0.8);
           }
         }
-                    /* Hide Leaflet zoom controls */
+        
+        /* Music marker pulse animation */
+        @keyframes musicPulse {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 15px rgba(147,51,234,0.8), 0 0 30px rgba(147,51,234,0.5); }
+          50% { transform: scale(1.1); box-shadow: 0 0 20px rgba(147,51,234,0.9), 0 0 40px rgba(147,51,234,0.6); }
+        }
+        
+        /* Radio wave animations for music markers */
+        @keyframes radioWave1 {
+          0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+          100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+        }
+        @keyframes radioWave2 {
+          0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0.8; }
+          33% { transform: translate(-50%, -50%) scale(0.7); opacity: 0.6; }
+          100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
+        }
+        @keyframes radioWave3 {
+          0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0.6; }
+          66% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.4; }
+          100% { transform: translate(-50%, -50%) scale(2.4); opacity: 0; }
+        }
+        /* Hide Leaflet zoom controls */
         .leaflet-control-zoom {
           display: none !important;
         }
@@ -5091,7 +5500,6 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         </>
       )}
     </div>
-    </StoryManagerProvider>
   );
 };
 

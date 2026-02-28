@@ -55,20 +55,42 @@ export const useMarkers = (user: User | null, userProfile: UserProfile | null) =
       );
     }
 
+    // Get the selected style from userProfile - FIXED: Use the correct property
+    const selectedStyle = userProfile.selectedGraffitiStyle || 
+                         userProfile.selectedStyleVariant || 
+                         `${userProfile.crewId || 'bqc'}-tag`;
+
+    // Extract style components
+    const [crewId, graffitiType] = selectedStyle.split('-');
+    
     const newMarker: UserMarker = {
       id: `user-marker-${Date.now()}`,
       position: data.position,
       name: 'Pole',
       description: 'Sticker/Slap',
-      color: '#' + Math.floor(Math.random()*16777215).toString(16), // Random color
+      color: userProfile.selectedColor || userProfile.favoriteColor || '#' + Math.floor(Math.random()*16777215).toString(16),
       timestamp: new Date(),
       distanceFromCenter: distanceFromCenter || undefined,
       userId: user.uid,
       username: userProfile.username,
-      userProfilePic: userProfile.profilePicUrl
+      userProfilePic: userProfile.profilePicUrl,
+      // CRITICAL FIX: Include all style info for font rendering
+      styleId: selectedStyle,
+      styleType: userProfile.selectedGraffitiStyle?.includes('svg') ? 'svg' : 'font',
+      playerTagName: userProfile.username || null,
+      surface: userProfile.selectedSurface || 'wall',
+      graffitiType: graffitiType || userProfile.selectedGraffitiType || 'tag',
+      crewId: crewId || userProfile.crewId || 'bqc',
+      // Include variant info if available
+      variant: userProfile.selectedStyleVariant || selectedStyle
     };
 
-    console.log('Marker created:', newMarker);
+    console.log('Marker created with style:', {
+      styleId: newMarker.styleId,
+      graffitiType: newMarker.graffitiType,
+      crewId: newMarker.crewId,
+      playerTagName: newMarker.playerTagName
+    });
     
     // Save to Firestore
     try {

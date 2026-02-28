@@ -22,6 +22,12 @@
   border: none !important;
 }
 
+/* Player tag font for Leaflet markers - uses Google Fonts Permanent Marker */
+.marker-tag-text {
+  font-family: 'Permanent Marker', Impact, 'Arial Black', sans-serif;
+  font-weight: 400;
+}
+
 html, body {
   height: 100%;
   width: 100%;
@@ -115,6 +121,44 @@ iframe[title="SoundCloud Player"] {
   to { transform: translateX(0); opacity: 1; }
 }
 
+@keyframes rainbow-pulse {
+ 0% { transform: scale(1); }
+ 50% { transform: scale(1.05); }
+ 100% { transform: scale(1); }
+}
+
+@keyframes rainbow-svg {
+  0% { filter: hue-rotate(0deg) saturate(2); }
+  50% { filter: hue-rotate(180deg) saturate(2); }
+  100% { filter: hue-rotate(360deg) saturate(2); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes metallic-shine {
+  0%, 100% { opacity: 1; filter: brightness(1); }
+  50% { opacity: 0.9; filter: brightness(1.4); }
+}
+
+.spray-can-icon svg {
+  display: block;
+}
+
+.spray-can-icon.rainbow-marker svg {
+  animation: rainbow-svg 2s linear infinite !important;
+}
+
+.spray-can-icon.glow-marker svg {
+  animation: glow-pulse 1.5s ease-in-out infinite !important;
+}
+
+.spray-can-icon.metallic-marker svg {
+  animation: metallic-shine 2s ease-in-out infinite !important;
+}
+
 /* Utility classes */
 .hidden {
   display: none !important;
@@ -138,4 +182,585 @@ iframe[title="SoundCloud Player"] {
 
 .gap-2 {
   gap: 8px;
+}
+
+/* ============================================
+   GRAFFITI FONT FACES - Blackout NZ
+   4 Crews × 13 Types = 52 Fonts
+   ============================================ */
+
+/* BQC (Brick Quality Crew) Fonts */
+@font-face {
+  font-family: 'BQC_sticker';
+  src: url('/fonts/bqc/sticker.woff2') format('woff2'),
+       url('/fonts/bqc/sticker.woff') format('woff'),
+       url('/fonts/bqc/sticker.otf') format('opentype'),
+       url('/fonts/bqc/sticker.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BQC_tag';
+  src: url('/fonts/bqc/tag.woff2') format('woff2'),
+       url('/fonts/bqc/tag.woff') format('woff'),
+       url('/fonts/bqc/tag.otf') format('opentype'),
+       url('/fonts/bqc/tag.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BQC_mops';
+  src: url('/fonts/bqc/mops.woff2') format('woff2'),
+       url('/fonts/bqc/mops.woff') format('woff'),
+       url('/fonts/bqc/mops.otf') format('opentype'),
+       url('/fonts/bqc/mops.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BQC_stencil';
+  src: url('/fonts/bqc/stencil.woff2') format('woff2'),
+       url('/fonts/bqc/stencil.woff') format('woff'),
+       url('/fonts/bqc/stencil.otf') format('opentype'),
+       url('/fonts/bqc/stencil.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BQC_pasteup';
+  src: url('/fonts/bqc/pasteup.woff2') format('woff2'),
+       url('/fonts/bqc/pasteup.woff') format('woff'),
+       url('/fonts/bqc/pasteup.otf') format('opentype'),
+       url('/fonts/bqc/pasteup.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BQC_throwup';
+  src: url('/fonts/bqc/throwup.woff2') format('woff2'),
+       url('/fonts/bqc/throwup.woff') format('woff'),
+       url('/fonts/bqc/throwup.otf') format('opentype'),
+       url('/fonts/bqc/throwup.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BQC_roller';
+  src: url('/fonts/bqc/roller.woff2') format('woff2'),
+       url('/fonts/bqc/roller.woff') format('woff'),
+       url('/fonts/bqc/roller.otf') format('opentype'),
+       url('/fonts/bqc/roller.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BQC_etch';
+  src: url('/fonts/bqc/etch.woff2') format('woff2'),
+       url('/fonts/bqc/etch.woff') format('woff'),
+       url('/fonts/bqc/etch.otf') format('opentype'),
+       url('/fonts/bqc/etch.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BQC_piece';
+  src: url('/fonts/bqc/piece.woff2') format('woff2'),
+       url('/fonts/bqc/piece.woff') format('woff'),
+       url('/fonts/bqc/piece.otf') format('opentype'),
+       url('/fonts/bqc/piece.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BQC_extinguisher';
+  src: url('/fonts/bqc/extinguisher.woff2') format('woff2'),
+       url('/fonts/bqc/extinguisher.woff') format('woff'),
+       url('/fonts/bqc/extinguisher.otf') format('opentype'),
+       url('/fonts/bqc/extinguisher.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BQC_burner';
+  src: url('/fonts/bqc/burner.woff2') format('woff2'),
+       url('/fonts/bqc/burner.woff') format('woff'),
+       url('/fonts/bqc/burner.otf') format('opentype'),
+       url('/fonts/bqc/burner.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BQC_mural';
+  src: url('/fonts/bqc/mural.woff2') format('woff2'),
+       url('/fonts/bqc/mural.woff') format('woff'),
+       url('/fonts/bqc/mural.otf') format('opentype'),
+       url('/fonts/bqc/mural.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BQC_rapel';
+  src: url('/fonts/bqc/rapel.woff2') format('woff2'),
+       url('/fonts/bqc/rapel.woff') format('woff'),
+       url('/fonts/bqc/rapel.otf') format('opentype'),
+       url('/fonts/bqc/rapel.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* SPS (Street Pirate Squad) Fonts */
+@font-face {
+  font-family: 'SPS_sticker';
+  src: url('/fonts/sps/sticker.woff2') format('woff2'),
+       url('/fonts/sps/sticker.woff') format('woff'),
+       url('/fonts/sps/sticker.otf') format('opentype'),
+       url('/fonts/sps/sticker.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SPS_tag';
+  src: url('/fonts/sps/tag.woff2') format('woff2'),
+       url('/fonts/sps/tag.woff') format('woff'),
+       url('/fonts/sps/tag.otf') format('opentype'),
+       url('/fonts/sps/tag.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SPS_mops';
+  src: url('/fonts/sps/mops.woff2') format('woff2'),
+       url('/fonts/sps/mops.woff') format('woff'),
+       url('/fonts/sps/mops.otf') format('opentype'),
+       url('/fonts/sps/mops.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SPS_stencil';
+  src: url('/fonts/sps/stencil.woff2') format('woff2'),
+       url('/fonts/sps/stencil.woff') format('woff'),
+       url('/fonts/sps/stencil.otf') format('opentype'),
+       url('/fonts/sps/stencil.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SPS_pasteup';
+  src: url('/fonts/sps/pasteup.woff2') format('woff2'),
+       url('/fonts/sps/pasteup.woff') format('woff'),
+       url('/fonts/sps/pasteup.otf') format('opentype'),
+       url('/fonts/sps/pasteup.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SPS_throwup';
+  src: url('/fonts/sps/throwup.woff2') format('woff2'),
+       url('/fonts/sps/throwup.woff') format('woff'),
+       url('/fonts/sps/throwup.otf') format('opentype'),
+       url('/fonts/sps/throwup.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SPS_roller';
+  src: url('/fonts/sps/roller.woff2') format('woff2'),
+       url('/fonts/sps/roller.woff') format('woff'),
+       url('/fonts/sps/roller.otf') format('opentype'),
+       url('/fonts/sps/roller.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SPS_etch';
+  src: url('/fonts/sps/etch.woff2') format('woff2'),
+       url('/fonts/sps/etch.woff') format('woff'),
+       url('/fonts/sps/etch.otf') format('opentype'),
+       url('/fonts/sps/etch.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SPS_piece';
+  src: url('/fonts/sps/piece.woff2') format('woff2'),
+       url('/fonts/sps/piece.woff') format('woff'),
+       url('/fonts/sps/piece.otf') format('opentype'),
+       url('/fonts/sps/piece.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SPS_extinguisher';
+  src: url('/fonts/sps/extinguisher.woff2') format('woff2'),
+       url('/fonts/sps/extinguisher.woff') format('woff'),
+       url('/fonts/sps/extinguisher.otf') format('opentype'),
+       url('/fonts/sps/extinguisher.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SPS_burner';
+  src: url('/fonts/sps/burner.woff2') format('woff2'),
+       url('/fonts/sps/burner.woff') format('woff'),
+       url('/fonts/sps/burner.otf') format('opentype'),
+       url('/fonts/sps/burner.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SPS_mural';
+  src: url('/fonts/sps/mural.woff2') format('woff2'),
+       url('/fonts/sps/mural.woff') format('woff'),
+       url('/fonts/sps/mural.otf') format('opentype'),
+       url('/fonts/sps/mural.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SPS_rapel';
+  src: url('/fonts/sps/rapel.woff2') format('woff2'),
+       url('/fonts/sps/rapel.woff') format('woff'),
+       url('/fonts/sps/rapel.otf') format('opentype'),
+       url('/fonts/sps/rapel.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* LZT (Legal Z-Town) Fonts */
+@font-face {
+  font-family: 'LZT_sticker';
+  src: url('/fonts/lzt/sticker.woff2') format('woff2'),
+       url('/fonts/lzt/sticker.woff') format('woff'),
+       url('/fonts/lzt/sticker.otf') format('opentype'),
+       url('/fonts/lzt/sticker.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'LZT_tag';
+  src: url('/fonts/lzt/tag.woff2') format('woff2'),
+       url('/fonts/lzt/tag.woff') format('woff'),
+       url('/fonts/lzt/tag.otf') format('opentype'),
+       url('/fonts/lzt/tag.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'LZT_mops';
+  src: url('/fonts/lzt/mops.woff2') format('woff2'),
+       url('/fonts/lzt/mops.woff') format('woff'),
+       url('/fonts/lzt/mops.otf') format('opentype'),
+       url('/fonts/lzt/mops.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'LZT_stencil';
+  src: url('/fonts/lzt/stencil.woff2') format('woff2'),
+       url('/fonts/lzt/stencil.woff') format('woff'),
+       url('/fonts/lzt/stencil.otf') format('opentype'),
+       url('/fonts/lzt/stencil.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'LZT_pasteup';
+  src: url('/fonts/lzt/pasteup.woff2') format('woff2'),
+       url('/fonts/lzt/pasteup.woff') format('woff'),
+       url('/fonts/lzt/pasteup.otf') format('opentype'),
+       url('/fonts/lzt/pasteup.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'LZT_throwup';
+  src: url('/fonts/lzt/throwup.woff2') format('woff2'),
+       url('/fonts/lzt/throwup.woff') format('woff'),
+       url('/fonts/lzt/throwup.otf') format('opentype'),
+       url('/fonts/lzt/throwup.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'LZT_roller';
+  src: url('/fonts/lzt/roller.woff2') format('woff2'),
+       url('/fonts/lzt/roller.woff') format('woff'),
+       url('/fonts/lzt/roller.otf') format('opentype'),
+       url('/fonts/lzt/roller.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'LZT_etch';
+  src: url('/fonts/lzt/etch.woff2') format('woff2'),
+       url('/fonts/lzt/etch.woff') format('woff'),
+       url('/fonts/lzt/etch.otf') format('opentype'),
+       url('/fonts/lzt/etch.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'LZT_piece';
+  src: url('/fonts/lzt/piece.woff2') format('woff2'),
+       url('/fonts/lzt/piece.woff') format('woff'),
+       url('/fonts/lzt/piece.otf') format('opentype'),
+       url('/fonts/lzt/piece.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'LZT_extinguisher';
+  src: url('/fonts/lzt/extinguisher.woff2') format('woff2'),
+       url('/fonts/lzt/extinguisher.woff') format('woff'),
+       url('/fonts/lzt/extinguisher.otf') format('opentype'),
+       url('/fonts/lzt/extinguisher.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'LZT_burner';
+  src: url('/fonts/lzt/burner.woff2') format('woff2'),
+       url('/fonts/lzt/burner.woff') format('woff'),
+       url('/fonts/lzt/burner.otf') format('opentype'),
+       url('/fonts/lzt/burner.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'LZT_mural';
+  src: url('/fonts/lzt/mural.woff2') format('woff2'),
+       url('/fonts/lzt/mural.woff') format('woff'),
+       url('/fonts/lzt/mural.otf') format('opentype'),
+       url('/fonts/lzt/mural.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'LZT_rapel';
+  src: url('/fonts/lzt/rapel.woff2') format('woff2'),
+       url('/fonts/lzt/rapel.woff') format('woff'),
+       url('/fonts/lzt/rapel.otf') format('opentype'),
+       url('/fonts/lzt/rapel.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* DGC (Downtown Graffiti Crew) Fonts */
+@font-face {
+  font-family: 'DGC_sticker';
+  src: url('/fonts/dgc/sticker.woff2') format('woff2'),
+       url('/fonts/dgc/sticker.woff') format('woff'),
+       url('/fonts/dgc/sticker.otf') format('opentype'),
+       url('/fonts/dgc/sticker.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DGC_tag';
+  src: url('/fonts/dgc/tag.woff2') format('woff2'),
+       url('/fonts/dgc/tag.woff') format('woff'),
+       url('/fonts/dgc/tag.otf') format('opentype'),
+       url('/fonts/dgc/tag.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DGC_mops';
+  src: url('/fonts/dgc/mops.woff2') format('woff2'),
+       url('/fonts/dgc/mops.woff') format('woff'),
+       url('/fonts/dgc/mops.otf') format('opentype'),
+       url('/fonts/dgc/mops.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DGC_stencil';
+  src: url('/fonts/dgc/stencil.woff2') format('woff2'),
+       url('/fonts/dgc/stencil.woff') format('woff'),
+       url('/fonts/dgc/stencil.otf') format('opentype'),
+       url('/fonts/dgc/stencil.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DGC_pasteup';
+  src: url('/fonts/dgc/pasteup.woff2') format('woff2'),
+       url('/fonts/dgc/pasteup.woff') format('woff'),
+       url('/fonts/dgc/pasteup.otf') format('opentype'),
+       url('/fonts/dgc/pasteup.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DGC_throwup';
+  src: url('/fonts/dgc/throwup.woff2') format('woff2'),
+       url('/fonts/dgc/throwup.woff') format('woff'),
+       url('/fonts/dgc/throwup.otf') format('opentype'),
+       url('/fonts/dgc/throwup.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DGC_roller';
+  src: url('/fonts/dgc/roller.woff2') format('woff2'),
+       url('/fonts/dgc/roller.woff') format('woff'),
+       url('/fonts/dgc/roller.otf') format('opentype'),
+       url('/fonts/dgc/roller.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DGC_etch';
+  src: url('/fonts/dgc/etch.woff2') format('woff2'),
+       url('/fonts/dgc/etch.woff') format('woff'),
+       url('/fonts/dgc/etch.otf') format('opentype'),
+       url('/fonts/dgc/etch.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DGC_piece';
+  src: url('/fonts/dgc/piece.woff2') format('woff2'),
+       url('/fonts/dgc/piece.woff') format('woff'),
+       url('/fonts/dgc/piece.otf') format('opentype'),
+       url('/fonts/dgc/piece.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DGC_extinguisher';
+  src: url('/fonts/dgc/extinguisher.woff2') format('woff2'),
+       url('/fonts/dgc/extinguisher.woff') format('woff'),
+       url('/fonts/dgc/extinguisher.otf') format('opentype'),
+       url('/fonts/dgc/extinguisher.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DGC_burner';
+  src: url('/fonts/dgc/burner.woff2') format('woff2'),
+       url('/fonts/dgc/burner.woff') format('woff'),
+       url('/fonts/dgc/burner.otf') format('opentype'),
+       url('/fonts/dgc/burner.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DGC_mural';
+  src: url('/fonts/dgc/mural.woff2') format('woff2'),
+       url('/fonts/dgc/mural.woff') format('woff'),
+       url('/fonts/dgc/mural.otf') format('opentype'),
+       url('/fonts/dgc/mural.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DGC_rapel';
+  src: url('/fonts/dgc/rapel.woff2') format('woff2'),
+       url('/fonts/dgc/rapel.woff') format('woff'),
+       url('/fonts/dgc/rapel.otf') format('opentype'),
+       url('/fonts/dgc/rapel.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
 }
