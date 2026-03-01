@@ -1,6 +1,38 @@
 // Add the useGPSTracker content from above
 import { useState, useCallback, useRef, useEffect } from 'react';
 
+type GeoError = {
+  code?: number;
+  message?: string;
+};
+
+const getGeolocationErrorMessage = (err: GeoError | null | undefined, context: 'initial' | 'watch' = 'initial'): string => {
+  if (!err) {
+    return context === 'watch' ? 'GPS tracking failed' : 'Failed to get location';
+  }
+
+  if (err.message) {
+    return err.message;
+  }
+
+  switch (err.code) {
+    case 1: // PERMISSION_DENIED
+      return context === 'watch'
+        ? 'Location permission denied'
+        : 'Location permission denied. Please enable location services in your browser settings.';
+    case 2: // POSITION_UNAVAILABLE
+      return context === 'watch'
+        ? 'Location information unavailable'
+        : 'Location information unavailable. Check your GPS signal or network connection.';
+    case 3: // TIMEOUT
+      return 'Location request timed out. Please try again.';
+    default:
+      return context === 'watch'
+        ? 'Unknown GPS error'
+        : 'Unable to get your location. Please check your device settings.';
+  }
+};
+
 export const useGPSTracker = () => {
   const [position, setPosition] = useState<[number, number] | null>(null);
   const [accuracy, setAccuracy] = useState<number | null>(null);
@@ -12,15 +44,17 @@ export const useGPSTracker = () => {
   const watchIdRef = useRef<number | null>(null);
 
   const getInitialLocation = useCallback(() => {
-    if (!navigator.geolocation) {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
       setError('Geolocation not supported in this browser');
       setIsLoading(false);
       return;
     }
 
-    if (window.location.protocol === 'http:' && 
-        window.location.hostname !== 'localhost' && 
-        window.location.hostname !== '127.0.0.1') {
+    if (
+      window.location.protocol === 'http:' &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1'
+    ) {
       setError('GPS requires HTTPS. Use localhost or deploy to production.');
       setIsLoading(false);
       return;
@@ -34,30 +68,9 @@ export const useGPSTracker = () => {
         setAccuracy(pos.coords.accuracy);
         setIsLoading(false);
       },
-      (err) => {
+      (err: GeolocationPositionError) => {
         console.error('GPS initial error:', err);
-        let errorMessage = 'Failed to get location';
-        
-        if (err && err.message) {
-          errorMessage = err.message;
-        } else if (err && err.code) {
-          switch(err.code) {
-            case 1: // PERMISSION_DENIED
-              errorMessage = 'Location permission denied. Please enable location services.';
-              break;
-            case 2: // POSITION_UNAVAILABLE
-              errorMessage = 'Location information unavailable. Check your GPS signal.';
-              break;
-            case 3: // TIMEOUT
-              errorMessage = 'Location request timed out. Please try again.';
-              break;
-            default:
-              errorMessage = 'Unable to get your location. Please check your device settings.';
-          }
-        } else {
-          errorMessage = 'Could not access location. Please ensure location services are enabled.';
-        }
-        
+        const errorMessage = getGeolocationErrorMessage(err, 'initial');
         setError(errorMessage);
         setIsLoading(false);
       },
@@ -69,15 +82,27 @@ export const useGPSTracker = () => {
     );
   }, []);
 
+  const stopTracking = useCallback(() => {
+    if (watchIdRef.current !== null && typeof navigator !== 'undefined') {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    setIsTracking(false);
+    setSpeed(null);
+    setHeading(null);
+  }, []);
+
   const startTracking = useCallback(() => {
-    if (!navigator.geolocation) {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
       setError('Geolocation not supported in this browser');
       return;
     }
 
-    if (window.location.protocol === 'http:' && 
-        window.location.hostname !== 'localhost' && 
-        window.location.hostname !== '127.0.0.1') {
+    if (
+      window.location.protocol === 'http:' &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1'
+    ) {
       setError('GPS requires HTTPS. Use localhost or deploy to production.');
       return;
     }
@@ -90,7 +115,7 @@ export const useGPSTracker = () => {
       (pos) => {
         setPosition([pos.coords.latitude, pos.coords.longitude]);
         setAccuracy(pos.coords.accuracy);
-        
+
         // Start continuous tracking
         const watchId = navigator.geolocation.watchPosition(
           (watchPos) => {
@@ -99,65 +124,24 @@ export const useGPSTracker = () => {
             setSpeed(watchPos.coords.speed || null);
             setHeading(watchPos.coords.heading || null);
           },
-          (err) => {
+          (err: GeolocationPositionError) => {
             console.error('GPS watch error:', err);
-            let errorMessage = 'GPS tracking failed';
-            
-            if (err && err.message) {
-              errorMessage = err.message;
-            } else if (err && err.code) {
-              switch(err.code) {
-                case err.PERMISSION_DENIED:
-                  errorMessage = 'Location permission denied';
-                  break;
-                case err.POSITION_UNAVAILABLE:
-                  errorMessage = 'Location information unavailable';
-                  break;
-                case err.TIMEOUT:
-                  errorMessage = 'Location request timed out';
-                  break;
-                default:
-                  errorMessage = 'Unknown GPS error';
-              }
-            }
-            
+            const errorMessage = getGeolocationErrorMessage(err, 'watch');
             setError(errorMessage);
             stopTracking();
           },
           {
             enableHighAccuracy: true,
             timeout: 10000,
-            maximumAge: 0,
-            distanceFilter: 1
+            maximumAge: 0
           }
         );
-        
+
         watchIdRef.current = watchId;
       },
-      (err) => {
+      (err: GeolocationPositionError) => {
         console.error('GPS initial error:', err);
-        let errorMessage = 'Failed to get location';
-        
-        if (err && err.message) {
-          errorMessage = err.message;
-        } else if (err && err.code) {
-          switch(err.code) {
-            case 1: // PERMISSION_DENIED
-              errorMessage = 'Location permission denied. Please enable location services in your browser settings.';
-              break;
-            case 2: // POSITION_UNAVAILABLE
-              errorMessage = 'Location information unavailable. Check your GPS signal or network connection.';
-              break;
-            case 3: // TIMEOUT
-              errorMessage = 'Location request timed out. Please try again.';
-              break;
-            default:
-              errorMessage = 'Unable to get your location. Please check your device settings.';
-          }
-        } else {
-          errorMessage = 'Could not access location. Please ensure location services are enabled and try again.';
-        }
-        
+        const errorMessage = getGeolocationErrorMessage(err, 'initial');
         setError(errorMessage);
         setIsTracking(false);
       },
@@ -167,30 +151,21 @@ export const useGPSTracker = () => {
         maximumAge: 0
       }
     );
-  }, []);
-
-  const stopTracking = useCallback(() => {
-    if (watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
-    setIsTracking(false);
-    setSpeed(null);
-    setHeading(null);
-  }, []);
+  }, [stopTracking]);
 
   // Start tracking automatically when component mounts
   useEffect(() => {
     // Get initial location when component mounts
     getInitialLocation();
-    
+
     // Start tracking automatically
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       startTracking();
     }, 1000);
 
     return () => {
-      if (watchIdRef.current !== null) {
+      clearTimeout(timer);
+      if (watchIdRef.current !== null && typeof navigator !== 'undefined') {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
     };

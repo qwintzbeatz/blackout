@@ -77,14 +77,14 @@ import { SurfaceGraffitiSelector } from '@/components/ui/SurfaceGraffitiSelector
 import { RepNotification } from '@/components/ui/RepNotification';
 import SongUnlockModal from '@/components/ui/SongUnlockModal';
 import VideoUnlockModal from '@/components/ui/VideoUnlockModal';
-import { SPOTIFY_TRACKS, UNLOCKABLE_TRACKS, DEFAULT_TRACK, isSpotifyUrl, getTrackName, getSpotifyTrackName } from '@/constants/all_tracks';
+import { SPOTIFY_TRACKS, UNLOCKABLE_TRACKS, DEFAULT_TRACK, isSpotifyUrl, getSpotifyTrackName } from '@/constants/all_tracks';
 import { FACEBOOK_VIDEOS, getVideoName, getFacebookEmbedUrl, getRandomVideo } from '@/constants/videos';
 import { HIPHOP_TRACKS } from '@/constants/tracks';
 import { fullScreenStyle, loadingSpinnerStyle, panelBaseStyle, buttonBaseStyle, primaryButtonStyle, secondaryButtonStyle, successButtonStyle, dangerButtonStyle, inputBaseStyle, flexCenterStyle, flexBetweenStyle, flexColumnStyle, titleTextStyle, subtitleTextStyle, colors, gradients } from './pageStyles';
 import { MarkerName, MarkerDescription, Gender, MARKER_COLORS, MARKER_NAMES, MARKER_DESCRIPTIONS, CrewId } from '@/constants/markers';
 import { SurfaceType, GraffitiType } from '@/types';
 import { createSprayCanDivIcon } from '@/components/map/SprayCanIcon';
-import { getLayeredIconForMarker } from '@/components/map/LayeredMarkerIcon';
+import MemoizedMarker from '@/components/map/MemoizedMarker';
 import { getCrewColor } from '@/utils/crewTheme';
 import { 
   migrateMarkerNameToSurface, 
@@ -98,8 +98,7 @@ import { calculateRep, RepResult, calculateEnhancedRank, getRankColor, getRankPr
 import { initializeUnlockedColors, getDefaultColorForCrew, ALL_COLORS } from '@/utils/colorUnlocks';
 import { GRAFFITI_STYLES } from '@/utils/graffitiUnlocks';
 import { calculateDistance as calculateDistanceHelper, getTrackNameFromUrl as getTrackNameFromUrlHelper, getTrackSource, getTrackThemeColor } from '@/lib/utils/dropHelpers';
-import { generateAvatarUrl as generateAvatarUrlHelper } from '@/lib/utils/avatarGenerator';
-import { getTrackName as getTrackNameHelper } from '@/constants/all_tracks';
+import { unlockRandomSpotifyTrack, unlockRandomSoundCloudTrack, unlockRandomTrack } from '@/lib/utils/musicUnlocks';
 import { NEW_ZEALAND_LOCATIONS, NZ_BOUNDS, NZ_CENTER, NZ_DEFAULT_ZOOM, GPS_DEFAULT_ZOOM } from '@/constants/locations';
 import { detectDevicePerformance, panelStyle } from '@/utils';
 import {
@@ -184,98 +183,6 @@ const calculateRank = (rep: number): string => {
 
 const calculateLevel = (rep: number): number => {
   return Math.floor(rep / 100) + 1;
-};
-
-// Helper function to unlock a random SPOTIFY track only
-// Used for: Tag/Marker drops
-const unlockRandomSpotifyTrack = (currentUnlocked: string[]): { newTracks: string[], newlyUnlocked: { url: string; name: string; source: 'Spotify' | 'SoundCloud' } | null } => {
-  // Spotify tracks only
-  const availableTracks = SPOTIFY_TRACKS.filter(track =>
-    !currentUnlocked.includes(track)
-  );
-
-  if (availableTracks.length === 0) return { newTracks: currentUnlocked, newlyUnlocked: null };
-
-  // Pick random Spotify track
-  const randomTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)];
-  
-  return {
-    newTracks: [...currentUnlocked, randomTrack],
-    newlyUnlocked: {
-      url: randomTrack,
-      name: getTrackNameFromUrl(randomTrack),
-      source: 'Spotify'
-    }
-  };
-};
-
-// Helper function to unlock a random SOUNDCLOUD track only
-// Used for: Photo drops
-const unlockRandomSoundCloudTrack = (currentUnlocked: string[]): { newTracks: string[], newlyUnlocked: { url: string; name: string; source: 'Spotify' | 'SoundCloud' } | null } => {
-  // SoundCloud tracks only (HIPHOP_TRACKS are SoundCloud URLs)
-  const availableTracks = HIPHOP_TRACKS.filter(track =>
-    !currentUnlocked.includes(track)
-  );
-
-  if (availableTracks.length === 0) return { newTracks: currentUnlocked, newlyUnlocked: null };
-
-  // Pick random SoundCloud track
-  const randomTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)];
-  
-  return {
-    newTracks: [...currentUnlocked, randomTrack],
-    newlyUnlocked: {
-      url: randomTrack,
-      name: getTrackNameFromUrl(randomTrack),
-      source: 'SoundCloud'
-    }
-  };
-};
-
-// Keep original function for backward compatibility (combines both)
-const unlockRandomTrack = (currentUnlocked: string[]): { newTracks: string[], newlyUnlocked: { url: string; name: string; source: 'Spotify' | 'SoundCloud' } | null } => {
-  // Combine Spotify and SoundCloud tracks
-  const ALL_TRACKS = [...SPOTIFY_TRACKS, ...HIPHOP_TRACKS];
-  
-  // Get tracks that haven't been unlocked yet
-  const availableTracks = ALL_TRACKS.filter(track =>
-    !currentUnlocked.includes(track)
-  );
-
-  if (availableTracks.length === 0) return { newTracks: currentUnlocked, newlyUnlocked: null };
-
-  // Pick random track
-  const randomTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)];
-  const isSpotify = randomTrack.includes('open.spotify.com');
-  
-  return {
-    newTracks: [...currentUnlocked, randomTrack],
-    newlyUnlocked: {
-      url: randomTrack,
-      name: getTrackNameFromUrl(randomTrack),
-      source: isSpotify ? 'Spotify' : 'SoundCloud'
-    }
-  };
-};
-
-// Helper function to get track name from URL
-// Safe version with null checks
-const getTrackNameFromUrl = (url: string | undefined | null): string => {
-  if (!url) return 'Unknown Track';
-  if (url === 'blackout-classic.mp3') return 'Blackout (Default)';
-  if (url.includes('open.spotify.com/')) {
-    // Use the getTrackName function from all_tracks
-    return getTrackName(url);
-  }
-  if (url.includes('soundcloud.com')) {
-    // Extract track name from SoundCloud URL
-    const segments = url.split('/');
-    const trackSegment = segments[segments.length - 1];
-    return trackSegment.split('-').map(word =>
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ');
-  }
-  return 'Unknown Track';
 };
 
 // Helper function to calculate bounds from markers
@@ -428,42 +335,6 @@ const usePerformanceMonitor = () => {
   
   return { logPerformance };
 };
-
-// Memoized Marker Component
-
-// Memoized Marker - Uses layered icon with font support for graffiti markers
-const MemoizedMarker = React.memo(({ marker, user, onClick, crewId }: {
-  marker: UserMarker,
-  user: FirebaseUser | null,
-  onClick: (marker: UserMarker) => void,
-  crewId?: string | null
-}) => {
-  const customIcon = useMemo(() => {
-    if (typeof window === 'undefined') return undefined;
-    
-    // Use the new layered icon system with font support
-    return getLayeredIconForMarker({
-      color: marker.color,
-      styleId: marker.styleId,
-      playerTagName: marker.username,
-      surface: marker.surface,
-      graffitiType: marker.graffitiType,
-      specialType: marker.specialType,
-      crewId: crewId
-    });
-  }, [marker.color, marker.styleId, marker.username, marker.surface, marker.graffitiType, marker.specialType, crewId]);
-  
-  return (
-    <Marker 
-      position={marker.position}
-      icon={customIcon}
-      eventHandlers={{ click: () => onClick(marker) }}
-    />
-  );
-});
-
-MemoizedMarker.displayName = 'MemoizedMarker';
-
 
 const HomeComponent = () => {
   const { hasRecentErrors } = useErrorHandler();
@@ -939,7 +810,7 @@ const {
     if (unlockedTracks.length === 0) return 'No tracks unlocked';
     
     const track = unlockedTracks[currentTrackIndex];
-    return getTrackNameFromUrl(track);
+    return getTrackNameFromUrlHelper(track);
   };
   
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1820,7 +1691,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         setPendingDropPosition(null);
 
         const trackUnlocked = newTracks.length > currentTracks.length;
-        const unlockedTrackName = trackUnlocked ? getTrackNameFromUrl(newTracks[newTracks.length - 1]) : '';
+        const unlockedTrackName = trackUnlocked ? getTrackNameFromUrlHelper(newTracks[newTracks.length - 1]) : '';
         const unlockedTrackUrl = trackUnlocked ? newTracks[newTracks.length - 1] : '';
 
         if (trackUnlocked) {
@@ -1961,8 +1832,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         username: userProfile.username,
         userProfilePic: userProfile.profilePicUrl,
         // New surface and graffiti type fields
-        surface: selectedSurface,
-        graffitiType: selectedGraffitiType,
+        surface: selectedSurface as SurfaceType,
+        graffitiType: selectedGraffitiType as GraffitiType,
         // Special color effect
         specialType: selectedSpecialType,
         // Selected graffiti style from Blackbook
@@ -2004,7 +1875,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         setUnlockedTracks(newTracks);
 
         const trackUnlocked = newTracks.length > currentTracks.length;
-        const unlockedTrackName = trackUnlocked ? getTrackNameFromUrl(newTracks[newTracks.length - 1]) : '';
+        const unlockedTrackName = trackUnlocked ? getTrackNameFromUrlHelper(newTracks[newTracks.length - 1]) : '';
         const unlockedTrackUrl = trackUnlocked ? newTracks[newTracks.length - 1] : '';
 
         if (trackUnlocked) {
@@ -2095,7 +1966,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       setRepNotification({
         show: true,
         amount: 0,
-        message: `Music drop placed! You gave away "${getTrackNameFromUrl(trackToDrop)}". ${newTracks.length === 0 ? "You have no songs left." : `${newTracks.length} track(s) remaining.`}`,
+        message: `Music drop placed! You gave away "${getTrackNameFromUrlHelper(trackToDrop)}". ${newTracks.length === 0 ? "You have no songs left." : `${newTracks.length} track(s) remaining.`}`,
       });
 
       // Check if user just placed their first drop and send welcome message if needed
@@ -3430,7 +3301,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             setIsCreatingDrop(false);
           }
         }}
-        getTrackNameFromUrl={getTrackNameFromUrl}
+        getTrackNameFromUrl={getTrackNameFromUrlHelper}
         isLoading={isCreatingDrop}
       />
 
@@ -4772,7 +4643,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {(Array.isArray(userProfile?.unlockedTracks) ? userProfile.unlockedTracks : (Array.isArray(unlockedTracks) ? unlockedTracks : [])).map((track, index) => {
-                        const trackName = getTrackNameFromUrl(track);
+                        const trackName = getTrackNameFromUrlHelper(track);
                         const isCurrentlyPlaying = index === currentTrackIndex;
 
                         return (
