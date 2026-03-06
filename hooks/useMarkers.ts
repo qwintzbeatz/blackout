@@ -58,7 +58,7 @@ export const useMarkers = (user: User | null, userProfile: UserProfile | null) =
     // Get the selected style from userProfile - FIXED: Use the correct property
     const selectedStyle = userProfile.selectedGraffitiStyle || 
                          userProfile.selectedStyleVariant || 
-                         `${userProfile.crewId || 'bqc'}-tag`;
+                         `${userProfile.crewId || 'bqc'}-tag-svg-1`;
 
     // Extract style components
     const [crewId, graffitiType] = selectedStyle.split('-');

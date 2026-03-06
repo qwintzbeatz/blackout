@@ -121,11 +121,11 @@ export function useDropCreation(options: UseDropCreationOptions): UseDropCreatio
         surface: selectedSurface,
         graffitiType: selectedGraffitiType,
         // CRITICAL FIX: Include all style properties
-        styleId: selectedGraffitiStyle || userProfile.selectedGraffitiStyle || `${userProfile.crewId || 'bqc'}-tag`,
+        styleId: selectedGraffitiStyle || userProfile.selectedGraffitiStyle || `${userProfile.crewId || 'bqc'}-tag-svg-1`,
         styleType: (selectedGraffitiStyle || userProfile.selectedGraffitiStyle || '').includes('svg') ? 'svg' : 'font',
         playerTagName: userProfile.username || null,
         crewId: userProfile.crewId || 'bqc',
-        variant: selectedGraffitiStyle || userProfile.selectedGraffitiStyle || `${userProfile.crewId || 'bqc'}-tag`,
+        variant: selectedGraffitiStyle || userProfile.selectedGraffitiStyle || `${userProfile.crewId || 'bqc'}-tag-svg-1`,
         userId: user.uid,
         username: userProfile.username,
         userProfilePic: userProfile.profilePicUrl,

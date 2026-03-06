@@ -1,0 +1,157 @@
+// Firestore Security Rules for Blackout NZ
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Users collection - crew detection security
+    match /users/{userId} {
+      // Users can read their own profile
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Users can read other users in the same crew for crew detection
+      allow read: if request.auth != null && 
+                  exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                  get(/databases/$(database)/documents/users/$(request.auth.uid)).data.crewId == 
+                  get(/databases/$(database)/documents/users/$(userId)).data.crewId;
+      
+      // Users can update their own profile
+      allow update: if request.auth != null && request.auth.uid == userId;
+      
+      // Users can update their lastLocation (for crew detection)
+      allow update: if request.auth != null && request.auth.uid == userId &&
+                  request.resource.data.keys().hasOnly(['lastLocation', 'lastLocationUpdated']) &&
+                  request.resource.data.lastLocation is map &&
+                  request.resource.data.lastLocation.lat is number &&
+                  request.resource.data.lastLocation.lng is number &&
+                  request.resource.data.lastLocationUpdated is timestamp;
+      
+      // Users can create their own profile
+      allow create: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Markers collection
+    match /markers/{markerId} {
+      // Users can read all markers
+      allow read: if request.auth != null;
+      
+      // Users can create markers
+      allow create: if request.auth != null;
+      
+      // Users can update their own markers
+      allow update: if request.auth != null && 
+                  request.resource.data.userId == request.auth.uid;
+      
+      // Users can delete their own markers
+      allow delete: if request.auth != null && 
+                  resource.data.userId == request.auth.uid;
+    }
+    
+    // Drops collection
+    match /drops/{dropId} {
+      // Users can read all drops
+      allow read: if request.auth != null;
+      
+      // Users can create drops
+      allow create: if request.auth != null;
+      
+      // Users can update their own drops (likes, etc.)
+      allow update: if request.auth != null && 
+                  request.resource.data.createdBy == request.auth.uid;
+      
+      // Users can delete their own drops
+      allow delete: if request.auth != null && 
+                  resource.data.createdBy == request.auth.uid;
+    }
+    
+    // Crew chats collection
+    match /crewChats/{crewId} {
+      // Users can read crew chats only if they're in that crew
+      allow read: if request.auth != null &&
+                  exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                  get(/databases/$(database)/documents/users/$(request.auth.uid)).data.crewId == crewId;
+      
+      // Users can write to crew chats only if they're in that crew
+      allow write: if request.auth != null &&
+                   exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.crewId == crewId;
+    }
+    
+    // Direct messages collection
+    match /directMessages/{messageId} {
+      // Users can read messages they're involved in
+      allow read: if request.auth != null &&
+                  (resource.data.fromUid == request.auth.uid || 
+                   resource.data.toUid == request.auth.uid);
+      
+      // Users can create messages to other users
+      allow create: if request.auth != null &&
+                    request.resource.data.fromUid == request.auth.uid;
+      
+      // Users can update their own messages (mark as read)
+      allow update: if request.auth != null &&
+                    (request.resource.data.fromUid == request.auth.uid ||
+                     request.resource.data.toUid == request.auth.uid);
+    }
+    
+    // Direct chats collection
+    match /directChats/{chatId} {
+      // Users can read chats they're involved in
+      allow read: if request.auth != null &&
+                  resource.data.participants[0] == request.auth.uid ||
+                  resource.data.participants[1] == request.auth.uid;
+      
+      // Users can create chats
+      allow create: if request.auth != null &&
+                    request.resource.data.participants[0] == request.auth.uid ||
+                    request.resource.data.participants[1] == request.auth.uid;
+      
+      // Users can update their own chats
+      allow update: if request.auth != null &&
+                    request.resource.data.participants[0] == request.auth.uid ||
+                    request.resource.data.participants[1] == request.auth.uid;
+    }
+    
+    // Story progress collection
+    match /storyProgress/{progressId} {
+      // Users can read their own story progress
+      allow read: if request.auth != null && request.auth.uid == progressId;
+      
+      // Users can update their own story progress
+      allow update: if request.auth != null && request.auth.uid == progressId;
+      
+      // Users can create their own story progress
+      allow create: if request.auth != null && request.auth.uid == progressId;
+    }
+    
+    // Unlocked tracks collection
+    match /unlockedTracks/{trackId} {
+      // Users can read their own unlocked tracks
+      allow read: if request.auth != null && request.auth.uid == trackId;
+      
+      // Users can update their own unlocked tracks
+      allow update: if request.auth != null && request.auth.uid == trackId;
+      
+      // Users can create their own unlocked tracks
+      allow create: if request.auth != null && request.auth.uid == trackId;
+    }
+    
+    // Top players collection (read-only for all authenticated users)
+    match /topPlayers/{playerId} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only server/admin can update
+    }
+    
+    // Crew data (read-only for all authenticated users)
+    match /crews/{crewId} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only server/admin can update
+    }
+    
+    // Story missions (read-only for all authenticated users)
+    match /storyMissions/{missionId} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only server/admin can update
+    }
+  }
+}

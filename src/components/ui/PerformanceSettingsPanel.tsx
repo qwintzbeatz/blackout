@@ -134,8 +134,13 @@ export const PerformanceSettingsPanel: React.FC<PerformanceSettingsPanelProps> =
               onChange={(e) => handleSettingChange('enableCrewDetection', e.target.checked)}
               style={{ marginRight: '8px' }}
             />
-            Enable Crew Detection
+            Enable Crew Radar
           </label>
+          <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', lineHeight: '1.4' }}>
+            See nearby crew members — uses more battery & data
+            <br />
+            <span style={{ color: '#64748b' }}>Scans every 90s when active, slows to 180s if no one nearby</span>
+          </div>
         </div>
 
         <div style={{

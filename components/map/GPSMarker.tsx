@@ -146,7 +146,7 @@ const GPSMarker: React.FC<GPSMarkerProps> = ({
 
   return (
     <>
-      <Marker position={position} icon={icon}>
+      <Marker position={position} icon={icon} zIndexOffset={-1000}>
         <Popup>
           <div style={{ textAlign: 'center', minWidth: '200px' }}>
             <strong>📍 Your Location</strong>
@@ -195,11 +195,12 @@ const GPSMarker: React.FC<GPSMarkerProps> = ({
             }}
           >
             <Popup>
-              <div style={{ textAlign: 'center' }}>
+              <div style={{ textAlign: 'center', minWidth: '250px' }}>
                 <strong style={{ color: gridColor }}>
-                  {isTracking ? '🟢 50m Radius (Online)' : '🔴 50m Radius (Offline)'}
+                  📍 50m Radius Zone
                 </strong>
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                
+                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px' }}>
                   {isTracking ? 'GPS tracking active' : 'GPS tracking paused'}
                   <br />
                   Click map to place markers

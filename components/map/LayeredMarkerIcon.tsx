@@ -4,7 +4,6 @@ import React, { useMemo } from 'react';
 import type { DivIcon } from 'leaflet';
 import { SurfaceType, getSurfaceConfig } from '@/constants/surfaces';
 import { GraffitiType, getGraffitiTypeConfig } from '@/constants/graffitiTypes';
-import { getStyleById, FONT_SIZES } from '@/constants/graffitiFonts';
 import { SpecialMarkerType } from '@/lib/types/blackout';
 
 interface LayeredMarkerIconOptions {
@@ -18,6 +17,7 @@ interface LayeredMarkerIconOptions {
   styleId?: string;
   specialType?: SpecialMarkerType;
   crewId?: string | null;
+  variant?: number;
 }
 
 // Get the leaflet DivIcon synchronously
@@ -29,11 +29,9 @@ export function getLayeredIconForMarker(options: LayeredMarkerIconOptions): DivI
   const rep = options.repEarned || 0;
   const markerColor = options.color || '#4dabf7';
   const playerTagName = options.playerTagName;
-  const styleId = options.styleId;
+  const crewId = options.crewId || 'bqc';
+  const variant = options.variant || 1;
   const specialType = options.specialType;
-  
-  // Get style info if provided
-  const style = styleId ? getStyleById(styleId) : null;
   
   const surfaceConfig = getSurfaceConfig(surface);
   const graffitiConfig = getGraffitiTypeConfig(graffitiType);
@@ -44,18 +42,12 @@ export function getLayeredIconForMarker(options: LayeredMarkerIconOptions): DivI
   const badgeColor = isOwn ? markerColor : '#ffffff';
   const badgeBorder = isOwn ? markerColor : '#333333';
   
-  // Determine if we should render font style (player name)
-  const isFontStyle = !!playerTagName && style?.styleType === 'font';
-  const fontSize = style ? FONT_SIZES[style.graffitiType] || 16 : 16;
+  // Simple logic: show font if playerTagName, otherwise show SVG
+  const showFont = !!playerTagName;
+  const fontSize = 16;
   
-  // CRITICAL FIX: Get the actual font family from the style
-  // For Leaflet div icons, we need actual font names that are loaded
+  // Get font family for player tags
   const getFontFamily = () => {
-    if (isFontStyle && style?.fontFamily) {
-      // Remove any quotes from the font family and ensure it's a string
-      return style.fontFamily.replace(/['"]/g, '');
-    }
-    // Fallback to web-safe fonts that work everywhere
     return '"Permanent Marker", "Impact", "Arial Black", sans-serif';
   };
   
@@ -78,11 +70,12 @@ export function getLayeredIconForMarker(options: LayeredMarkerIconOptions): DivI
     `;
   }
   
+  // Construct SVG path directly from graffitiType, crewId, and variant
+  const svgPath = `/icons/${crewId}/${graffitiType}-${variant}.svg`;
+  
   let badgeContent: string;
   
-  if (isFontStyle && playerTagName) {
-    // CRITICAL FIX: Use inline style with the correct font family
-    // Don't rely on CSS classes - use inline styles for divIcon
+  if (showFont && playerTagName) {
     badgeContent = `
       <span style="
         font-family: ${getFontFamily()};
@@ -101,8 +94,19 @@ export function getLayeredIconForMarker(options: LayeredMarkerIconOptions): DivI
       ">${playerTagName.toUpperCase()}</span>
     `;
   } else {
-    // Render icon as fallback
-    badgeContent = graffitiIcon;
+    // Show SVG icon (default variant 1)
+    badgeContent = `
+      <img src="${svgPath}" 
+           style="
+             width: ${size * 0.55}px;
+             height: ${size * 0.55}px;
+             filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.3));
+             display: block;
+           "
+           alt="${graffitiType}"
+           onerror="this.onerror=null; this.parentElement.innerHTML='<span style=\'font-size:${size * 0.28}px;color:red;\'>⚠️</span>';"
+      />
+    `;
   }
   
   const html = `
@@ -125,14 +129,14 @@ export function getLayeredIconForMarker(options: LayeredMarkerIconOptions): DivI
         position: absolute;
         bottom: ${size * 0.02}px;
         right: ${size * 0.02}px;
-        ${isFontStyle ? `
-          min-width: ${size * 0.42}px;
-          height: ${size * 0.42}px;
+        ${showFont ? `
+          min-width: ${size * 0.65}px;
+          height: ${size * 0.65}px;
           padding: 0 ${size * 0.08}px;
           border-radius: ${size * 0.15}px;
         ` : `
-          width: ${size * 0.42}px;
-          height: ${size * 0.42}px;
+          width: ${size * 0.65}px;
+          height: ${size * 0.65}px;
           border-radius: 50%;
         `}
         background: ${badgeColor};
@@ -146,23 +150,23 @@ export function getLayeredIconForMarker(options: LayeredMarkerIconOptions): DivI
         ${colorStyle}
       ">${badgeContent}</span>
       
-      <!-- Style Type Indicator (Font vs SVG) -->
-      ${style ? `
+      <!-- SVG variant indicator -->
+      ${!showFont ? `
       <span style="
         position: absolute;
         bottom: -${size * 0.05}px;
         right: ${size * 0.05}px;
-        background: ${style.styleType === 'font' ? '#8b5cf6' : markerColor};
+        background: ${markerColor};
         color: white;
         font-size: ${size * 0.1}px;
         font-weight: bold;
         padding: 1px 4px;
         border-radius: 3px;
         opacity: 0.9;
-      ">${style.styleType === 'font' ? 'Aa' : 'V' + style.variant}</span>
+      ">V1</span>
       ` : ''}
       
-      <!-- REP Badge (optional) -->
+      <!-- REP Badge -->
       ${rep > 0 ? `
       <span style="
         position: absolute;
@@ -198,7 +202,6 @@ export function getLayeredIconForMarker(options: LayeredMarkerIconOptions): DivI
     </div>
   `;
   
-  // Use require for leaflet in SSR-safe way
   const L = require('leaflet');
   
   return L.divIcon({
@@ -219,7 +222,9 @@ export function LayeredMarkerIconPreview({
   repEarned = 0,
   color = '#4dabf7',
   playerTagName,
-  styleId
+  styleId,
+  crewId,
+  variant = 1
 }: {
   surface: SurfaceType;
   graffitiType: GraffitiType;
@@ -229,19 +234,18 @@ export function LayeredMarkerIconPreview({
   color?: string;
   playerTagName?: string;
   styleId?: string;
+  crewId?: string | null;
+  variant?: number;
 }) {
   const surfaceConfig = useMemo(() => getSurfaceConfig(surface), [surface]);
   const graffitiConfig = useMemo(() => getGraffitiTypeConfig(graffitiType), [graffitiType]);
-  const style = useMemo(() => styleId ? getStyleById(styleId) : null, [styleId]);
   
-  const isFontStyle = style?.styleType === 'font' && playerTagName;
-  const fontSize = style ? FONT_SIZES[style.graffitiType] || 16 : 16;
+  const showFont = !!playerTagName;
+  const crew = crewId || 'bqc';
+  const svgPath = `/icons/${crew}/${graffitiType}-${variant}.svg`;
+  const fontSize = 16;
   
-  // Get font family for preview
   const getFontFamily = () => {
-    if (isFontStyle && style?.fontFamily) {
-      return style.fontFamily.replace(/['"]/g, '');
-    }
     return '"Permanent Marker", "Impact", "Arial Black", sans-serif';
   };
   
@@ -257,16 +261,16 @@ export function LayeredMarkerIconPreview({
     }}>
       <span>{surfaceConfig.icon}</span>
       
-      {/* Badge - either font text or icon */}
+      {/* Badge - either font text or SVG icon */}
       <span style={{
         position: 'absolute',
         bottom: size * 0.02,
         right: size * 0.02,
-        width: isFontStyle ? 'auto' : size * 0.42,
-        height: size * 0.42,
-        minWidth: size * 0.42,
-        padding: isFontStyle ? `0 ${size * 0.08}px` : 0,
-        borderRadius: isFontStyle ? size * 0.12 : '50%',
+        width: showFont ? 'auto' : size * 0.65,
+        height: size * 0.65,
+        minWidth: size * 0.65,
+        padding: showFont ? `0 ${size * 0.08}px` : 0,
+        borderRadius: showFont ? size * 0.12 : '50%',
         background: isOwn ? color : '#fff',
         display: 'flex',
         alignItems: 'center',
@@ -275,7 +279,7 @@ export function LayeredMarkerIconPreview({
         border: `2px solid ${isOwn ? color : '#333'}`,
         boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
       }}>
-        {isFontStyle && style ? (
+        {showFont && playerTagName ? (
           <span style={{
             fontFamily: getFontFamily(),
             fontSize: fontSize * 0.6,
@@ -286,20 +290,29 @@ export function LayeredMarkerIconPreview({
             letterSpacing: '1px',
             whiteSpace: 'nowrap'
           }}>
-            {playerTagName!.toUpperCase()}
+            {playerTagName.toUpperCase()}
           </span>
         ) : (
-          graffitiConfig.icon
+          <img 
+            src={svgPath}
+            alt={graffitiType}
+            style={{
+              width: size * 0.55,
+              height: size * 0.55,
+              filter: 'drop-shadow(1px 1px 2px rgba(0,0,0,0.3))',
+              display: 'block'
+            }}
+          />
         )}
       </span>
       
-      {/* Style type indicator */}
-      {style && (
+      {/* SVG variant indicator */}
+      {!showFont && (
         <span style={{
           position: 'absolute',
           bottom: -size * 0.05,
           right: size * 0.05,
-          background: style.styleType === 'font' ? '#8b5cf6' : color,
+          background: color,
           color: 'white',
           fontSize: size * 0.1,
           fontWeight: 'bold',
@@ -307,7 +320,7 @@ export function LayeredMarkerIconPreview({
           borderRadius: 3,
           opacity: 0.9
         }}>
-          {style.styleType === 'font' ? 'Aa' : `V${style.variant}`}
+          V1
         </span>
       )}
       

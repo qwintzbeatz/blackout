@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { UserProfile, UserMarker, Drop, TopPlayer, NearbyCrewMember } from '@/lib/types/blackout';
+import { UserProfile, UserMarker, Drop, TopPlayer } from '@/lib/types/blackout';
 import { getCrewTheme } from '@/utils/crewTheme';
 import { doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
@@ -30,7 +30,6 @@ interface BlackbookPanelProps {
   showOnlyMyDrops: boolean;
   onToggleFilter: () => void;
   onLogout: () => void;
-  nearbyCrewMembers: NearbyCrewMember[];
   expandedRadius: number;
   onOpenCrewChat: () => void;
 }
@@ -94,32 +93,84 @@ export const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
   const lockedFonts = lockedStyles.filter(s => s.styleType === 'font');
   const lockedIcons = lockedStyles.filter(s => s.styleType === 'svg');
   
-  // Handle style selection
+  // Handle style selection with robust error handling and retry logic
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState<number>(0);
+  
   const handleSelectStyle = useCallback(async (styleId: string) => {
     if (!userProfile) return;
     
-    // Update local state immediately for instant feedback
-    onProfileUpdate({
-      ...userProfile,
-      selectedGraffitiStyle: styleId,
-      selectedStyleVariant: styleId,
-      activeGraffitiStyle: styleId.split('-')[1]
-    });
+    const now = Date.now();
+    const timeSinceLastUpdate = now - lastUpdateTimestamp;
     
-    // Persist to Firestore
+    // Prevent rapid consecutive updates (debounce for 500ms)
+    if (timeSinceLastUpdate < 500) {
+      console.log('Skipping rapid update for style:', styleId);
+      return;
+    }
+    
+    // Prevent concurrent updates
+    if (isUpdating) {
+      console.log('Update already in progress, skipping:', styleId);
+      return;
+    }
+    
+    setIsUpdating(true);
+    setLastUpdateTimestamp(now);
+    
     try {
-      const userRef = doc(db, 'users', userProfile.uid);
-      await updateDoc(userRef, {
+      // Update local state immediately for instant feedback
+      onProfileUpdate({
+        ...userProfile,
         selectedGraffitiStyle: styleId,
         selectedStyleVariant: styleId,
-        activeGraffitiStyle: styleId.split('-')[1],
-        lastActive: Timestamp.now()
+        activeGraffitiStyle: styleId.split('-')[1]
       });
-      console.log('✅ Style saved to Firestore:', styleId);
+      
+      // Retry logic for Firestore operations
+      let retryCount = 0;
+      const maxRetries = 3;
+      const retryDelay = 500;
+      
+      while (retryCount < maxRetries) {
+        try {
+          // Persist to Firestore with error handling
+          const userRef = doc(db, 'users', userProfile.uid);
+          await updateDoc(userRef, {
+            selectedGraffitiStyle: styleId,
+            selectedStyleVariant: styleId,
+            activeGraffitiStyle: styleId.split('-')[1],
+            lastActive: Timestamp.now()
+          });
+          
+          console.log('✅ Style saved to Firestore:', styleId);
+          break; // Success, exit retry loop
+        } catch (error: any) {
+          retryCount++;
+          
+          // Check if it's a network/connection error that's worth retrying
+          if (error.code === 'unavailable' || error.code === 'deadline-exceeded' || 
+              error.message?.includes('aborted') || error.message?.includes('network')) {
+            
+            if (retryCount < maxRetries) {
+              console.log(`Retrying Firestore update (${retryCount}/${maxRetries}) for style:`, styleId);
+              await new Promise(resolve => setTimeout(resolve, retryDelay * retryCount));
+              continue;
+            }
+          }
+          
+          // For non-retryable errors or max retries reached, log and continue
+          console.error(`❌ Failed to save style to Firestore after ${maxRetries} attempts:`, styleId, error);
+          break;
+        }
+      }
     } catch (error) {
-      console.error('Error saving style to Firestore:', error);
+      console.error('Error in handleSelectStyle:', error);
+    } finally {
+      // Always reset the updating state
+      setIsUpdating(false);
     }
-  }, [userProfile, onProfileUpdate]);
+  }, [userProfile, onProfileUpdate, isUpdating, lastUpdateTimestamp]);
 
   // Render a style card
   const renderStyleCard = (style: GraffitiStyle, isUnlocked: boolean) => {
@@ -189,21 +240,34 @@ export const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
             overflow: 'hidden',
             padding: '0 4px'
           }}>
-            <div style={{
-              fontFamily: fontFamily,
-              fontSize: `${fontSize}px`,
-              fontWeight: 'bold',
-              color: isUnlocked ? markerColor : '#666',
-              textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
-              letterSpacing: '1px',
-              textAlign: 'center',
-              maxWidth: '100%',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
-            }}>
-              {playerTagName.toUpperCase()}
-            </div>
+            {style.styleType === 'font' ? (
+              <div style={{
+                fontFamily: fontFamily,
+                fontSize: `${fontSize}px`,
+                fontWeight: 'bold',
+                color: isUnlocked ? markerColor : '#666',
+                textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
+                letterSpacing: '1px',
+                textAlign: 'center',
+                maxWidth: '100%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}>
+                {playerTagName.toUpperCase()}
+              </div>
+            ) : (
+              <img 
+                src={style.svgPath || ''}
+                alt={style.name}
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  filter: 'drop-shadow(1px 1px 2px rgba(0,0,0,0.3))',
+                  opacity: isUnlocked ? 1 : 0.5
+                }}
+              />
+            )}
           </div>
           
           {/* Right side - Badges (text only, no emoji) */}

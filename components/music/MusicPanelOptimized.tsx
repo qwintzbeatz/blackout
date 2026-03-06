@@ -155,7 +155,7 @@ const MusicPanelOptimized: React.FC<MusicPanelProps> = ({
           gap: '8px'
         }}>
           <span style={{ fontSize: '20px' }}>🎵</span>
-          Music Collections
+          Music Collection
         </h2>
         <button
           onClick={onClose}

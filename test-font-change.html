@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Font Change Test</title>
+    <style>
+        @font-face {
+            font-family: 'BQC_tag';
+            src: url('/fonts/bqc/tag.woff2') format('woff2'),
+                 url('/fonts/bqc/tag.woff') format('woff'),
+                 url('/fonts/bqc/tag.otf') format('opentype'),
+                 url('/fonts/bqc/tag.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        @font-face {
+            font-family: 'BQC_mops';
+            src: url('/fonts/bqc/mops.woff2') format('woff2'),
+                 url('/fonts/bqc/mops.woff') format('woff'),
+                 url('/fonts/bqc/mops.otf') format('opentype'),
+                 url('/fonts/bqc/mops.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+        }
+
+        .test-container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .current-tag {
+            background: linear-gradient(135deg, #4dabf720, #4dabf705);
+            border: 1px solid #4dabf730;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .tag-text {
+            font-size: 32px;
+            font-weight: bold;
+            color: #10b981;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            letter-spacing: 2px;
+            margin: 10px 0;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .btn-tag { background: #4dabf7; color: white; }
+        .btn-mops { background: #f59e0b; color: white; }
+        .btn-default { background: #6b7280; color: white; }
+
+        .font-info {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Blackbook Font Change Test</h1>
+        
+        <div class="current-tag">
+            <div class="font-info">Current Font Family:</div>
+            <div id="font-display" class="tag-text" style="font-family: 'Permanent Marker', cursive;">
+                TEST TAG
+            </div>
+            <div class="font-info" id="font-name">Font: Permanent Marker (Fallback)</div>
+        </div>
+
+        <div class="controls">
+            <button class="btn-default" onclick="setFontSize('32px')">Default Size</button>
+            <button class="btn-tag" onclick="setFont('BQC_tag', '32px')">BQC Tag Font</button>
+            <button class="btn-mops" onclick="setFont('BQC_mops', '32px')">BQC Mops Font</button>
+        </div>
+
+        <div class="controls">
+            <button class="btn-default" onclick="setFont('Permanent Marker, cursive', '24px')">Smaller</button>
+            <button class="btn-tag" onclick="setFont('BQC_tag', '40px')">Larger</button>
+            <button class="btn-mops" onclick="setFont('BQC_mops', '48px')">Extra Large</button>
+        </div>
+
+        <div style="margin-top: 20px; padding: 15px; background: #333; border-radius: 8px;">
+            <h3>Test Instructions:</h3>
+            <ol>
+                <li>Click "BQC Tag Font" to test the tag font</li>
+                <li>Click "BQC Mops Font" to test the mops font</li>
+                <li>Notice how the font family changes in the preview</li>
+                <li>This simulates what should happen in the Blackbook panel</li>
+            </ol>
+            
+            <h3>Font Files Available:</h3>
+            <ul>
+                <li>/fonts/bqc/tag.woff2</li>
+                <li>/fonts/bqc/mops.woff2</li>
+                <li>And other font files in /public/fonts/bqc/</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function setFont(fontFamily, fontSize) {
+            const tagElement = document.getElementById('font-display');
+            const nameElement = document.getElementById('font-name');
+            
+            tagElement.style.fontFamily = fontFamily;
+            tagElement.style.fontSize = fontSize;
+            
+            if (fontFamily.includes('BQC_tag')) {
+                nameElement.textContent = 'Font: BQC_tag (Custom Font)';
+            } else if (fontFamily.includes('BQC_mops')) {
+                nameElement.textContent = 'Font: BQC_mops (Custom Font)';
+            } else {
+                nameElement.textContent = 'Font: Permanent Marker (Fallback)';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BQC SVG Icons Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #4dabf7;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+        .icon-card {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid #444;
+        }
+        .icon-preview {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 10px;
+            filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.5));
+        }
+        .icon-name {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+        .icon-path {
+            font-size: 10px;
+            color: #666;
+            word-break: break-all;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            background: #333;
+            border-radius: 8px;
+        }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 BQC SVG Icons Test</h1>
+        
+        <div class="status">
+            <strong>Status:</strong> <span id="status-text">Testing SVG icons...</span>
+        </div>
+
+        <div class="icon-grid" id="icon-grid">
+            <!-- Icons will be loaded here -->
+        </div>
+    </div>
+
+    <script>
+        // Test SVG icons that should be available
+        const testIcons = [
+            'tag-1.svg',
+            'sticker-1.svg', 
+            'piece-1.svg',
+            'burner-1.svg',
+            'throwup-1.svg',
+            'roller-1.svg',
+            'etch-1.svg',
+            'extinguisher-1.svg',
+            'mural-1.svg',
+            'rapel-1.svg',
+            'mops-1.svg',
+            'stencil-1.svg'
+        ];
+
+        const iconGrid = document.getElementById('icon-grid');
+        const statusText = document.getElementById('status-text');
+        let loadedCount = 0;
+        let errorCount = 0;
+
+        testIcons.forEach(iconName => {
+            const iconPath = `/fonts/bqc/${iconName}`;
+            
+            const card = document.createElement('div');
+            card.className = 'icon-card';
+            
+            const preview = document.createElement('img');
+            preview.className = 'icon-preview';
+            preview.src = iconPath;
+            preview.alt = iconName;
+            preview.style.width = '60px';
+            preview.style.height = '60px';
+            
+            const name = document.createElement('div');
+            name.className = 'icon-name';
+            name.textContent = iconName;
+            
+            const path = document.createElement('div');
+            path.className = 'icon-path';
+            path.textContent = iconPath;
+            
+            card.appendChild(preview);
+            card.appendChild(name);
+            card.appendChild(path);
+            iconGrid.appendChild(card);
+
+            // Test loading
+            preview.onload = () => {
+                loadedCount++;
+                updateStatus();
+            };
+            
+            preview.onerror = () => {
+                errorCount++;
+                preview.style.display = 'none';
+                const errorDiv = document.createElement('div');
+                errorDiv.style.color = '#ef4444';
+                errorDiv.style.fontSize = '12px';
+                errorDiv.textContent = '❌ Not Found';
+                card.appendChild(errorDiv);
+                updateStatus();
+            };
+        });
+
+        function updateStatus() {
+            const total = testIcons.length;
+            const success = loadedCount;
+            const failed = errorCount;
+            
+            statusText.innerHTML = `
+                Total: ${total} | 
+                <span class="success">Loaded: ${success}</span> | 
+                <span class="error">Failed: ${failed}</span>
+            `;
+        }
+    </script>
+</body>
+</html>

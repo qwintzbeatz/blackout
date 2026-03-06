@@ -104,6 +104,7 @@ import { detectDevicePerformance, panelStyle } from '@/utils';
 import {
   UserProfile,
   TopPlayer,
+  TopCrew,
   SoundCloudTrack,
   CrewData,
   Comment,
@@ -376,6 +377,11 @@ const HomeComponent = () => {
   
   // User profile states
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  // Use ref to always get current userProfile in callbacks (avoids stale closure)
+  const userProfileRef = useRef<UserProfile | null>(null);
+  useEffect(() => {
+    userProfileRef.current = userProfile;
+  }, [userProfile]);
   const [showProfileSetup, setShowProfileSetup] = useState(false);
   const [loadingUserProfile, setLoadingUserProfile] = useState(false);
   const [profileUsername, setProfileUsername] = useState('');
@@ -392,6 +398,9 @@ const HomeComponent = () => {
   // Surface and graffiti type states (new)
   const [selectedSurface, setSelectedSurface] = useState<SurfaceType>('wall');
   const [selectedGraffitiType, setSelectedGraffitiType] = useState<GraffitiType>('tag');
+  
+  // Radius expansion state (removed crew detection, keeping basic radius)
+  const [expandedRadius, setExpandedRadius] = useState(50);
 
   // Audio player states - Spotify only
   const [isPlaying, setIsPlaying] = useState(false);
@@ -417,9 +426,6 @@ const HomeComponent = () => {
   const [selectedMarkerType, setSelectedMarkerType] = useState<MarkerDescription>('Tag/Signature');
   const [selectedTrackForMusicDrop, setSelectedTrackForMusicDrop] = useState<string | null>(null);
 
-  // Crew states
-  const [nearbyCrewMembers, setNearbyCrewMembers] = useState<NearbyCrewMember[]>([]);
-  const [expandedRadius, setExpandedRadius] = useState(50);
   
   // Last marker date for streak bonus
   const [lastMarkerDate, setLastMarkerDate] = useState<string | null>(null);
@@ -427,6 +433,10 @@ const HomeComponent = () => {
   // Top players state
   const [topPlayers, setTopPlayers] = useState<TopPlayer[]>([]);
   const [showTopPlayers, setShowTopPlayers] = useState(false);
+  
+  // Top crews state
+  const [topCrews, setTopCrews] = useState<TopCrew[]>([]);
+  const [showTopCrews, setShowTopCrews] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [showPerformanceSettings, setShowPerformanceSettings] = useState(false);
   
@@ -589,7 +599,7 @@ const HomeComponent = () => {
   };
 
   // ========== PERFORMANCE SETTINGS ==========
-  const [crewDetectionEnabled, setCrewDetectionEnabled] = useState(true);
+  const [crewDetectionEnabled, setCrewDetectionEnabled] = useState(false);
   const [markerQuality, setMarkerQuality] = useState<'low' | 'medium' | 'high'>('medium');
   
   // Dynamic quality settings
@@ -669,14 +679,6 @@ const {
   useEffect(() => {
     const intervals: NodeJS.Timeout[] = [];
     
-    // Clean up crew detection interval
-    if (crewDetectionEnabled && userProfile?.crewId) {
-      const crewInterval = setInterval(() => {
-        detectNearbyCrewMembers();
-      }, 30000);
-      intervals.push(crewInterval);
-    }
-    
     // Clean up map listeners
     const mapInstance = mapRef.current;
     
@@ -695,7 +697,7 @@ const {
         iframe.remove();
       });
     };
-  }, [crewDetectionEnabled, userProfile?.crewId]);
+  }, []);
 
   // ========== ADD THIS NEW USEEFFECT RIGHT HERE ==========
   useEffect(() => {
@@ -858,7 +860,12 @@ const {
           distanceFromCenter: data.distanceFromCenter ?? undefined,
           repEarned: data.repEarned || 0,
           createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
-          specialType: data.specialType || null
+          specialType: data.specialType || null,
+          // Load missing style fields
+          surface: data.surface || 'wall',
+          graffitiType: data.graffitiType || 'tag',
+          styleId: data.styleId,
+          crewId: data.crewId || 'bqc'
         });
       });
       
@@ -929,6 +936,42 @@ const {
       setTopPlayers(playersWithPositions);
     } catch (error) {
       console.error('Error loading top players:', error);
+    }
+  };
+
+  const loadTopCrews = async (): Promise<void> => {
+    try {
+      const crewsRef = collection(db, 'crews');
+      const crewsSnapshot = await getDocs(crewsRef);
+      
+      const allCrews: TopCrew[] = [];
+      
+      crewsSnapshot.forEach((doc) => {
+        const data = doc.data();
+        allCrews.push({
+          crewId: data.id || doc.id,
+          name: data.name,
+          totalRep: data.rep || 0,
+          memberCount: data.members ? data.members.length : 0,
+          color: data.color || '#4dabf7',
+          accentColor: data.accentColor || '#339af0',
+          description: data.description || '',
+          leaderName: data.leader || 'Unknown',
+          leaderUsername: data.leaderUsername || 'Unknown',
+          leaderProfilePicUrl: data.leaderProfilePicUrl || generateAvatarUrl(doc.id, data.leader || 'Unknown'),
+          createdAt: data.createdAt?.toDate() || new Date(),
+          lastActive: data.lastActive?.toDate() || new Date()
+        });
+      });
+      
+      const sortedCrews = allCrews
+        .filter(crew => crew.name && crew.totalRep > 0)
+        .sort((a, b) => b.totalRep - a.totalRep)
+        .slice(0, 3);
+      
+      setTopCrews(sortedCrews);
+    } catch (error) {
+      console.error('Error loading top crews:', error);
     }
   };
 
@@ -1309,86 +1352,44 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     }
   }, [userProfile?.unlockedTracks]);
 
+  // Dynamic logo functions
+  const getLogoSrc = (crewId: CrewId | null | undefined): string => {
+    // Map crew IDs to logo files
+    switch (crewId) {
+      case 'bqc': // Blaqwt Crew
+        return '/botoplogo1.svg'; // Default logo for Blaqwt Crew
+      case 'sps': // Spontaneous
+        return '/botoplogo2.svg'; // Different logo for Spontaneous
+      case 'lzt': // Luzunt
+        return '/botoplogo3.svg'; // Different logo for Luzunt
+      case 'dgc': // Don't Get Capped
+        return '/botoplogo4.svg'; // Different logo for Don't Get Capped
+      default: // Solo or unknown crew
+        return '/botoplogo.svg'; // Default logo for solo players
+    }
+  };
+
+  const getLogoAltText = (crewId: CrewId | null | undefined): string => {
+    switch (crewId) {
+      case 'bqc':
+        return 'Blaqwt Crew Logo';
+      case 'sps':
+        return 'Spontaneous Crew Logo';
+      case 'lzt':
+        return 'Luzunt Crew Logo';
+      case 'dgc':
+        return "Don't Get Capped Crew Logo";
+      default:
+        return 'Blackout NZ Logo';
+    }
+  };
+
   
 
   useEffect(() => {
     loadDrops();
   }, [loadDrops]);
 
-  // Crew detection function
-  const detectNearbyCrewMembers = useCallback(async () => {
-    if (!gpsPosition || !userProfile || !user || userProfile.isSolo || !userProfile.crewId) {
-      setExpandedRadius(50);
-      setNearbyCrewMembers([]);
-      return;
-    }
-
-    try {
-      const crewDoc = await getDoc(doc(db, 'crews', userProfile.crewId!));
-      if (!crewDoc.exists()) {
-        setExpandedRadius(50);
-        setNearbyCrewMembers([]);
-        return;
-      }
-
-      const crewData = crewDoc.data();
-      const crewMemberIds = crewData.members || [];
-      
-      const otherMemberIds = crewMemberIds.filter((uid: string) => uid !== user.uid);
-      
-      if (otherMemberIds.length === 0) {
-        setExpandedRadius(50);
-        setNearbyCrewMembers([]);
-        return;
-      }
-
-      const nearbyMembers: NearbyCrewMember[] = [];
-      
-      topPlayers.forEach((player) => {
-        if (otherMemberIds.includes(player.uid) && player.position) {
-          const distance = calculateDistanceHelper(
-            gpsPosition[0],
-            gpsPosition[1],
-            player.position[0],
-            player.position[1]
-          );
-          
-          if (distance <= 200) {
-            nearbyMembers.push({
-              uid: player.uid,
-              username: player.username,
-              distance: Math.round(distance)
-            });
-          }
-        }
-      });
-
-      const newRadius = 50 + (nearbyMembers.length * 50);
-      setExpandedRadius(newRadius);
-      setNearbyCrewMembers(nearbyMembers);
-    } catch (error) {
-      console.error('Error detecting nearby crew members:', error);
-      setExpandedRadius(50);
-      setNearbyCrewMembers([]);
-    }
-  }, [gpsPosition, userProfile, user, topPlayers]);
-
-  useEffect(() => {
-    if (!gpsPosition || !userProfile || !user || userProfile.isSolo || !userProfile.crewId) {
-      setExpandedRadius(50);
-      setNearbyCrewMembers([]);
-      return;
-    }
-
-    // Run immediately
-    detectNearbyCrewMembers();
-    
-    // 🔧 PERFORMANCE: Increase interval to 30 seconds (was 20s)
-    const detectionInterval = crewDetectionEnabled ? 30000 : 60000;
-    const interval = setInterval(detectNearbyCrewMembers, detectionInterval);
-    
-    return () => clearInterval(interval);
-  }, [gpsPosition, userProfile, user, topPlayers, crewDetectionEnabled, detectNearbyCrewMembers]);
   
   useEffect(() => {
     if (gpsPosition && !mapCenter) {
@@ -1444,25 +1445,25 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       const streakBonus = calculateStreakBonus();
       const totalRep = repResult.rep + streakBonus;
       
-      const markerData = {
-        position: marker.position,
-        name: marker.name,
-        description: marker.description,
-        color: marker.color,
-        timestamp: Timestamp.fromDate(marker.timestamp),
-        userId: user.uid,
-        username: userProfile.username,
-        userProfilePic: userProfile.profilePicUrl,
-        createdAt: firestoreServerTimestamp(),
-        distanceFromCenter: marker.distanceFromCenter || null,
-        repEarned: totalRep,
-        // New surface and graffiti type fields
-        surface: (marker.surface ?? migrateMarkerNameToSurface(marker.name)) as SurfaceType | undefined,
-        graffitiType: (marker.graffitiType ?? migrateMarkerDescriptionToGraffiti(marker.description)) as GraffitiType | undefined,
-        repBreakdown: repResult.breakdown,
-        // Special color effect (rainbow, glow, metallic)
-        specialType: marker.specialType || null
-      };
+        const markerData = {
+          position: marker.position,
+          name: marker.name,
+          description: marker.description,
+          color: marker.color,
+          timestamp: Timestamp.fromDate(marker.timestamp),
+          userId: user.uid,
+          username: userProfile.username,
+          userProfilePic: userProfile.profilePicUrl,
+          createdAt: firestoreServerTimestamp(),
+          distanceFromCenter: marker.distanceFromCenter || null,
+          repEarned: totalRep,
+          // New surface and graffiti type fields
+          surface: marker.surface || migrateMarkerNameToSurface(marker.name),
+          graffitiType: marker.graffitiType || migrateMarkerDescriptionToGraffiti(marker.description),
+          repBreakdown: repResult.breakdown,
+          // Special color effect (rainbow, glow, metallic)
+          specialType: marker.specialType || null
+        };
       
       const docRef = await addDoc(collection(db, 'markers'), markerData);
       
@@ -1821,6 +1822,11 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
       const dropId = await saveDropToFirestore(newDrop);
 
+      // DEBUG: Log the current style being used (use ref to get latest)
+      const currentUserProfile = userProfileRef.current;
+      const currentStyleId = currentUserProfile?.selectedGraffitiStyle;
+      console.log('🎨 Creating marker with styleId:', currentStyleId);
+
       const markerData: UserMarker = {
         id: `temp-${Date.now()}`,
         position: [pendingDropPosition.lat, pendingDropPosition.lng],
@@ -1829,15 +1835,15 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         color: selectedMarkerColor,
         timestamp: new Date(),
         userId: user.uid,
-        username: userProfile.username,
-        userProfilePic: userProfile.profilePicUrl,
+        username: currentUserProfile?.username,
+        userProfilePic: currentUserProfile?.profilePicUrl,
         // New surface and graffiti type fields
-        surface: selectedSurface as SurfaceType,
-        graffitiType: selectedGraffitiType as GraffitiType,
+        surface: selectedSurface,
+        graffitiType: selectedGraffitiType,
         // Special color effect
         specialType: selectedSpecialType,
         // Selected graffiti style from Blackbook
-        styleId: userProfile.selectedGraffitiStyle || undefined,
+        styleId: currentStyleId,
       };
 
       const markerId = await saveMarkerToFirestore(markerData);
@@ -1904,6 +1910,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
         await loadDrops();
         await loadAllMarkers();
+        await loadTopPlayers();
       }
 
       setShowDropTypeModal(false);
@@ -1918,7 +1925,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       // 🚫 Rate limit: Reset loading state
       setIsCreatingDrop(false);
     }
-  }, [user, userProfile, pendingDropPosition, selectedMarkerType, selectedMarkerColor, selectedSurface, selectedGraffitiType, loadDrops, loadAllMarkers]);
+  }, [user, userProfile, pendingDropPosition, selectedMarkerType, selectedMarkerColor, selectedSurface, selectedGraffitiType, loadDrops, loadAllMarkers, loadTopPlayers]);
 
   const handlePhotoDrop = useCallback(() => {
     setShowDropTypeModal(false);
@@ -2408,7 +2415,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           </div>
         )}
 
-      {/* Top-Left Logo - Changes color based on day/night */}
+      {/* Top-Left Logo - Dynamic based on crew selection and day/night */}
       <div style={{
         position: 'fixed',
         top: '15px',
@@ -2417,8 +2424,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         pointerEvents: 'none'
       }}>
         <img 
-          src="/botoplogo1.svg" 
-          alt="Blackout NZ Logo"
+          src={getLogoSrc(userProfile?.crewId as CrewId | null | undefined)}
+          alt={getLogoAltText(userProfile?.crewId as CrewId | null | undefined)}
           style={{
             width: '120px',
             height: 'auto',
@@ -2607,31 +2614,12 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                           📍 GPS tracking paused (Offline Mode)
                         </div>
                       )}
-                      {!isOfflineMode && nearbyCrewMembers.length > 0 && (
-                        <div style={{ fontSize: '12px', color: '#10b981', marginTop: '5px', fontWeight: 'bold' }}>
-                          👥 {nearbyCrewMembers.length} crew member{nearbyCrewMembers.length > 1 ? 's' : ''} nearby!
-                          <br />
-                          <span style={{ fontSize: '11px', fontWeight: 'normal' }}>
-                            Radius expanded to {expandedRadius}m
-                          </span>
-                        </div>
-                      )}
                       <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
                         {isOfflineMode
                           ? 'Use joystick to explore the map'
                           : 'Click inside this circle to place drops within ' + expandedRadius + 'm'
                         }
                       </div>
-                      {nearbyCrewMembers.length > 0 && !isOfflineMode && (
-                        <div style={{ fontSize: '11px', color: '#666', marginTop: '8px', textAlign: 'left' }}>
-                          <strong>Nearby crew:</strong>
-                          {nearbyCrewMembers.map((member, idx) => (
-                            <div key={member.uid} style={{ marginTop: '4px' }}>
-                              👤 {member.username} ({member.distance}m away)
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </Popup>
                 </Circle>
@@ -2946,6 +2934,243 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                   >
                     🚀 Go to Writer
+                  </button>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
+
+        {/* Top Crews Markers */}
+        {showTopCrews && topCrews.map((crew, index) => {
+          if (!crew.leaderProfilePicUrl) return null;
+          
+          // Crew card colors based on rank
+          const cardColor = index === 0 ? '#fbbf24' : index === 1 ? '#cbd5e1' : '#d97706';
+          const textColor = index === 0 ? '#7c2d12' : index === 1 ? '#1f2937' : '#7c2d12';
+          const accentColor = index === 0 ? '#f59e0b' : index === 1 ? '#94a3b8' : '#b45309';
+          
+          // Spray can drip - using emoji for simplicity
+          const sprayCanEmoji = '🎨';
+          
+          const customIcon = typeof window !== 'undefined' ? 
+            new (require('leaflet').DivIcon)({
+              html: `
+                <div style="
+                  position: relative;
+                  width: 45px;
+                  height: 45px;
+                  background: linear-gradient(135deg, ${cardColor}, ${accentColor});
+                  border: 3px solid white;
+                  border-radius: 50%;
+                  box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  font-weight: bold;
+                  font-size: 14px;
+                  color: ${textColor};
+                  overflow: hidden;
+                ">
+                  <div style="
+                    position: absolute;
+                    top: -5px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: ${cardColor};
+                    color: ${textColor};
+                    font-size: 10px;
+                    padding: 1px 6px;
+                    border-radius: 10px;
+                    white-space: nowrap;
+                    font-weight: bold;
+                    border: 1px solid white;
+                    z-index: 2;
+                  ">
+                    #${index + 1} CREW
+                  </div>
+                  <div style="
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    font-size: 16px;
+                    font-weight: bold;
+                    text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+                  ">
+                    ${crew.name.charAt(0)}
+                  </div>
+                </div>
+              `,
+              iconSize: [45, 45],
+              iconAnchor: [22, 22],
+              popupAnchor: [0, -22]
+            }) : undefined;
+
+          return (
+            <Marker 
+              key={`top-crew-${crew.crewId}`}
+              position={NZ_CENTER} // Use NZ center as default position for now
+              icon={customIcon}
+            >
+              <Popup>
+                <div style={{ 
+                  textAlign: 'center', 
+                  minWidth: '240px',
+                  padding: '10px'
+                }}>
+                  <div style={{
+                    position: 'absolute',
+                    top: '-10px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: cardColor,
+                    color: textColor,
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    padding: '4px 12px',
+                    borderRadius: '12px',
+                    border: '2px solid white',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                    whiteSpace: 'nowrap',
+                    zIndex: 10
+                  }}>
+                    {index === 0 ? '🥇 TOP CREW' : index === 1 ? '🥈 RUNNER-UP' : '🥉 CONTENDER'}
+                  </div>
+                  
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    marginTop: '15px',
+                    marginBottom: '15px'
+                  }}>
+                    {/* Crew Leader Avatar with Rectangular Border */}
+                    <div style={{
+                      position: 'relative',
+                      width: '60px',
+                      height: '60px',
+                      borderRadius: '0',
+                      border: `3px solid ${cardColor}`,
+                      overflow: 'visible'
+                    }}>
+                      <img
+                        src={crew.leaderProfilePicUrl}
+                        alt={crew.leaderName}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          display: 'block'
+                        }}
+                      />
+                      {/* Spray Can Drip in Bottom Left */}
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '-8px',
+                        left: '-8px',
+                        width: '20px',
+                        height: '20px',
+                        zIndex: 5,
+                        fontSize: '16px',
+                        lineHeight: '1'
+                      }}>
+                        {sprayCanEmoji}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'left', flex: 1 }}>
+                      <div style={{ 
+                        fontSize: '16px', 
+                        fontWeight: 'bold',
+                        color: cardColor
+                      }}>
+                        {crew.name}
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#666' }}>
+                        {crew.leaderName} • {crew.memberCount} members
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '8px',
+                    marginBottom: '15px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{
+                      background: '#f8f9fa',
+                      padding: '8px 4px',
+                      borderRadius: '6px',
+                      border: '1px solid #e5e7eb'
+                    }}>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#10b981' }}>
+                        {crew.totalRep}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#666' }}>CREW REP</div>
+                    </div>
+                    
+                    <div style={{
+                      background: '#f8f9fa',
+                      padding: '8px 4px',
+                      borderRadius: '6px',
+                      border: '1px solid #e5e7eb'
+                    }}>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#4dabf7' }}>
+                        {crew.memberCount}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#666' }}>MEMBERS</div>
+                    </div>
+                    
+                    <div style={{
+                      background: '#f8f9fa',
+                      padding: '8px 4px',
+                      borderRadius: '6px',
+                      border: '1px solid #e5e7eb'
+                    }}>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#8b5cf6' }}>
+                        {crew.description || 'No description'}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#666' }}>CREW INFO</div>
+                    </div>
+                  </div>
+                  
+                  <div style={{
+                    fontSize: '11px',
+                    color: '#94a3b8',
+                    backgroundColor: '#f1f5f9',
+                    padding: '6px',
+                    borderRadius: '4px',
+                    marginTop: '10px'
+                  }}>
+                    Created: {crew.createdAt ? crew.createdAt.toLocaleDateString() : 'Unknown'}
+                  </div>
+                  
+                  <button
+                    onClick={() => {
+                      // Center map on crew leader's last known position
+                      // For now, we'll center on the crew leader's profile pic URL (placeholder)
+                      // In a real implementation, we'd need actual coordinates
+                      alert('Crew leader location not available yet');
+                    }}
+                    style={{
+                      backgroundColor: cardColor,
+                      color: textColor,
+                      border: 'none',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      width: '100%',
+                      marginTop: '10px',
+                      transition: 'transform 0.2s'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                    onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                  >
+                    🚀 Go to Crew
                   </button>
                 </div>
               </Popup>
@@ -3721,7 +3946,6 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                 showOnlyMyDrops={showOnlyMyDrops}
                 onToggleFilter={() => setShowOnlyMyDrops(!showOnlyMyDrops)}
                 onLogout={handleLogout}
-                nearbyCrewMembers={nearbyCrewMembers}
                 expandedRadius={expandedRadius}
                 onOpenCrewChat={() => {
                   togglePanel('crewchat');
@@ -4111,7 +4335,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               borderBottom: '1px solid rgba(255,255,255,0.1)',
               paddingBottom: '12px'
             }}>
-              <h3 style={{ margin: 0, color: '#4dabf7', fontSize: '18px' }}>🗺️ MAP CONTROLS</h3>
+              <h3 style={{ margin: 0, color: '#4dabf7', fontSize: '18px' }}>🗺️ MAP CONTROL</h3>
               <button
                 onClick={() => togglePanel('none')}
                 style={{

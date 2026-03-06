@@ -178,6 +178,30 @@ export interface TopPlayer {
   lastActive: Date;
 }
 
+// Top Crew type
+export interface TopCrew {
+  crewId: string;
+  name: string;
+  fullName?: string;
+  totalRep: number;
+  memberCount: number;
+  leaderName: string;
+  leaderUsername: string;
+  leaderProfilePicUrl: string;
+  leaderPosition?: [number, number];
+  color: string;
+  accentColor: string;
+  description?: string;
+  createdAt?: Date;
+  lastActive: Date;
+  members?: Array<{
+    uid: string;
+    username: string;
+    rep: number;
+    position?: [number, number];
+  }>;
+}
+
 // SoundCloud Track type
 export interface SoundCloudTrack {
   url: string;

@@ -27,14 +27,22 @@ const MemoizedMarkerComponent: React.FC<MemoizedMarkerProps> = ({
   const customIcon = useMemo(() => {
     if (typeof window === 'undefined') return undefined;
 
+    // Extract variant from styleId (e.g., "bqc-tag-svg-3" -> 3)
+    const variantMatch = marker.styleId?.match(/-svg-(\d+)$/);
+    const variant = variantMatch ? parseInt(variantMatch[1], 10) : 1;
+
+    // DEBUG: Log what's happening
+    console.log('🎯 Marker styleId:', marker.styleId, '-> variant:', variant);
+
     return getLayeredIconForMarker({
       color: marker.color,
-      styleId: marker.styleId,
-      playerTagName: marker.username,
       surface: marker.surface,
       graffitiType: marker.graffitiType,
       specialType: marker.specialType,
-      crewId
+      crewId: crewId || 'bqc',
+      // Always show SVG icon in badge, never username text
+      playerTagName: undefined,
+      variant
     });
   }, [
     marker.color,
