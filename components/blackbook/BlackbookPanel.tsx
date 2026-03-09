@@ -14,6 +14,7 @@ import {
 } from '@/constants/graffitiFonts';
 import { GRAFFITI_TYPES } from '@/constants/graffitiTypes';
 import { CrewId } from '@/constants/crewGraffitiStyles';
+import { ALL_COLORS, isColorUnlocked, getColorStyle } from '@/utils/colorUnlocks';
 
 interface BlackbookPanelProps {
   userProfile: UserProfile | null;
@@ -32,6 +33,10 @@ interface BlackbookPanelProps {
   onLogout: () => void;
   expandedRadius: number;
   onOpenCrewChat: () => void;
+  selectedColor?: string;
+  selectedSpecialType?: 'rainbow' | 'glow' | 'metallic' | null;
+  unlockedColors: string[];
+  onColorSelect: (colorId: string, colorHex: string, specialType?: 'rainbow' | 'glow' | 'metallic' | null) => void;
 }
 
 // Available font files (checked in public/fonts/)
@@ -51,7 +56,10 @@ export const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
   onProfileUpdate,
   onRefreshAll,
   isRefreshing,
-  onLogout
+  onLogout,
+  selectedColor,
+  unlockedColors,
+  onColorSelect
 }) => {
   // Get crew theme
   const crewTheme = getCrewTheme(userProfile?.crewId);
@@ -63,14 +71,21 @@ export const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
   const crewId = (userProfile?.crewId || 'bqc') as CrewId;
   
   // Current selected style
-  const selectedStyleId = userProfile?.selectedGraffitiStyle || getDefaultStyleForCrew(crewId);
+  const selectedStyleId = useMemo(() => {
+    const rawStyleId = userProfile?.selectedGraffitiStyle || getDefaultStyleForCrew(crewId);
+    const fontMatch = rawStyleId.match(/^([a-z0-9]+)-([a-z0-9]+)-font$/i);
+    if (fontMatch) {
+      return `${fontMatch[1].toLowerCase()}-${fontMatch[2].toLowerCase()}-svg-1`;
+    }
+    return rawStyleId;
+  }, [userProfile?.selectedGraffitiStyle, crewId]);
   
   // State for tabs
-  const [activeTab, setActiveTab] = useState<'fonts' | 'icons' | 'locked'>('fonts');
+  const [activeTab, setActiveTab] = useState<'icons' | 'locked'>('icons');
   
   // Get all available styles for this crew
   const crewStyles = useMemo(() => {
-    return ALL_GRAFFITI_STYLES.filter(s => s.crewId === crewId);
+    return ALL_GRAFFITI_STYLES.filter(s => s.crewId === crewId && s.styleType === 'svg');
   }, [crewId]);
   
   // Get unlocked styles (fonts are free, SVGs need REP)
@@ -88,9 +103,7 @@ export const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
   }, [crewStyles, currentRep, userProfile?.unlockedGraffitiTypes]);
   
   // Separate fonts and icons
-  const unlockedFonts = unlockedStyles.filter(s => s.styleType === 'font');
   const unlockedIcons = unlockedStyles.filter(s => s.styleType === 'svg');
-  const lockedFonts = lockedStyles.filter(s => s.styleType === 'font');
   const lockedIcons = lockedStyles.filter(s => s.styleType === 'svg');
   
   // Handle style selection with robust error handling and retry logic
@@ -171,6 +184,10 @@ export const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
       setIsUpdating(false);
     }
   }, [userProfile, onProfileUpdate, isUpdating, lastUpdateTimestamp]);
+  const handleColorClick = useCallback((colorId: string, colorHex: string, specialType?: 'rainbow' | 'glow' | 'metallic' | null) => {
+    if (!isColorUnlocked(colorId, unlockedColors)) return;
+    onColorSelect(colorId, colorHex, specialType);
+  }, [onColorSelect, unlockedColors]);
 
   // Render a style card
   const renderStyleCard = (style: GraffitiStyle, isUnlocked: boolean) => {
@@ -522,10 +539,8 @@ export const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
         padding: '4px',
         borderRadius: '8px'
       }}>
-        {(['fonts', 'icons', 'locked'] as const).map(tab => {
-          const count = tab === 'fonts' ? unlockedFonts.length : 
-                       tab === 'icons' ? unlockedIcons.length : 
-                       lockedIcons.length + lockedFonts.length;
+        {(['icons', 'locked'] as const).map(tab => {
+          const count = tab === 'icons' ? unlockedIcons.length : lockedIcons.length;
           
           return (
             <button
@@ -562,32 +577,6 @@ export const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
         })}
       </div>
 
-      {/* FONTS TAB - 1 column, text only */}
-      {activeTab === 'fonts' && unlockedFonts.length > 0 && (
-        <div style={{ marginBottom: '16px' }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '12px',
-            padding: '0 4px'
-          }}>
-            <span style={{ fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase' }}>
-              Font Styles
-            </span>
-            <span style={{ fontSize: '11px', color: '#10b981' }}>
-              {unlockedFonts.length} unlocked
-            </span>
-          </div>
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px'
-          }}>
-            {unlockedFonts.map(style => renderStyleCard(style, true))}
-          </div>
-        </div>
-      )}
 
       {/* ICONS TAB - 4 columns, text only */}
       {activeTab === 'icons' && unlockedIcons.length > 0 && (
@@ -617,7 +606,7 @@ export const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
       )}
 
       {/* LOCKED TAB - 4 columns, text only */}
-      {activeTab === 'locked' && (lockedFonts.length > 0 || lockedIcons.length > 0) && (
+      {activeTab === 'locked' && lockedIcons.length > 0 && (
         <div style={{ marginBottom: '16px' }}>
           <div style={{
             display: 'flex',
@@ -639,7 +628,7 @@ export const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
             gap: '8px'
           }}>
             {/* Show both locked icons and fonts, but prioritize icons for display */}
-            {[...lockedIcons, ...lockedFonts].slice(0, 8).map(style => renderStyleCard(style, false))}
+            {lockedIcons.slice(0, 8).map(style => renderStyleCard(style, false))}
           </div>
         </div>
       )}
@@ -657,6 +646,49 @@ export const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
         </span>
       </div>
 
+      {/* Colors Section */}
+      <div style={{
+        padding: '12px',
+        background: 'rgba(255,255,255,0.03)',
+        borderRadius: '8px',
+        marginBottom: '16px',
+        border: '1px solid rgba(255,255,255,0.08)'
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '10px'
+        }}>
+          <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#e2e8f0' }}>SPRAY COLORS</span>
+          <span style={{ fontSize: '10px', color: '#94a3b8' }}>in Blackbook</span>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {ALL_COLORS.map((color) => {
+            const unlocked = isColorUnlocked(color.id, unlockedColors);
+            const selected = selectedColor === color.hex || selectedColor === color.id;
+            return (
+              <button
+                key={color.id}
+                onClick={() => handleColorClick(color.id, color.hex, color.special as 'rainbow' | 'glow' | 'metallic' | null | undefined)}
+                disabled={!unlocked}
+                title={`${color.name}${unlocked ? '' : ' (Locked)'}`}
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '6px',
+                  border: selected ? '2px solid #fbbf24' : '1px solid rgba(255,255,255,0.35)',
+                  cursor: unlocked ? 'pointer' : 'not-allowed',
+                  opacity: unlocked ? 1 : 0.35,
+                  boxShadow: selected ? '0 0 0 2px rgba(251,191,36,0.25)' : 'none',
+                  ...getColorStyle(color),
+                  backgroundColor: color.hex
+                }}
+              />
+            );
+          })}
+        </div>
+      </div>
       {/* Actions - text only */}
       <div style={{ display: 'flex', gap: '8px' }}>
         <button
@@ -758,3 +790,9 @@ export const BlackbookPanel: React.FC<BlackbookPanelProps> = ({
 };
 
 BlackbookPanel.displayName = 'BlackbookPanel';
+
+
+
+
+
+

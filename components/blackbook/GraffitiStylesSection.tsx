@@ -65,7 +65,7 @@ export const GraffitiStylesSection: React.FC<GraffitiStylesSectionProps> = ({
   const [selectedType, setSelectedType] = useState<GraffitiType>('tag');
 
   // Get unlocked styles from profile
-  const unlockedStyles = userProfile?.unlockedGraffitiTypes || ['sticker', 'tag', 'mops'];
+  const unlockedStyles = userProfile?.unlockedGraffitiTypes || ['tag'];
   const activeStyle = userProfile?.selectedGraffitiStyle || userProfile?.selectedStyleVariant || `${userProfile?.crewId || 'bqc'}-tag-svg-1`;
   const currentRep = userProfile?.rep || 0;
   const crewId = userProfile?.crewId as CrewId | null;
@@ -369,3 +369,4 @@ export const GraffitiStylesSection: React.FC<GraffitiStylesSectionProps> = ({
 };
 
 GraffitiStylesSection.displayName = 'GraffitiStylesSection';
+

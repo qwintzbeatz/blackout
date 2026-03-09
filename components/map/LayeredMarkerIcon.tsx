@@ -3,7 +3,7 @@
 import React, { useMemo } from 'react';
 import type { DivIcon } from 'leaflet';
 import { SurfaceType, getSurfaceConfig } from '@/constants/surfaces';
-import { GraffitiType, getGraffitiTypeConfig } from '@/constants/graffitiTypes';
+import { GraffitiType } from '@/constants/graffitiTypes';
 import { SpecialMarkerType } from '@/lib/types/blackout';
 
 interface LayeredMarkerIconOptions {
@@ -34,10 +34,8 @@ export function getLayeredIconForMarker(options: LayeredMarkerIconOptions): DivI
   const specialType = options.specialType;
   
   const surfaceConfig = getSurfaceConfig(surface);
-  const graffitiConfig = getGraffitiTypeConfig(graffitiType);
   
   const surfaceIcon = surfaceConfig.icon;
-  const graffitiIcon = graffitiConfig.icon;
   
   const badgeColor = isOwn ? markerColor : '#ffffff';
   const badgeBorder = isOwn ? markerColor : '#333333';
@@ -48,7 +46,12 @@ export function getLayeredIconForMarker(options: LayeredMarkerIconOptions): DivI
   
   // Get font family for player tags
   const getFontFamily = () => {
-    return '"Permanent Marker", "Impact", "Arial Black", sans-serif';
+    const styleMatch = options.styleId?.match(/^([a-z0-9]+)-([a-z0-9]+)-/i);
+    const styleCrewId = styleMatch?.[1];
+    const styleGraffitiType = styleMatch?.[2];
+    const resolvedCrewId = (styleCrewId || crewId || 'bqc').toUpperCase();
+    const resolvedGraffitiType = styleGraffitiType || graffitiType;
+    return `"${resolvedCrewId}_${resolvedGraffitiType}", "BQC_${resolvedGraffitiType}", "Permanent Marker", "Impact", "Arial Black", sans-serif`;
   };
   
   // Apply special effects
@@ -163,7 +166,7 @@ export function getLayeredIconForMarker(options: LayeredMarkerIconOptions): DivI
         padding: 1px 4px;
         border-radius: 3px;
         opacity: 0.9;
-      ">V1</span>
+      ">V${variant}</span>
       ` : ''}
       
       <!-- REP Badge -->
@@ -238,7 +241,6 @@ export function LayeredMarkerIconPreview({
   variant?: number;
 }) {
   const surfaceConfig = useMemo(() => getSurfaceConfig(surface), [surface]);
-  const graffitiConfig = useMemo(() => getGraffitiTypeConfig(graffitiType), [graffitiType]);
   
   const showFont = !!playerTagName;
   const crew = crewId || 'bqc';
@@ -246,7 +248,12 @@ export function LayeredMarkerIconPreview({
   const fontSize = 16;
   
   const getFontFamily = () => {
-    return '"Permanent Marker", "Impact", "Arial Black", sans-serif';
+    const styleMatch = styleId?.match(/^([a-z0-9]+)-([a-z0-9]+)-/i);
+    const styleCrewId = styleMatch?.[1];
+    const styleGraffitiType = styleMatch?.[2];
+    const resolvedCrewId = (styleCrewId || crewId || 'bqc').toUpperCase();
+    const resolvedGraffitiType = styleGraffitiType || graffitiType;
+    return `"${resolvedCrewId}_${resolvedGraffitiType}", "BQC_${resolvedGraffitiType}", "Permanent Marker", "Impact", "Arial Black", sans-serif`;
   };
   
   return (
@@ -320,7 +327,7 @@ export function LayeredMarkerIconPreview({
           borderRadius: 3,
           opacity: 0.9
         }}>
-          V1
+          V{variant}
         </span>
       )}
       
@@ -344,3 +351,4 @@ export function LayeredMarkerIconPreview({
 }
 
 export default LayeredMarkerIconPreview;
+

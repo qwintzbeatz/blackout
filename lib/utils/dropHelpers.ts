@@ -56,6 +56,7 @@ import { getTrackName } from '@/constants/all_tracks';
 
 export const getTrackNameFromUrl = (url: string): string => {
   if (url === 'blackout-classic.mp3') return 'Blackout (Default)';
+  if (url === 'https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1') return 'Blackout Classic (At Western)';
   
   // Use the comprehensive track name mapping from all_tracks.ts
   const fullTrackName = getTrackName(url);
@@ -179,3 +180,4 @@ export const getDropColor = (drop: Drop): string => {
       return '#4dabf7';
   }
 };
+

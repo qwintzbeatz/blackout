@@ -16,6 +16,7 @@ export type UnlockResult = {
 const getTrackNameFromUrl = (url: string | undefined | null): string => {
   if (!url) return 'Unknown Track';
   if (url === 'blackout-classic.mp3') return 'Blackout (Default)';
+  if (url === 'https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1') return 'Blackout Classic (At Western)';
   if (url.includes('open.spotify.com/')) {
     return getTrackName(url);
   }
@@ -95,4 +96,5 @@ export const unlockRandomTrack = (currentUnlocked: string[]): UnlockResult => {
     }
   };
 };
+
 

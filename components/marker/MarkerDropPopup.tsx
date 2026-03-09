@@ -23,6 +23,7 @@ interface MarkerDropPopupProps {
     username?: string;
     profilePicUrl?: string;
   };
+  onEditComplete?: (updates?: Partial<Drop>) => void;
 }
 
 const MarkerDropPopup: React.FC<MarkerDropPopupProps> = ({
@@ -31,7 +32,8 @@ const MarkerDropPopup: React.FC<MarkerDropPopupProps> = ({
   onLikeUpdate,
   onClose,
   mapRef,
-  userProfile
+  userProfile,
+  onEditComplete
 }) => {
   const [isLiked, setIsLiked] = useState(drop.likes?.includes(user?.uid || '') || false);
   const [likeCount, setLikeCount] = useState(drop.likes?.length || 0);
@@ -45,8 +47,15 @@ const MarkerDropPopup: React.FC<MarkerDropPopupProps> = ({
   const [selectedSurface, setSelectedSurface] = useState<SurfaceType>((drop as any).surface || 'wall');
   const [selectedGraffitiType, setSelectedGraffitiType] = useState<GraffitiType>((drop as any).graffitiType || 'tag');
   const [isSaving, setIsSaving] = useState(false);
+  const [displaySurface, setDisplaySurface] = useState<SurfaceType>((drop as any).surface || 'wall');
+  const [displayGraffitiType, setDisplayGraffitiType] = useState<GraffitiType>((drop as any).graffitiType || 'tag');
 
   const isOwner = user?.uid === drop.createdBy;
+
+  useEffect(() => {
+    setDisplaySurface((drop as any).surface || 'wall');
+    setDisplayGraffitiType((drop as any).graffitiType || 'tag');
+  }, [drop.surface, drop.graffitiType]);
 
   // Load comments when opening comment section
   useEffect(() => {
@@ -153,7 +162,10 @@ const MarkerDropPopup: React.FC<MarkerDropPopupProps> = ({
         graffitiType: selectedGraffitiType as any,
       });
       
+      setDisplaySurface(selectedSurface);
+      setDisplayGraffitiType(selectedGraffitiType);
       setIsEditing(false);
+      if (onEditComplete) onEditComplete({ surface: selectedSurface as any, graffitiType: selectedGraffitiType as any });
       alert('✅ Drop updated successfully!');
     } catch (error) {
       console.error('Error updating drop:', error);
@@ -462,7 +474,7 @@ const MarkerDropPopup: React.FC<MarkerDropPopupProps> = ({
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
               <div style={{ fontSize: '13px', color: '#cbd5e1' }}>
                 🎨 Type: <span style={{ color: drop.color || '#4dabf7', fontWeight: 'bold' }}>
-                  {(drop as any).graffitiType || 'Signature Tag'}
+                  {displayGraffitiType || 'Signature Tag'}
                 </span>
               </div>
               <div style={{
@@ -477,7 +489,7 @@ const MarkerDropPopup: React.FC<MarkerDropPopupProps> = ({
             </div>
             
             <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-              Surface: <span style={{ color: '#e0e0e0' }}>{(drop as any).surface || 'Wall'}</span>
+              Surface: <span style={{ color: '#e0e0e0' }}>{displaySurface || 'Wall'}</span>
             </div>
             
             {/* Style Variant Display */}
@@ -695,3 +707,4 @@ const MarkerDropPopup: React.FC<MarkerDropPopupProps> = ({
 };
 
 export default MarkerDropPopup;
+

@@ -16,38 +16,43 @@ interface MemoizedMarkerProps {
   user: FirebaseUser | null;
   onClick: (marker: UserMarker) => void;
   crewId?: string | null;
+  activeStyleId?: string;
+  activeUsername?: string;
 }
 
 const MemoizedMarkerComponent: React.FC<MemoizedMarkerProps> = ({
   marker,
-  user,
+  user: _user,
   onClick,
   crewId
 }) => {
   const customIcon = useMemo(() => {
     if (typeof window === 'undefined') return undefined;
 
-    // Extract variant from styleId (e.g., "bqc-tag-svg-3" -> 3)
-    const variantMatch = marker.styleId?.match(/-svg-(\d+)$/);
-    const variant = variantMatch ? parseInt(variantMatch[1], 10) : 1;
+    // Fonts are intentionally disabled on the map. Convert any *-font style to svg variant 1.
+    const styleId = marker.styleId || '';
+    const fontStyleMatch = styleId.match(/^([a-z0-9]+)-([a-z0-9]+)-font$/i);
+    const effectiveStyleId = fontStyleMatch
+      ? `${fontStyleMatch[1].toLowerCase()}-${fontStyleMatch[2].toLowerCase()}-svg-1`
+      : styleId;
 
-    // DEBUG: Log what's happening
-    console.log('🎯 Marker styleId:', marker.styleId, '-> variant:', variant);
+    const variantMatch = effectiveStyleId.match(/-svg-(\d+)$/);
+    const variant = variantMatch ? parseInt(variantMatch[1], 10) : 1;
+    const styleCrewId = effectiveStyleId.split('-')[0];
 
     return getLayeredIconForMarker({
       color: marker.color,
       surface: marker.surface,
       graffitiType: marker.graffitiType,
       specialType: marker.specialType,
-      crewId: crewId || 'bqc',
-      // Always show SVG icon in badge, never username text
+      crewId: styleCrewId || crewId || 'bqc',
       playerTagName: undefined,
+      styleId: effectiveStyleId || undefined,
       variant
     });
   }, [
     marker.color,
     marker.styleId,
-    marker.username,
     marker.surface,
     marker.graffitiType,
     marker.specialType,

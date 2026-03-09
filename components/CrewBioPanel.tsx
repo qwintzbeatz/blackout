@@ -20,14 +20,15 @@ const CrewBioPanel: React.FC<CrewBioPanelProps> = ({ onClose, userCrewId }) => {
   // Animation and style matching music panel
   const panelStyle = {
     position: 'fixed' as const,
-    top: '0px',
-    left: '20px',
+    top: '20px',
+    left: '50%',
+    transform: 'translateX(-50%)',
     backgroundColor: 'rgba(0, 0, 0, 0.92)',
     color: '#e0e0e0',
     padding: '16px',
     borderRadius: '12px',
     minWidth: '280px',
-    maxWidth: 'calc(100vw - 40px)',
+    maxWidth: '95vw',
     width: '350px',
     maxHeight: '85vh',
     overflowY: 'auto' as const,

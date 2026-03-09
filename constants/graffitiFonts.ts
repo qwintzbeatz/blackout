@@ -103,8 +103,9 @@ function generateAllStyles(): GraffitiStyle[] {
       
       // Generate 5 SVG styles (variants 1-5) - UNLOCKABLE
       for (let v = 1; v <= 5; v++) {
-        const tier = svgTiers[v - 1];
-        const threshold = svgThresholds[v - 1];
+        const isStarterSvgV1 = type === 'tag' && v === 1;
+        const tier = isStarterSvgV1 ? 'starter' : svgTiers[v - 1];
+        const threshold = isStarterSvgV1 ? 0 : svgThresholds[v - 1];
         const styleId = `${crewId}-${type}-svg-${v}`;
         
         styles.push({
@@ -114,7 +115,9 @@ function generateAllStyles(): GraffitiStyle[] {
           styleType: 'svg',
           variant: v,
           name: `${type.charAt(0).toUpperCase() + type.slice(1)} Icon ${v}`,
-          description: `${tier} ${type} icon - unlock at ${threshold} REP`,
+          description: isStarterSvgV1
+            ? `starter ${type} icon - default unlock`
+            : `${tier} ${type} icon - unlock at ${threshold} REP`,
           svgPath: `/icons/${crewId}/${type}-${v}.svg`,
           previewUrl: `/icons/${crewId}/previews/${type}-${v}.png`,
           unlockRep: threshold,
@@ -193,9 +196,9 @@ export function getUnlockedStyles(
   );
 }
 
-// Get default style for a crew (always the font)
+// Get default style for a crew (tag SVG v1 only starter/default path)
 export function getDefaultStyleForCrew(crewId: CrewId): string {
-  return `${crewId}-tag-font`; // Default to tag font (free)
+  return `${crewId}-tag-svg-1`;
 }
 
 // Get font size for a type
@@ -219,3 +222,5 @@ export function getNextSVGUnlock(userRep: number, crewId: CrewId, graffitiType: 
   const locked = svgStyles.filter(s => s.unlockRep > userRep);
   return locked.length > 0 ? locked[0] : null;
 }
+
+

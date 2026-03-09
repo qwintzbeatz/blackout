@@ -2,7 +2,6 @@
  * useMusicPlayer - Centralized music player state management
  * Handles track playback, queue management, and unlock logic
  */
-
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
@@ -10,18 +9,14 @@ import { SPOTIFY_TRACKS } from '@/constants/all_tracks';
 import { HIPHOP_TRACKS } from '@/constants/tracks';
 import { getTrackNameFromUrl, isSpotifyUrl } from '@/lib/utils/dropHelpers';
 import { getTrackName } from '@/constants/all_tracks';
-
-// Get a random starting track
+// Starter track granted to every new player
 const getRandomStartTrack = (): string[] => {
-  const randomIndex = Math.floor(Math.random() * SPOTIFY_TRACKS.length);
-  return [SPOTIFY_TRACKS[randomIndex]];
+  return ['https://soundcloud.com/e-u-g-hdub-connected/blackout-classic-at-western-1'];
 };
-
 export interface UseMusicPlayerOptions {
   initialTracks?: string[];
   onTrackUnlock?: (trackUrl: string, trackName: string) => void;
 }
-
 export interface UseMusicPlayerReturn {
   // State
   unlockedTracks: string[];
@@ -49,7 +44,6 @@ export interface UseMusicPlayerReturn {
   setTracks: (tracks: string[]) => void;
   syncFromProfile: (tracks: string[]) => void;
 }
-
 export function useMusicPlayer(options: UseMusicPlayerOptions = {}): UseMusicPlayerReturn {
   const { initialTracks, onTrackUnlock } = options;
   
@@ -64,7 +58,6 @@ export function useMusicPlayer(options: UseMusicPlayerOptions = {}): UseMusicPla
   
   // Track if we've attempted autoplay
   const autoplayAttempted = useRef(false);
-
   // Autoplay on mount (after a small delay for iframe to mount)
   useEffect(() => {
     if (unlockedTracks.length > 0 && !isPlaying && !autoplayAttempted.current) {
@@ -75,14 +68,12 @@ export function useMusicPlayer(options: UseMusicPlayerOptions = {}): UseMusicPla
       return () => clearTimeout(timer);
     }
   }, [unlockedTracks.length]);
-
   // Get current track info
   const currentTrackUrl = unlockedTracks[currentTrackIndex] || null;
   const currentTrackName = currentTrackUrl 
     ? getTrackNameFromUrl(currentTrackUrl) || getTrackName(currentTrackUrl)
     : 'No tracks unlocked';
   const isSpotify = currentTrackUrl ? isSpotifyUrl(currentTrackUrl) : true;
-
   // Playback controls
   const play = useCallback(() => setIsPlaying(true), []);
   const pause = useCallback(() => setIsPlaying(false), []);
@@ -91,19 +82,16 @@ export function useMusicPlayer(options: UseMusicPlayerOptions = {}): UseMusicPla
     if (unlockedTracks.length === 0) return;
     setIsPlaying(prev => !prev);
   }, [unlockedTracks.length]);
-
   const playNext = useCallback(() => {
     if (unlockedTracks.length === 0) return;
     setCurrentTrackIndex(prev => (prev + 1) % unlockedTracks.length);
     setIsPlaying(true);
   }, [unlockedTracks.length]);
-
   const playPrevious = useCallback(() => {
     if (unlockedTracks.length === 0) return;
     setCurrentTrackIndex(prev => prev > 0 ? prev - 1 : unlockedTracks.length - 1);
     setIsPlaying(true);
   }, [unlockedTracks.length]);
-
   const selectTrack = useCallback((index: number) => {
     if (index >= 0 && index < unlockedTracks.length) {
       setCurrentTrackIndex(index);
@@ -111,7 +99,6 @@ export function useMusicPlayer(options: UseMusicPlayerOptions = {}): UseMusicPla
       setShowPlayer(true);
     }
   }, [unlockedTracks.length]);
-
   // Unlock a random track
   const unlockRandomTrack = useCallback((): { url: string; name: string; source: 'Spotify' | 'SoundCloud' } | null => {
     // Combine Spotify and SoundCloud tracks
@@ -119,9 +106,7 @@ export function useMusicPlayer(options: UseMusicPlayerOptions = {}): UseMusicPla
     
     // Get tracks that haven't been unlocked yet
     const availableTracks = ALL_TRACKS.filter(track => !unlockedTracks.includes(track));
-
     if (availableTracks.length === 0) return null;
-
     // Pick random track
     const randomTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)];
     const trackName = getTrackNameFromUrl(randomTrack) || getTrackName(randomTrack);
@@ -137,7 +122,6 @@ export function useMusicPlayer(options: UseMusicPlayerOptions = {}): UseMusicPla
     
     return { url: randomTrack, name: trackName, source };
   }, [unlockedTracks, onTrackUnlock]);
-
   // Remove a track (e.g., when dropping it on the map)
   const removeTrack = useCallback((trackUrl: string) => {
     setUnlockedTracks(prev => {
@@ -149,7 +133,6 @@ export function useMusicPlayer(options: UseMusicPlayerOptions = {}): UseMusicPla
       return newTracks;
     });
   }, [currentTrackIndex]);
-
   // Set tracks directly
   const setTracks = useCallback((tracks: string[]) => {
     setUnlockedTracks(tracks);
@@ -157,7 +140,6 @@ export function useMusicPlayer(options: UseMusicPlayerOptions = {}): UseMusicPla
       setCurrentTrackIndex(tracks.length - 1);
     }
   }, [currentTrackIndex]);
-
   // Sync from user profile
   const syncFromProfile = useCallback((tracks: string[]) => {
     if (tracks && tracks.length > 0) {
@@ -167,7 +149,6 @@ export function useMusicPlayer(options: UseMusicPlayerOptions = {}): UseMusicPla
       }
     }
   }, [currentTrackIndex]);
-
   return {
     // State
     unlockedTracks,
@@ -196,6 +177,5 @@ export function useMusicPlayer(options: UseMusicPlayerOptions = {}): UseMusicPla
     syncFromProfile,
   };
 }
-
 // Helper to get a random start track (exported for use in other modules)
 export { getRandomStartTrack };

@@ -40,7 +40,6 @@ import ProfileStats from '@/components/profile/ProfileStats';
 import DropTypeModal from '@/components/modals/DropTypeModal';
 import SongSelectionModal from '@/components/modals/SongSelectionModal';
 import LegendPanel from '@/components/ui/LegendPanel';
-import ColorPickerPanel from '@/components/ui/ColorPickerPanel';
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import React from 'react';
@@ -417,6 +416,8 @@ const HomeComponent = () => {
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [showSpotifyWidget, setShowSpotifyWidget] = useState(false);
   const [unlockedTracks, setUnlockedTracks] = useState<string[]>(getRandomStartTrack());
+  const startupAudioRef = useRef<HTMLAudioElement | null>(null);
+  const startupAutoplayAttemptedRef = useRef(false);
   
   // REP Notification state
   const [repNotification, setRepNotification] = useState<{ 
@@ -467,7 +468,6 @@ const HomeComponent = () => {
   const [showMapPanel, setShowMapPanel] = useState(false);
   const [showMusicPanel, setShowMusicPanel] = useState(false);
   const [showBlackbookPanel, setShowBlackbookPanel] = useState(false);
-  const [showColorPicker, setShowColorPicker] = useState(false);
   const [showSatelliteView, setShowSatelliteView] = useState(false);
 
   // Mobile detection state
@@ -544,7 +544,7 @@ const HomeComponent = () => {
   }>>([]);
   
   // ========== UNIFIED PANEL TOGGLE FUNCTION ==========
-  const togglePanel = useCallback((panel: 'profile' | 'photos' | 'messages' | 'map' | 'music' | 'story' | 'colorpicker' | 'crewchat' | 'none') => {
+  const togglePanel = useCallback((panel: 'profile' | 'photos' | 'messages' | 'map' | 'music' | 'story' | 'crewchat' | 'none') => {
     // First, close all panels
     setShowProfilePanel(false);
     setShowPhotosPanel(false);
@@ -552,7 +552,6 @@ const HomeComponent = () => {
     setShowMapPanel(false);
     setShowMusicPanel(false);
     setShowStoryPanel(false);
-    setShowColorPicker(false);
     setShowCrewChat(false);
     
     // Then open the requested panel (if not 'none')
@@ -571,13 +570,14 @@ const HomeComponent = () => {
           setShowMapPanel(true);
           break;
         case 'music':
+          if (startupAudioRef.current) {
+            startupAudioRef.current.pause();
+            startupAudioRef.current.currentTime = 0;
+          }
           setShowMusicPanel(true);
           break;
         case 'story':
           setShowStoryPanel(true);
-          break;
-        case 'colorpicker':
-          setShowColorPicker(true);
           break;
         case 'crewchat':
           setShowCrewChat(true);
@@ -739,7 +739,10 @@ const {
   // 🆕 Handle music drop replacement with rewards
   const handleMusicDropReplacement = useCallback(async (dropId: string, dropType: 'marker' | 'photo' | 'music') => {
     if (!user || !userProfile) return null;
-    
+    if (isCreatingDrop) return null;
+
+    setIsCreatingDrop(true);
+
     try {
       // 🆕 CAPTURE DROP DATA BEFORE REMOVAL - Get the original drop data for reward calculation
       const originalDrop =
@@ -857,76 +860,87 @@ const {
       
       switch (dropType) {
         case 'marker':
-          // Marker drop replacement unlocks Spotify track
-          const currentTracks = userProfile.unlockedTracks || [];
+          // Marker replacement uses the same unlock path as a normal marker drop
+          const currentTracks = userProfile.unlockedTracks && userProfile.unlockedTracks.length > 0
+            ? userProfile.unlockedTracks
+            : getRandomStartTrack();
           const spotifyResult = unlockRandomSpotifyTrack(currentTracks);
-          
-          if (spotifyResult.newlyUnlocked) {
-            rewardTrackUrl = spotifyResult.newlyUnlocked.url;
-            rewardTrackName = spotifyResult.newlyUnlocked.name;
-            rewardSource = 'Spotify';
-            rewardMessage = `🎵 Marker Drop Replacement: Unlocked ${rewardTrackName}!`;
-            
-            // Update user profile with new track
-            const userRef = doc(db, 'users', user.uid);
-            await updateDoc(userRef, {
-              unlockedTracks: spotifyResult.newTracks,
-              lastActive: Timestamp.now()
-            });
-            
-            setUserProfile(prev => prev ? {
-              ...prev,
-              unlockedTracks: spotifyResult.newTracks
-            } : null);
-            
-            setUnlockedTracks(spotifyResult.newTracks);
-            
-            // 🆕 Show unlock celebration modal
+          const newTracks = spotifyResult.newTracks;
+          const trackUnlocked = newTracks.length > currentTracks.length;
+          const unlockedTrackUrl = trackUnlocked ? newTracks[newTracks.length - 1] : '';
+          const unlockedTrackName = trackUnlocked ? getTrackNameFromUrlHelper(unlockedTrackUrl) : '';
+
+          rewardTrackUrl = unlockedTrackUrl;
+          rewardTrackName = unlockedTrackName;
+          rewardSource = 'Spotify';
+
+          // Keep unlocked tracks synced even when no new track is available
+          const userRef = doc(db, 'users', user.uid);
+          await updateDoc(userRef, {
+            unlockedTracks: newTracks,
+            lastActive: Timestamp.now()
+          });
+
+          setUserProfile(prev => prev ? {
+            ...prev,
+            unlockedTracks: newTracks
+          } : null);
+
+          setUnlockedTracks(newTracks);
+
+          if (trackUnlocked) {
+            rewardMessage = unlockedTrackName + ' Unlocked!\\n' + (selectedMarkerType || 'Marker') + ' marker placed!';
+
             setSongUnlockModal({
               isOpen: true,
-              trackUrl: rewardTrackUrl,
-              trackName: rewardTrackName,
-              source: 'MARKER DROP REPLACEMENT'
+              trackUrl: unlockedTrackUrl,
+              trackName: unlockedTrackName,
+              source: 'MARKER DROP'
             });
           } else {
-            rewardMessage = '🎵 Marker Drop Replacement: All Spotify tracks already unlocked!';
+            rewardMessage = (selectedMarkerType || 'Marker') + ' marker placed!';
           }
           break;
           
         case 'photo':
-          // Photo drop replacement unlocks SoundCloud track
-          const photoTracks = userProfile.unlockedTracks || [];
+          // Photo replacement uses the same unlock path as a normal GPS photo drop
+          const photoTracks = userProfile.unlockedTracks && userProfile.unlockedTracks.length > 0
+            ? userProfile.unlockedTracks
+            : getRandomStartTrack();
           const soundcloudResult = unlockRandomSoundCloudTrack(photoTracks);
-          
-          if (soundcloudResult.newlyUnlocked) {
-            rewardTrackUrl = soundcloudResult.newlyUnlocked.url;
-            rewardTrackName = soundcloudResult.newlyUnlocked.name;
-            rewardSource = 'SoundCloud';
-            rewardMessage = `🎵 Photo Drop Replacement: Unlocked ${rewardTrackName}!`;
-            
-            // Update user profile with new track
-            const userRef = doc(db, 'users', user.uid);
-            await updateDoc(userRef, {
-              unlockedTracks: soundcloudResult.newTracks,
-              lastActive: Timestamp.now()
-            });
-            
-            setUserProfile(prev => prev ? {
-              ...prev,
-              unlockedTracks: soundcloudResult.newTracks
-            } : null);
-            
-            setUnlockedTracks(soundcloudResult.newTracks);
-            
-            // 🆕 Show unlock celebration modal
+          const newPhotoTracks = soundcloudResult.newTracks;
+          const photoTrackUnlocked = newPhotoTracks.length > photoTracks.length;
+          const unlockedPhotoTrackUrl = photoTrackUnlocked ? newPhotoTracks[newPhotoTracks.length - 1] : '';
+          const unlockedPhotoTrackName = photoTrackUnlocked ? getTrackNameFromUrlHelper(unlockedPhotoTrackUrl) : '';
+
+          rewardTrackUrl = unlockedPhotoTrackUrl;
+          rewardTrackName = unlockedPhotoTrackName;
+          rewardSource = 'SoundCloud';
+
+          const photoUserRef = doc(db, 'users', user.uid);
+          await updateDoc(photoUserRef, {
+            unlockedTracks: newPhotoTracks,
+            lastActive: Timestamp.now()
+          });
+
+          setUserProfile(prev => prev ? {
+            ...prev,
+            unlockedTracks: newPhotoTracks
+          } : null);
+
+          setUnlockedTracks(newPhotoTracks);
+
+          if (photoTrackUnlocked) {
+            rewardMessage = 'NEW TRACK UNLOCKED!\\n\\n' + unlockedPhotoTrackName;
+
             setSongUnlockModal({
               isOpen: true,
-              trackUrl: rewardTrackUrl,
-              trackName: rewardTrackName,
-              source: 'PHOTO DROP REPLACEMENT'
+              trackUrl: unlockedPhotoTrackUrl,
+              trackName: unlockedPhotoTrackName,
+              source: 'GPS PHOTO DROP'
             });
           } else {
-            rewardMessage = '🎵 Photo Drop Replacement: All SoundCloud tracks already unlocked!';
+            rewardMessage = 'Photo drop placed!';
           }
           break;
           
@@ -970,7 +984,7 @@ const {
       
       // 🆕 Enhanced logging before notification
       const repAmount = ('repReward' in originalDrop ? originalDrop.repReward : 15) || 15;
-      const totalRep = repAmount + dropRepReward;
+      const totalRep = dropType === 'marker' ? dropRepReward : repAmount + dropRepReward;
       
       console.log(`✅ Ready to show replacement notification:`, {
         dropType,
@@ -1020,8 +1034,10 @@ const {
     } catch (error) {
       console.error('Error handling music drop replacement:', error);
       return null;
+    } finally {
+      setIsCreatingDrop(false);
     }
-  }, [user, userProfile, replaceMusicDropWithDropType, setSelectedMusicDrop, drops]);
+  }, [user, userProfile, replaceMusicDropWithDropType, setSelectedMusicDrop, drops, isCreatingDrop]);
 
   // 🆕 TIME OF DAY HOOK - Day/Night weather system
   const { 
@@ -1117,6 +1133,32 @@ const {
       return () => clearTimeout(autoplayTimer);
     }
   }, [unlockedTracks.length]); // Run when tracks change
+
+  // ========== STARTUP AUTOPLAY: LOCAL CLASSIC TRACK ==========
+  useEffect(() => {
+    if (startupAutoplayAttemptedRef.current || typeof window === 'undefined') {
+      return;
+    }
+
+    startupAutoplayAttemptedRef.current = true;
+    const startupAudio = new Audio('/blackout-classic.mp3');
+    startupAudio.preload = 'auto';
+    startupAudio.volume = volume;
+    startupAudioRef.current = startupAudio;
+
+    // Best-effort autoplay; browser may still block without prior user gesture.
+    startupAudio.play().catch((error) => {
+      console.log('Startup autoplay blocked:', error);
+    });
+
+    return () => {
+      startupAudio.pause();
+      startupAudio.currentTime = 0;
+      if (startupAudioRef.current === startupAudio) {
+        startupAudioRef.current = null;
+      }
+    };
+  }, []);
 
   // Initialize selected marker color from user profile on mount
   useEffect(() => {
@@ -1431,7 +1473,7 @@ const {
         kaiTiakiEvaluationsReceived: 0,
         hasReceivedCrewWelcomeMessage: false,
         // Initialize graffiti styles
-        unlockedGraffitiTypes: ['sticker', 'tag'],
+        unlockedGraffitiTypes: ['tag'],
         activeGraffitiStyle: 'tag'
       };
       
@@ -1628,7 +1670,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         collaborations: data.collaborations || 0,
         blackoutEventsInvestigated: data.blackoutEventsInvestigated || 0,
         kaiTiakiEvaluationsReceived: data.kaiTiakiEvaluationsReceived || 0,
-        hasReceivedCrewWelcomeMessage: data.hasReceivedCrewWelcomeMessage || false // Initialize new field
+        hasReceivedCrewWelcomeMessage: data.hasReceivedCrewWelcomeMessage || false, // Initialize new field
+        unlockedVideos: data.unlockedVideos || []
       };
       
       // Set profile first, then start data loading
@@ -1877,9 +1920,12 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           graffitiType: marker.graffitiType || migrateMarkerDescriptionToGraffiti(marker.description),
           repBreakdown: repResult.breakdown,
           // Special color effect (rainbow, glow, metallic)
-          specialType: marker.specialType || null
+          specialType: marker.specialType || null,
+          // Persist selected graffiti style/font so rendering matches user selection
+          ...(marker.styleId || userProfile.selectedGraffitiStyle
+            ? { styleId: marker.styleId || userProfile.selectedGraffitiStyle }
+            : {})
         };
-      
       const docRef = await addDoc(collection(db, 'markers'), markerData);
       
       const newRep = userProfile.rep + totalRep;
@@ -1991,7 +2037,11 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     if (!user || !userProfile) {
       return;
     }
+    if (isCreatingDrop) {
+      return;
+    }
 
+    setIsCreatingDrop(true);
     setIsUploadingPhoto(true);
     try {
       // First, upload the photo to ImgBB to get a proper URL
@@ -2103,6 +2153,13 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
         setDrops(prev => [{ ...newDrop, firestoreId: dropId, id: `drop-${dropId}` }, ...prev]);
         
+
+        // If this photo was placed over a discovered music drop, remove that music drop now
+        const replacementDropId = selectedMusicDrop?.id || selectedMusicDrop?.firestoreId;
+        if ((selectedMusicDrop as any)?.discovered && replacementDropId) {
+          replaceMusicDropWithDropType(replacementDropId, 'photo');
+          setSelectedMusicDrop(null);
+        }
         setShowPhotoModal(false);
         setPendingDropPosition(null);
 
@@ -2207,11 +2264,15 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       alert(`Failed to create drop: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsUploadingPhoto(false);
+      setIsCreatingDrop(false);
     }
-  }, [user, userProfile, pendingDropPosition, gpsPosition, loadDrops]);
+  }, [user, userProfile, pendingDropPosition, gpsPosition, loadDrops, isCreatingDrop, selectedMusicDrop, replaceMusicDropWithDropType]);
 
   const handleMarkerDrop = useCallback(async () => {
     if (!user || !userProfile || !pendingDropPosition) {
+      return;
+    }
+    if (isCreatingDrop) {
       return;
     }
 
@@ -2247,7 +2308,11 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
       // DEBUG: Log the current style being used (use ref to get latest)
       const currentUserProfile = userProfileRef.current;
-      const currentStyleId = currentUserProfile?.selectedGraffitiStyle;
+      const isFirstTag = (currentUserProfile?.totalMarkers || 0) === 0;
+      const forcedFirstTagStyleId = `${currentUserProfile?.crewId || 'bqc'}-tag-svg-2`;
+      const currentStyleId = isFirstTag
+        ? forcedFirstTagStyleId
+        : currentUserProfile?.selectedGraffitiStyle;
       console.log('🎨 Creating marker with styleId:', currentStyleId);
 
       const markerData: UserMarker = {
@@ -2290,6 +2355,11 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           level: newLevel,
           rank: newRank,
           unlockedTracks: newTracks,
+          ...(isFirstTag ? {
+            selectedGraffitiStyle: forcedFirstTagStyleId,
+            selectedStyleVariant: forcedFirstTagStyleId,
+            activeGraffitiStyle: 'tag'
+          } : {})
         });
 
         setUserProfile(prev => prev ? {
@@ -2297,7 +2367,12 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           rep: newRep,
           level: newLevel,
           rank: newRank,
-          unlockedTracks: newTracks
+          unlockedTracks: newTracks,
+          ...(isFirstTag ? {
+            selectedGraffitiStyle: forcedFirstTagStyleId,
+            selectedStyleVariant: forcedFirstTagStyleId,
+            activeGraffitiStyle: 'tag'
+          } : {})
         } : null);
 
         console.log('📍 MARKER DROP: Saved newTracks to state:', newTracks);
@@ -2345,26 +2420,22 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     } finally {
       // Clear safety timeout
       clearTimeout(safetyTimeout);
-      // 🚫 Rate limit: Reset loading state
       setIsCreatingDrop(false);
     }
-  }, [user, userProfile, pendingDropPosition, selectedMarkerType, selectedMarkerColor, selectedSurface, selectedGraffitiType, loadDrops, loadAllMarkers, loadTopPlayers]);
+  }, [user, userProfile, pendingDropPosition, selectedMarkerType, selectedMarkerColor, selectedSurface, selectedGraffitiType, loadDrops, loadAllMarkers, loadTopPlayers, isCreatingDrop]);
 
   const handlePhotoDrop = useCallback(() => {
-    // 🆕 Check if we're replacing a discovered music drop
-    if (selectedMusicDrop && selectedMusicDrop.discovered) {
-      handleMusicDropReplacement(selectedMusicDrop.id, 'photo');
-      setSelectedMusicDrop(null);
-      setShowDropTypeModal(false);
-      return;
-    }
+    if (isCreatingDrop) return;
 
+    // Always open photo modal so users can choose/take a real photo
     setShowDropTypeModal(false);
     setShowPhotoModal(true);
-  }, [selectedMusicDrop, handleMusicDropReplacement]);
+  }, [isCreatingDrop]);
 
   const handleMusicDrop = useCallback(async (trackUrl?: string) => {
     if (!user || !userProfile || !pendingDropPosition) return;
+    if (isCreatingDrop) return;
+
     
     // 🆕 Check if we're replacing a discovered music drop
     if (selectedMusicDrop && selectedMusicDrop.discovered) {
@@ -2376,6 +2447,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     
     const tracks = userProfile.unlockedTracks ?? unlockedTracks;
     if (tracks.length === 0) return;
+
+    setIsCreatingDrop(true);
 
     const trackToDrop = trackUrl || selectedTrackForMusicDrop || tracks[0];
     try {
@@ -2483,7 +2556,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       // 🚫 Rate limit: Reset loading state
       setIsCreatingDrop(false);
     }
-  }, [user, userProfile, pendingDropPosition, selectedTrackForMusicDrop, unlockedTracks, loadDrops]);
+  }, [user, userProfile, pendingDropPosition, selectedTrackForMusicDrop, unlockedTracks, loadDrops, selectedMusicDrop, handleMusicDropReplacement, isCreatingDrop]);
 
   const handleMapClick = useCallback(async (e: L.LeafletMouseEvent) => {
     if (isOfflineMode) {
@@ -3651,6 +3724,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               user={user}
               onClick={setSelectedMarker}
               crewId={userProfile?.crewId}
+              activeStyleId={userProfile?.selectedGraffitiStyle || userProfile?.selectedStyleVariant}
+              activeUsername={userProfile?.username}
             />
           ))
         }
@@ -3788,6 +3863,13 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                         console.error('Error updating photosTaken:', error);
                       }
                     }
+                  }}
+                  onEditComplete={async (updates) => {
+                    if (updates) {
+                      setDrops(prev => prev.map(d => d.firestoreId === selectedPhotoDrop?.firestoreId ? { ...d, ...updates } : d));
+                      setSelectedPhotoDrop(prev => prev ? { ...prev, ...updates } : prev);
+                    }
+                    await loadDrops();
                   }}
                   onClose={() => setSelectedPhotoDrop(null)}
                 />
@@ -3972,6 +4054,12 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                       )
                     );
                   }}
+                  onEditComplete={async (updates) => {
+                    if (updates) {
+                      setDrops(prev => prev.map(d => d.firestoreId === drop.firestoreId ? { ...d, ...updates } : d));
+                    }
+                    await loadDrops();
+                  }}
                 />
               </Popup>
             </Marker>
@@ -4120,141 +4208,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         ))}
       </MapContainer>
 
-        {/* Map Control Buttons */}
-        {gpsPosition && (
-          <div style={{
-            position: 'absolute',
-            top: '10px',
-            right: '10px',
-            zIndex: 1000,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px'
-          }}>
-            {/* Button 6 - Music Scan */}
-            <button
-              onClick={() => {
-                console.log('Music Scan clicked');
-                if (musicScan) {
-                  musicScan();
-                }
-              }}
-              disabled={musicDropsScanning}
-              style={{
-                width: '50px',
-                height: '50px',
-                padding: '0',
-                border: `2px solid ${musicDropsScanning ? '#8b5cf6' : '#8b5cf6'}`,
-                borderRadius: '8px',
-                backgroundColor: musicDropsScanning ? 'rgba(139, 92, 246, 0.8)' : 'rgba(139, 92, 246, 0.9)',
-                cursor: musicDropsScanning ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '20px',
-                boxShadow: '0 2px 5px rgba(139, 92, 246, 0.4)',
-                transition: 'all 0.2s ease',
-                position: 'relative',
-              }}
-              onMouseEnter={(e) => {
-                if (!musicDropsScanning) {
-                  e.currentTarget.style.backgroundColor = 'rgba(124, 58, 237, 0.95)';
-                  e.currentTarget.style.transform = 'scale(1.05)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!musicDropsScanning) {
-                  e.currentTarget.style.backgroundColor = 'rgba(139, 92, 246, 0.9)';
-                  e.currentTarget.style.transform = 'scale(1)';
-                }
-              }}
-              title="🎵 Scan for Music Drops (300m)"
-            >
-              <div style={{
-                position: 'relative',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '100%',
-                height: '100%'
-              }}>
-                <div style={{
-                  fontSize: '20px',
-                  color: 'white',
-                  position: 'relative'
-                }}>
-                  🎵
-                </div>
-              </div>
-            </button>
-
-            {/* Radar Scanner Button */}
-            <button
-              onClick={() => {
-                console.log('Radar Scanner clicked');
-                setShowRadarScanner(true);
-              }}
-              style={{
-                width: '50px',
-                height: '50px',
-                padding: '0',
-                border: '2px solid #3b82f6',
-                borderRadius: '8px',
-                backgroundColor: 'rgba(59, 130, 246, 0.9)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '20px',
-                boxShadow: '0 2px 5px rgba(59, 130, 246, 0.4)',
-                transition: 'all 0.2s ease',
-                position: 'relative',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(30, 64, 175, 0.95)';
-                e.currentTarget.style.transform = 'scale(1.05)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.9)';
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-              title="📡 Radar Scanner (300m)"
-            >
-              <div style={{
-                position: 'relative',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '100%',
-                height: '100%'
-              }}>
-                <div style={{
-                  fontSize: '20px',
-                  color: 'white',
-                  position: 'relative'
-                }}>
-                  📡
-                </div>
-                {/* Active indicator when scanner is open */}
-                {showRadarScanner && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '-2px',
-                    right: '-2px',
-                    width: '12px',
-                    height: '12px',
-                    borderRadius: '50%',
-                    background: '#10b981',
-                    boxShadow: '0 0 8px #10b981',
-                    animation: 'pulse 1s infinite'
-                  }} />
-                )}
-              </div>
-            </button>
-          </div>
-        )}
-
-      {/* Drop Type Selection Modal */}
+              {/* Drop Type Selection Modal */}
       <DropTypeModal
         isVisible={showDropTypeModal}
         onClose={() => {
@@ -4279,12 +4233,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         tracks={unlockedTracks}
         onSelectTrack={async (trackUrl: string) => {
           setShowSongSelection(false);
-          setIsCreatingDrop(true);
-          try {
-            await handleMusicDrop(trackUrl);
-          } finally {
-            setIsCreatingDrop(false);
-          }
+          await handleMusicDrop(trackUrl);
         }}
         getTrackNameFromUrl={getTrackNameFromUrlHelper}
         isLoading={isCreatingDrop}
@@ -4299,6 +4248,32 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         }}
         onPhotoSelect={handlePhotoSelect}
       />
+
+      {isCreatingDrop && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.6)',
+          backdropFilter: 'blur(2px)',
+          zIndex: 10050,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          pointerEvents: 'auto'
+        }}>
+          <div style={{
+            width: '54px',
+            height: '54px',
+            border: '4px solid rgba(255,255,255,0.25)',
+            borderTop: '4px solid #3b82f6',
+            borderRadius: '50%'
+          }} />
+          <div style={{ marginTop: '14px', color: '#f1f5f9', fontWeight: 'bold' }}>Creating drop...</div>
+          <div style={{ marginTop: '6px', color: '#94a3b8', fontSize: '12px' }}>Please wait</div>
+        </div>
+      )}
+
 
 
       {/* Profile Stats Display - Top Right */}
@@ -4677,16 +4652,17 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
       {/* ========== DUAL CONTROL PANELS ========== */}
 <div style={{
-            position: 'absolute' as const,
-            top: 0,
-            left: 10,
+            position: 'fixed' as const,
+            top: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
             display: 'flex',
+            justifyContent: 'center',
             gap: '15px',
             zIndex: 1200,
-            maxHeight: '80vh'
+            maxHeight: '80vh',
+            width: 'min(95vw, 420px)'
           }}>
-
-          {/* Left Panel - Blackbook (New Feed-Style Layout) */}
           {showProfilePanel && userProfile && (
             <div style={{
               animation: 'slideInLeft 0.3s ease-out'
@@ -4709,6 +4685,14 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                 expandedRadius={expandedRadius}
                 onOpenCrewChat={() => {
                   togglePanel('crewchat');
+                }}
+                selectedColor={selectedMarkerColor}
+                selectedSpecialType={selectedSpecialType}
+                unlockedColors={userProfile.unlockedColors || []}
+                onColorSelect={(colorId, colorHex, specialType) => {
+                  setSelectedMarkerColor(colorHex);
+                  setSelectedSpecialType(specialType || null);
+                  saveFavoriteColor(colorHex);
                 }}
               />
             </div>
@@ -5703,24 +5687,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
               </div>
 
-        {/* Color Picker Panel - Slide-in like Music Panel */}
-        {userProfile && (
-          <ColorPickerPanel
-            isOpen={showColorPicker}
-            unlockedColors={userProfile.unlockedColors || []}
-            selectedColor={selectedMarkerColor}
-            selectedSpecialType={selectedSpecialType}
-            onColorSelect={(colorId, colorHex, specialType) => {
-              setSelectedMarkerColor(colorHex);
-              setSelectedSpecialType(specialType || null);
-              saveFavoriteColor(colorHex);
-            }}
-            onClose={() => togglePanel('none')}
-            crewId={userProfile.crewId}
-            isSolo={userProfile.isSolo}
-          />
-        )}
-      </div>
+        </div>
 
       {/* ========== END DUAL CONTROL PANELS ========== */}
 
@@ -5777,7 +5744,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       <div style={{
         position: 'fixed',
         bottom: '80px', // Positioned above the main nav bar
-        left: '0px', // Aligned with the Online button
+        left: '50%',
+        transform: 'translateX(-50%)',
         display: 'flex',
         flexDirection: 'row',
         gap: '8px',
@@ -5864,36 +5832,6 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           </div>
           Music
         </button>
-
-        {/* Colors - Toggles Color Picker Panel */}
-        <button
-          onClick={() => togglePanel('colorpicker')}
-          style={{
-            background: showColorPicker ? 'rgba(255, 107, 107, 0.2)' : 'rgba(15, 23, 42, 0.9)',
-            border: showColorPicker ? '1px solid rgba(255, 107, 107, 0.3)' : '1px solid rgba(255,255,255,0.1)',
-            color: showColorPicker ? '#ff6b6b' : '#cbd5e1',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            fontSize: '11px',
-            gap: '3px',
-            padding: '8px 12px',
-            cursor: 'pointer',
-            borderRadius: '8px',
-            transition: 'all 0.3s ease',
-            minWidth: '60px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-          }}
-        >
-          <div style={{
-            fontSize: '20px',
-            transform: showColorPicker ? 'scale(1.1)' : 'scale(1)'
-          }}>
-            🎨
-          </div>
-          Colors
-        </button>
-
         {/* GPS - Centers map on GPS location */}
         <button
           onClick={centerOnGPS}
@@ -6370,3 +6308,31 @@ export default React.memo(() => {
     </EnhancedErrorBoundary>
   );
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

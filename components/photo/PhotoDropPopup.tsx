@@ -15,6 +15,7 @@ interface PhotoDropPopupProps {
   onLikeUpdate: (dropId: string, newLikes: string[]) => void;
   onDelete?: (dropId: string) => void;
   onClose?: () => void;
+  onEditComplete?: (updates?: Partial<Drop>) => void;
 }
 
 const PhotoDropPopup: React.FC<PhotoDropPopupProps> = ({
@@ -22,7 +23,8 @@ const PhotoDropPopup: React.FC<PhotoDropPopupProps> = ({
   user,
   onLikeUpdate,
   onDelete,
-  onClose
+  onClose,
+  onEditComplete
 }) => {
   const [isLiked, setIsLiked] = useState(drop.likes?.includes(user?.uid || '') || false);
   const [likeCount, setLikeCount] = useState(drop.likes?.length || 0);
@@ -85,6 +87,7 @@ const PhotoDropPopup: React.FC<PhotoDropPopupProps> = ({
       });
       
       setIsEditing(false);
+      if (onEditComplete) onEditComplete({ surface: selectedSurface as any, graffitiType: selectedGraffitiType as any });
       alert('✅ Photo drop updated successfully!');
     } catch (error) {
       console.error('Error updating photo drop:', error);
@@ -618,3 +621,4 @@ const PhotoDropPopup: React.FC<PhotoDropPopupProps> = ({
 };
 
 export default PhotoDropPopup;
+

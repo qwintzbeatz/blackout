@@ -130,7 +130,7 @@ export const panelStyle = {
   padding: '16px',
   borderRadius: '12px',
   boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
-  width: 'min(110vw, 400px)',
+  width: 'min(95vw, 400px)',
   maxHeight: '75vh',
   overflowY: 'auto' as const,
   border: '1px solid rgba(255,255,255,0.15)',

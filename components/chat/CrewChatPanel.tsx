@@ -669,10 +669,11 @@ export default function CrewChatPanel({
   return (
     <div style={{
       ...panelStyle,
-      position: 'absolute',
-      top: '0px',
-      left: '0px',
-      width: 'min(400px, 110vw)',
+      position: 'fixed',
+      top: '20px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      width: 'min(95vw, 400px)',
       maxHeight: 'calc(100vh - 180px)',
       zIndex: 1400,
       display: 'flex',
