@@ -85,6 +85,8 @@ export interface Drop {
   lng: number;
   photoUrl?: string;
   trackUrl?: string;
+  trackName?: string;
+  source?: string;
   createdBy: string;
   timestamp: Date;
   likes: string[];

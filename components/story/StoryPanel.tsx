@@ -13,8 +13,7 @@ const StoryPanel: React.FC<{ markStoryContentAsViewed: () => Promise<void> }> = 
     markStoryContentAsViewed();
   }, [markStoryContentAsViewed]); 
 
-  const panelStyle = { backgroundColor: 'rgba(0, 0, 0, 0.85)', color: '#e0e0e0', padding: '16px', borderRadius: '8px', width: '400px', maxHeight: '80vh', overflowY: 'auto' as const, zIndex: 1200 };
-  const crewColors: Record<CrewId, string> = { bqc: '#000000', sps: '#10b981', lzt: '#4dabf7', dgc: '#f97316' };
+  const crewColors: Record<CrewId, string> = { bqc: '#ffffff', sps: '#10b981', lzt: '#4dabf7', dgc: '#f97316' };
   const crewNames: Record<CrewId, string> = { bqc: 'BLAQWT', sps: 'SPONTANEOUS', lzt: 'LUZUNT', dgc: 'DON\'T GET CAPPED' };
 
   if (!storyProgress) return <div style={panelStyle}><h3>📖 STORY</h3><p>Loading...</p></div>;

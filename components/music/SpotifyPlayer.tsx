@@ -15,6 +15,8 @@ interface SpotifyPlayerProps {
   spotifyUrl: string;
   trackName?: string;
   onClose?: () => void;
+  onCollectTrack?: (trackUrl: string, trackName: string) => void;
+  isTrackCollected?: boolean;
 }
 
 // Convert Spotify URL to embed URL
@@ -75,11 +77,14 @@ export default function SpotifyPlayer({
   spotifyUrl,
   trackName = 'Spotify Track',
   onClose,
+  onCollectTrack,
+  isTrackCollected = false,
 }: SpotifyPlayerProps) {
   const [embedUrl, setEmbedUrl] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isCollecting, setIsCollecting] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Initialize embed URL
@@ -116,8 +121,30 @@ export default function SpotifyPlayer({
     onClose?.();
   }, [onClose]);
 
+  const handleCollectAndClose = useCallback(async () => {
+    // Send pause message to iframe
+    if (iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage({ command: 'pause' }, '*');
+    }
+
+    // Collect the track if not already collected and onCollectTrack is provided
+    if (onCollectTrack && !isTrackCollected) {
+      setIsCollecting(true);
+      try {
+        onCollectTrack(spotifyUrl, trackName);
+      } catch (error) {
+        console.error('Error collecting track:', error);
+      } finally {
+        setIsCollecting(false);
+      }
+    }
+    
+    onClose?.();
+  }, [onClose, onCollectTrack, isTrackCollected, spotifyUrl, trackName]);
+
   // Validate Spotify URL
   const isValidSpotifyUrl = useCallback(() => {
+    if (!spotifyUrl) return false;
     const spotifyRegex = /^https?:\/\/(open\.)?spotify\.com\//;
     return spotifyRegex.test(spotifyUrl);
   }, [spotifyUrl]);
@@ -198,22 +225,63 @@ export default function SpotifyPlayer({
             Spotify
           </span>
         </div>
-        {onClose && (
-          <button
-            onClick={handleClose}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#94a3b8',
-              cursor: 'pointer',
-              padding: '4px 8px',
-              borderRadius: '4px',
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {onCollectTrack && !isTrackCollected && (
+            <button
+              onClick={handleCollectAndClose}
+              disabled={isCollecting}
+              style={{
+                background: isCollecting ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.9)',
+                border: '1px solid #10b981',
+                color: '#ffffff',
+                cursor: isCollecting ? 'not-allowed' : 'pointer',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease',
+                opacity: isCollecting ? 0.7 : 1
+              }}
+            >
+              {isCollecting ? '⏳ Collecting...' : '🎵 Collect Track'}
+            </button>
+          )}
+          {onClose && (
+            <button
+              onClick={handleClose}
+              style={{
+                background: 'transparent',
+                border: '1px solid rgba(255,255,255,0.2)',
+                color: '#94a3b8',
+                cursor: 'pointer',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#ffffff'}
+              onMouseLeave={(e) => e.currentTarget.style.color = '#94a3b8'}
+            >
+              ✕ Close
+            </button>
+          )}
+          {isTrackCollected && (
+            <div style={{
+              background: 'rgba(16, 185, 129, 0.2)',
+              border: '1px solid rgba(16, 185, 129, 0.4)',
+              color: '#10b981',
+              padding: '6px 12px',
+              borderRadius: '6px',
               fontSize: '12px',
-            }}
-          >
-            ✕ Close
-          </button>
-        )}
+              fontWeight: 'bold'
+            }}>
+              ✅ Collected
+            </div>
+          )}
+        </div>
       </div>     
 
       {/* Spotify Embed */}

@@ -55,7 +55,7 @@ import PhotoDropPopup from '@/components/photo/PhotoDropPopup';
 import MarkerDropPopup from '@/components/marker/MarkerDropPopup';
 import DirectMessaging from '@/components/DirectMessaging';
 import { uploadImageToImgBB } from '@/lib/services/imgbb';
-import { saveDropToFirestore, loadAllDrops, deleteUserDrops } from '@/lib/firebase/drops';
+import { saveDropToFirestore, loadAllDrops, deleteUserDrops, deleteDrop } from '@/lib/firebase/drops';
 import CrewChatPanel from '@/components/chat/CrewChatPanel';
 
 import { BlackbookPanel } from '@/components/blackbook/BlackbookPanel';
@@ -68,6 +68,7 @@ import SpotifyPlayer from '@/components/music/SpotifyPlayer';
 import SoundCloudPlayer from '@/components/music/SoundCloudPlayer';
 import { CREWS } from '@/data/crews';
 import { useGPSTracker } from '@/hooks/useGPSTracker';
+import { useMusicDrops } from '@/hooks/useMusicDrops';
 import { EnhancedErrorBoundary } from '@/src/components/ui/EnhancedErrorBoundary';
 import { ErrorRecoveryPanel } from '@/src/components/ui/ErrorRecoveryPanel';
 import { useErrorHandler } from '@/src/hooks/useErrorHandler';
@@ -77,12 +78,15 @@ import { SurfaceGraffitiSelector } from '@/components/ui/SurfaceGraffitiSelector
 import { RepNotification } from '@/components/ui/RepNotification';
 import SongUnlockModal from '@/components/ui/SongUnlockModal';
 import VideoUnlockModal from '@/components/ui/VideoUnlockModal';
+import RadarScanner from '@/components/map/RadarScanner';
 import { SPOTIFY_TRACKS, UNLOCKABLE_TRACKS, DEFAULT_TRACK, isSpotifyUrl, getSpotifyTrackName } from '@/constants/all_tracks';
 import { FACEBOOK_VIDEOS, getVideoName, getFacebookEmbedUrl, getRandomVideo } from '@/constants/videos';
 import { HIPHOP_TRACKS } from '@/constants/tracks';
 import { fullScreenStyle, loadingSpinnerStyle, panelBaseStyle, buttonBaseStyle, primaryButtonStyle, secondaryButtonStyle, successButtonStyle, dangerButtonStyle, inputBaseStyle, flexCenterStyle, flexBetweenStyle, flexColumnStyle, titleTextStyle, subtitleTextStyle, colors, gradients } from './pageStyles';
 import { MarkerName, MarkerDescription, Gender, MARKER_COLORS, MARKER_NAMES, MARKER_DESCRIPTIONS, CrewId } from '@/constants/markers';
 import { SurfaceType, GraffitiType } from '@/types';
+import { SURFACES } from '@/constants/surfaces';
+import { GRAFFITI_TYPES } from '@/constants/graffitiTypes';
 import { createSprayCanDivIcon } from '@/components/map/SprayCanIcon';
 import MemoizedMarker from '@/components/map/MemoizedMarker';
 import { getCrewColor } from '@/utils/crewTheme';
@@ -311,6 +315,11 @@ interface FirestoreMarker {
   distanceFromCenter: number | null;
   repEarned: number;
   specialType?: 'rainbow' | 'glow' | 'metallic' | null;
+  // New fields for surface and graffiti type
+  surface?: string;
+  graffitiType?: string;
+  styleId?: string;
+  crewId?: string;
 }
 
 // Custom hook for performance monitoring
@@ -396,8 +405,8 @@ const HomeComponent = () => {
   const [selectedSpecialType, setSelectedSpecialType] = useState<'rainbow' | 'glow' | 'metallic' | null>(null);
   
   // Surface and graffiti type states (new)
-  const [selectedSurface, setSelectedSurface] = useState<SurfaceType>('wall');
-  const [selectedGraffitiType, setSelectedGraffitiType] = useState<GraffitiType>('tag');
+  const [selectedSurface, setSelectedSurface] = useState<SurfaceType>('wall' as SurfaceType);
+  const [selectedGraffitiType, setSelectedGraffitiType] = useState<GraffitiType>('tag' as GraffitiType);
   
   // Radius expansion state (removed crew detection, keeping basic radius)
   const [expandedRadius, setExpandedRadius] = useState(50);
@@ -484,8 +493,14 @@ const HomeComponent = () => {
   // 🆕 Selected Music Drop for full-screen modal
   const [selectedMusicDrop, setSelectedMusicDrop] = useState<Drop | null>(null);
   
+  // 🆕 Drop replacement state
+  const [replacingDropId, setReplacingDropId] = useState<string | null>(null);
+  
   // 🆕 Selected Photo Drop for full-screen modal
   const [selectedPhotoDrop, setSelectedPhotoDrop] = useState<Drop | null>(null);
+  
+  // 🆕 Radar Scanner State
+  const [showRadarScanner, setShowRadarScanner] = useState(false);
   
   // 🆕 Song Unlock Modal state
   const [songUnlockModal, setSongUnlockModal] = useState<{
@@ -517,6 +532,16 @@ const HomeComponent = () => {
   
   // 🆕 GPS Scan animation state
   const [isScanning, setIsScanning] = useState(false);
+  
+  // 🆕 Music drop scanning state
+  const [isMusicScanning, setIsMusicScanning] = useState(false);
+  const [lastScanTime, setLastScanTime] = useState<number>(0);
+  const [discoveredTracks, setDiscoveredTracks] = useState<Array<{
+    trackUrl: string;
+    trackName: string;
+    source: string;
+    position: [number, number];
+  }>>([]);
   
   // ========== UNIFIED PANEL TOGGLE FUNCTION ==========
   const togglePanel = useCallback((panel: 'profile' | 'photos' | 'messages' | 'map' | 'music' | 'story' | 'colorpicker' | 'crewchat' | 'none') => {
@@ -657,6 +682,346 @@ const {
   stopTracking
 } = useGPSTracker();
 
+  // 🆕 MUSIC DROPS HOOK
+  const {
+    musicDrops,
+    activeMusicDrops,
+    discoveredMusicDrops,
+    isScanning: musicDropsScanning,
+    scanResults,
+    musicScan,
+    unlockMusicTrack,
+    discoverMusicDrop,
+    replaceMusicDropWithDropType
+  } = useMusicDrops(user, gpsPosition);
+
+  // 🆕 Handle music drop unlocking with proper state sync
+  const handleMusicDropUnlock = useCallback(async (drop: any) => {
+    if (!drop.discovered) return false;
+    
+    try {
+      // Call the hook's unlock function
+      const success = await unlockMusicTrack(drop);
+      
+      if (success && user && userProfile) {
+        // Update local state to sync with Firestore
+        const currentTracks = userProfile.unlockedTracks || [];
+        const newTracks = [...currentTracks, drop.trackUrl];
+        
+        // Update user profile state
+        setUserProfile(prev => prev ? {
+          ...prev,
+          unlockedTracks: newTracks
+        } : null);
+        
+        // Update local unlockedTracks state
+        setUnlockedTracks(newTracks);
+        
+        // Show success notification
+        setRepNotification({
+          show: true,
+          amount: drop.repReward || 15,
+          message: `🎵 Music Drop Unlocked: ${drop.trackName}!`
+        });
+        
+        console.log('🎵 Music drop unlocked and synced:', newTracks);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error handling music drop unlock:', error);
+      return false;
+    }
+  }, [user, userProfile, unlockMusicTrack]);
+
+  // 🆕 Replace discovered music drop with selected drop type
+  // 🆕 Handle music drop replacement with rewards
+  const handleMusicDropReplacement = useCallback(async (dropId: string, dropType: 'marker' | 'photo' | 'music') => {
+    if (!user || !userProfile) return null;
+    
+    try {
+      // 🆕 CAPTURE DROP DATA BEFORE REMOVAL - Get the original drop data for reward calculation
+      const originalDrop =
+        musicDrops.find(drop => drop.id === dropId) ||
+        drops.find(drop => drop.id === dropId || drop.firestoreId === dropId);
+      
+      if (!originalDrop) {
+        console.warn(`⚠️ Could not find original drop with ID: ${dropId}`);
+        return null;
+      }
+      
+      // 🆕 NOW remove the music drop from ephemeral hook state
+      const replacementData = replaceMusicDropWithDropType(dropId, dropType);
+
+      // Also remove from Firestore-backed drops (in case the user tapped a persisted drop)
+      setDrops(prev => prev.filter(d => d.id !== dropId && d.firestoreId !== dropId));
+
+      // If the drop existed in Firestore, delete it there too so other users can't still see it
+      const firestoreDrop = drops.find(d => d.id === dropId || d.firestoreId === dropId);
+      if (firestoreDrop && firestoreDrop.firestoreId) {
+        // fire-and-forget, we don't need to block the UI
+        deleteDrop(firestoreDrop.firestoreId).catch(err => console.error('Error deleting drop from Firestore:', err));
+      }
+      
+      if (!replacementData) {
+        console.warn('⚠️ Replacement data not found');
+        return null;
+      }
+      
+      // 🆕 CREATE NEW DROP AT THE SAME LOCATION
+      let newDropId: string | null = null;
+      let dropRepReward = 0;
+      const dropLat = 'position' in originalDrop ? originalDrop.position[0] : originalDrop.lat;
+      const dropLng = 'position' in originalDrop ? originalDrop.position[1] : originalDrop.lng;
+      
+      try {
+        if (dropType === 'marker') {
+          // Create a new marker drop - Awards 5 REP
+          dropRepReward = 5;
+          const newMarker: UserMarker = {
+            id: `temp-${Date.now()}`,
+            position: [dropLat, dropLng],
+            name: selectedMarkerType || 'Tag',
+            description: GRAFFITI_TO_MARKER_DESCRIPTION[selectedGraffitiType] || 'tag',
+            color: selectedMarkerColor,
+            timestamp: new Date(),
+            userId: user.uid,
+            username: userProfile.username,
+            userProfilePic: userProfile.profilePicUrl,
+            surface: selectedSurface as any,
+            graffitiType: selectedGraffitiType as any,
+            specialType: selectedSpecialType,
+            styleId: userProfileRef.current?.selectedGraffitiStyle
+          };
+          newDropId = await saveMarkerToFirestore(newMarker);
+        } else if (dropType === 'photo') {
+          // Create a new photo drop - Awards 10 REP
+          dropRepReward = 10;
+          const newPhotoDrop: Drop = {
+            lat: dropLat,
+            lng: dropLng,
+            photoUrl: 'https://via.placeholder.com/400x400?text=Music+Drop+Replacement',
+            createdBy: user.uid,
+            timestamp: new Date(),
+            likes: [],
+            username: userProfile.username,
+            userProfilePic: userProfile.profilePicUrl
+          };
+          newDropId = await saveDropToFirestore(newPhotoDrop);
+        } else if (dropType === 'music') {
+          // Create a new music drop - Awards 0 REP (but consumes a track)
+          dropRepReward = 0;
+          const tracks = userProfile.unlockedTracks ?? unlockedTracks;
+          if (tracks.length > 0) {
+            const trackToDrop = tracks[0];
+            const newMusicDrop: Drop = {
+              lat: dropLat,
+              lng: dropLng,
+              trackUrl: trackToDrop,
+              createdBy: user.uid,
+              timestamp: new Date(),
+              likes: [],
+              username: userProfile.username,
+              userProfilePic: userProfile.profilePicUrl
+            };
+            newDropId = await saveDropToFirestore(newMusicDrop);
+            
+            // Update user profile to remove the used track
+            const newTracks = tracks.filter(t => t !== trackToDrop);
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, {
+              unlockedTracks: newTracks,
+              lastActive: Timestamp.now()
+            });
+            setUserProfile(prev => prev ? { ...prev, unlockedTracks: newTracks } : null);
+            setUnlockedTracks(newTracks);
+          }
+        }
+        
+        if (newDropId) {
+          console.log(`✅ New ${dropType} drop created at [${dropLat}, ${dropLng}] - REP: +${dropRepReward}`);
+          // Refresh drops list
+          await loadDrops();
+          await loadAllMarkers();
+        }
+      } catch (error) {
+        console.error(`❌ Error creating ${dropType} drop:`, error);
+      }
+      
+      // Calculate rewards based on replacement type
+      let rewardTrackUrl = '';
+      let rewardTrackName = '';
+      let rewardSource = '';
+      let rewardMessage = '';
+      
+      switch (dropType) {
+        case 'marker':
+          // Marker drop replacement unlocks Spotify track
+          const currentTracks = userProfile.unlockedTracks || [];
+          const spotifyResult = unlockRandomSpotifyTrack(currentTracks);
+          
+          if (spotifyResult.newlyUnlocked) {
+            rewardTrackUrl = spotifyResult.newlyUnlocked.url;
+            rewardTrackName = spotifyResult.newlyUnlocked.name;
+            rewardSource = 'Spotify';
+            rewardMessage = `🎵 Marker Drop Replacement: Unlocked ${rewardTrackName}!`;
+            
+            // Update user profile with new track
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, {
+              unlockedTracks: spotifyResult.newTracks,
+              lastActive: Timestamp.now()
+            });
+            
+            setUserProfile(prev => prev ? {
+              ...prev,
+              unlockedTracks: spotifyResult.newTracks
+            } : null);
+            
+            setUnlockedTracks(spotifyResult.newTracks);
+            
+            // 🆕 Show unlock celebration modal
+            setSongUnlockModal({
+              isOpen: true,
+              trackUrl: rewardTrackUrl,
+              trackName: rewardTrackName,
+              source: 'MARKER DROP REPLACEMENT'
+            });
+          } else {
+            rewardMessage = '🎵 Marker Drop Replacement: All Spotify tracks already unlocked!';
+          }
+          break;
+          
+        case 'photo':
+          // Photo drop replacement unlocks SoundCloud track
+          const photoTracks = userProfile.unlockedTracks || [];
+          const soundcloudResult = unlockRandomSoundCloudTrack(photoTracks);
+          
+          if (soundcloudResult.newlyUnlocked) {
+            rewardTrackUrl = soundcloudResult.newlyUnlocked.url;
+            rewardTrackName = soundcloudResult.newlyUnlocked.name;
+            rewardSource = 'SoundCloud';
+            rewardMessage = `🎵 Photo Drop Replacement: Unlocked ${rewardTrackName}!`;
+            
+            // Update user profile with new track
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, {
+              unlockedTracks: soundcloudResult.newTracks,
+              lastActive: Timestamp.now()
+            });
+            
+            setUserProfile(prev => prev ? {
+              ...prev,
+              unlockedTracks: soundcloudResult.newTracks
+            } : null);
+            
+            setUnlockedTracks(soundcloudResult.newTracks);
+            
+            // 🆕 Show unlock celebration modal
+            setSongUnlockModal({
+              isOpen: true,
+              trackUrl: rewardTrackUrl,
+              trackName: rewardTrackName,
+              source: 'PHOTO DROP REPLACEMENT'
+            });
+          } else {
+            rewardMessage = '🎵 Photo Drop Replacement: All SoundCloud tracks already unlocked!';
+          }
+          break;
+          
+        case 'music':
+          // Music drop replacement unlocks Facebook video
+          const currentVideos = userProfile.unlockedVideos || [];
+          const availableVideos = FACEBOOK_VIDEOS.filter(v => !currentVideos.includes(v));
+          
+          if (availableVideos.length > 0) {
+            const randomVideo = availableVideos[Math.floor(Math.random() * availableVideos.length)];
+            const newVideos = [...currentVideos, randomVideo];
+            
+            rewardTrackUrl = randomVideo;
+            rewardTrackName = getVideoName(randomVideo);
+            rewardSource = 'Facebook Video';
+            rewardMessage = `🎬 Music Drop Replacement: Unlocked ${rewardTrackName}!`;
+            
+            // Update user profile with new video
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, {
+              unlockedVideos: newVideos,
+              lastActive: Timestamp.now()
+            });
+            
+            setUserProfile(prev => prev ? {
+              ...prev,
+              unlockedVideos: newVideos
+            } : null);
+            
+            // Show video unlock modal
+            setVideoUnlockModal({
+              isOpen: true,
+              videoUrl: randomVideo,
+              source: 'MUSIC DROP REPLACEMENT'
+            });
+          } else {
+            rewardMessage = '🎬 Music Drop Replacement: All Facebook videos already unlocked!';
+          }
+          break;
+      }
+      
+      // 🆕 Enhanced logging before notification
+      const repAmount = ('repReward' in originalDrop ? originalDrop.repReward : 15) || 15;
+      const totalRep = repAmount + dropRepReward;
+      
+      console.log(`✅ Ready to show replacement notification:`, {
+        dropType,
+        originalDropTrackName: ('trackName' in originalDrop ? originalDrop.trackName : 'Unknown'),
+        rewardMessage,
+        rewardTrackName,
+        unlockedReward: repAmount,
+        newDropReward: dropRepReward,
+        totalRep
+      });
+      
+      // 🆕 Update notification message to include new drop REP
+      let finalMessage = rewardMessage;
+      if (dropRepReward > 0) {
+        finalMessage += ` (+${dropRepReward} REP for new ${dropType} drop)`;
+      }
+      
+      // Show success notification with total REP
+      setRepNotification({
+        show: true,
+        amount: totalRep,
+        message: finalMessage
+      });
+      
+      // Set recently unlocked track for music panel display (if it's a track)
+      if (rewardTrackUrl && rewardSource !== 'Facebook Video') {
+        setRecentlyUnlocked({
+          url: rewardTrackUrl,
+          name: rewardTrackName,
+          source: rewardSource as 'Spotify' | 'SoundCloud'
+        });
+      }
+      
+      console.log(`🎵 ${dropType} drop replacement completed:`, {
+        originalDrop: 'trackName' in originalDrop ? originalDrop.trackName : 'Unknown',
+        reward: rewardTrackName,
+        source: rewardSource,
+        totalRepRewarded: totalRep
+      });
+      
+      // Close the music drop popup and reset modal
+      setSelectedMusicDrop(null);
+      setShowDropTypeModal(false);
+      setPendingDropPosition(null);
+      
+      return replacementData;
+    } catch (error) {
+      console.error('Error handling music drop replacement:', error);
+      return null;
+    }
+  }, [user, userProfile, replaceMusicDropWithDropType, setSelectedMusicDrop, drops]);
 
   // 🆕 TIME OF DAY HOOK - Day/Night weather system
   const { 
@@ -736,15 +1101,18 @@ const {
     };
   }, []);
 
-  // ========== AUTOPLAY MUSIC ON MAP LOAD ==========
+  // ========== AUTOPLAY MUSIC ON MAP LOAD - MOBILE OPTIMIZED ==========
   useEffect(() => {
     // Only try autoplay if we have tracks and haven't attempted yet
     if (unlockedTracks.length > 0 && !isPlaying) {
-      // Small delay to ensure iframe is mounted
+      // Mobile devices get longer delay to prevent performance issues
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const delay = isMobile ? 2000 : 1000; // 2s for mobile, 1s for desktop
+      
       const autoplayTimer = setTimeout(() => {
         setIsPlaying(true);
         console.log('Attempting autoplay...');
-      }, 1000);
+      }, delay);
       
       return () => clearTimeout(autoplayTimer);
     }
@@ -842,32 +1210,31 @@ const {
       );
       
       const querySnapshot = await getDocs(q);
-      const loadedMarkers: UserMarker[] = [];
-      
-      querySnapshot.forEach((doc) => {
-        const data = doc.data() as FirestoreMarker;
-        loadedMarkers.push({
-          id: `marker-${doc.id}`,
-          firestoreId: doc.id,
-          position: data.position,
-          name: data.name as MarkerName,
-          description: data.description as MarkerDescription,
-          color: data.color || '#10b981',
-          timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(),
-          userId: data.userId,
-          username: data.username || 'Anonymous',
-          userProfilePic: data.userProfilePic || generateAvatarUrl(data.userId, data.username),
-          distanceFromCenter: data.distanceFromCenter ?? undefined,
-          repEarned: data.repEarned || 0,
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
-          specialType: data.specialType || null,
-          // Load missing style fields
-          surface: data.surface || 'wall',
-          graffitiType: data.graffitiType || 'tag',
-          styleId: data.styleId,
-          crewId: data.crewId || 'bqc'
+        const loadedMarkers: UserMarker[] = [];
+        
+        querySnapshot.forEach((doc) => {
+          const data = doc.data() as FirestoreMarker;
+          loadedMarkers.push({
+            id: `marker-${doc.id}`,
+            firestoreId: doc.id,
+            position: data.position,
+            name: data.name as MarkerName,
+            description: data.description as MarkerDescription,
+            color: data.color || '#10b981',
+            timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(),
+            userId: data.userId,
+            username: data.username || 'Anonymous',
+            userProfilePic: data.userProfilePic || generateAvatarUrl(data.userId, data.username),
+            distanceFromCenter: data.distanceFromCenter ?? undefined,
+            repEarned: data.repEarned || 0,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+            specialType: data.specialType || null,
+            // Load missing style fields with proper defaults
+            surface: 'wall' as any,
+            graffitiType: 'tag' as any,
+            styleId: data.styleId || undefined
+          });
         });
-      });
       
       loadedMarkers.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
       setUserMarkers(loadedMarkers);
@@ -1352,6 +1719,54 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     }
   }, [userProfile?.unlockedTracks]);
 
+  // 🎵 Handle track collection from Spotify player
+  const handleCollectTrack = useCallback(async (trackUrl: string, trackName: string) => {
+    if (!user || !userProfile) {
+      alert('Please sign in first!');
+      return;
+    }
+
+    // Check if track is already collected
+    const currentTracks = userProfile.unlockedTracks || [];
+    if (currentTracks.includes(trackUrl)) {
+      alert('🎵 This track is already in your collection!');
+      return;
+    }
+
+    try {
+      // Add track to collection
+      const newTracks = [...currentTracks, trackUrl];
+      
+      // Update Firestore
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        unlockedTracks: newTracks,
+        lastActive: Timestamp.now()
+      });
+      
+      // Update local state
+      setUserProfile(prev => prev ? {
+        ...prev,
+        unlockedTracks: newTracks
+      } : null);
+      
+      setUnlockedTracks(newTracks);
+      
+      // Show success notification
+      setRepNotification({
+        show: true,
+        amount: 0,
+        message: `🎵 Track Collected: ${trackName}!`
+      });
+      
+      console.log('🎵 Track collected successfully:', trackName);
+      
+    } catch (error) {
+      console.error('Error collecting track:', error);
+      alert('Failed to collect track. Please try again.');
+    }
+  }, [user, userProfile]);
+
   // Dynamic logo functions
   const getLogoSrc = (crewId: CrewId | null | undefined): string => {
     // Map crew IDs to logo files
@@ -1800,6 +2215,14 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       return;
     }
 
+    // 🆕 Check if we're replacing a discovered music drop
+    if (selectedMusicDrop && selectedMusicDrop.discovered) {
+      await handleMusicDropReplacement(selectedMusicDrop.id, 'marker');
+      setSelectedMusicDrop(null);
+      setShowDropTypeModal(false);
+      return;
+    }
+
     // 🚫 Rate limit: Set loading state with safety timeout
     setIsCreatingDrop(true);
     
@@ -1838,8 +2261,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         username: currentUserProfile?.username,
         userProfilePic: currentUserProfile?.profilePicUrl,
         // New surface and graffiti type fields
-        surface: selectedSurface,
-        graffitiType: selectedGraffitiType,
+        surface: selectedSurface as any,
+        graffitiType: selectedGraffitiType as any,
         // Special color effect
         specialType: selectedSpecialType,
         // Selected graffiti style from Blackbook
@@ -1928,12 +2351,29 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
   }, [user, userProfile, pendingDropPosition, selectedMarkerType, selectedMarkerColor, selectedSurface, selectedGraffitiType, loadDrops, loadAllMarkers, loadTopPlayers]);
 
   const handlePhotoDrop = useCallback(() => {
+    // 🆕 Check if we're replacing a discovered music drop
+    if (selectedMusicDrop && selectedMusicDrop.discovered) {
+      handleMusicDropReplacement(selectedMusicDrop.id, 'photo');
+      setSelectedMusicDrop(null);
+      setShowDropTypeModal(false);
+      return;
+    }
+
     setShowDropTypeModal(false);
     setShowPhotoModal(true);
-  }, []);
+  }, [selectedMusicDrop, handleMusicDropReplacement]);
 
   const handleMusicDrop = useCallback(async (trackUrl?: string) => {
     if (!user || !userProfile || !pendingDropPosition) return;
+    
+    // 🆕 Check if we're replacing a discovered music drop
+    if (selectedMusicDrop && selectedMusicDrop.discovered) {
+      await handleMusicDropReplacement(selectedMusicDrop.id, 'music');
+      setSelectedMusicDrop(null);
+      setShowDropTypeModal(false);
+      return;
+    }
+    
     const tracks = userProfile.unlockedTracks ?? unlockedTracks;
     if (tracks.length === 0) return;
 
@@ -2116,14 +2556,37 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       setZoom(18);
       mapRef.current.setView(gpsPosition, 18);
       
-      // Stop the scan animation after 2.5 seconds
-      setTimeout(() => {
-        setIsScanning(false);
-      }, 2500);
+      // Scan for music drops during the GPS scan animation - use 150m radius
+      if (musicScan) {
+        const discoveredTracks = musicScan(gpsPosition, 150);
+        
+        // Show discovered tracks notification after scan animation
+        setTimeout(() => {
+          if (discoveredTracks && discoveredTracks.length > 0) {
+            setRepNotification({
+              show: true,
+              amount: 0,
+              message: `🎵 GPS Scan Complete: Found ${discoveredTracks.length} track${discoveredTracks.length > 1 ? 's' : ''}!`
+            });
+          } else {
+            setRepNotification({
+              show: true,
+              amount: 0,
+              message: '🎵 GPS Scan Complete: No tracks found in range.'
+            });
+          }
+          setIsScanning(false);
+        }, 2500);
+      } else {
+        // Fallback if musicScan is not available
+        setTimeout(() => {
+          setIsScanning(false);
+        }, 2500);
+      }
     } else {
       alert('GPS location not available. Please enable location services.');
     }
-  }, [gpsPosition]);
+  }, [gpsPosition, musicScan]);
 
   const updateMarker = (id: string, updates: Partial<UserMarker>) => {
     setUserMarkers(prev => 
@@ -3370,17 +3833,76 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         })}
 
         {/* Full-Screen Music Drop Modal */}
-        {selectedMusicDrop && (
+        {selectedMusicDrop && selectedMusicDrop.trackUrl && (
           <MusicDropPopup
-            drop={selectedMusicDrop}
-            user={user}
-            onLikeUpdate={(dropId: string, newLikes: string[]) => {
-              setDrops(prev =>
-                prev.map((d: any) =>
-                  d.firestoreId === dropId ? { ...d, likes: newLikes } : d
-                )
-              );
+            drop={{
+              id: selectedMusicDrop.id || selectedMusicDrop.firestoreId || '',
+              lat: selectedMusicDrop.lat || (selectedMusicDrop as any)?.position?.[0] || 0,
+              lng: selectedMusicDrop.lng || (selectedMusicDrop as any)?.position?.[1] || 0,
+              trackUrl: selectedMusicDrop.trackUrl,
+              trackName: selectedMusicDrop.trackName || getTrackNameFromUrlHelper(selectedMusicDrop.trackUrl),
+              source: selectedMusicDrop.source || getTrackSource(selectedMusicDrop.trackUrl),
+              createdBy: user?.uid || '',
+              timestamp: selectedMusicDrop.timestamp || (selectedMusicDrop as any)?.discoveredAt || new Date(),
+              likes: [],
+              username: userProfile?.username || 'Unknown',
+              userProfilePic: userProfile?.profilePicUrl || generateAvatarUrl(user?.uid || '', userProfile?.username || 'Unknown'),
+              discovered: true,
+              discoveredAt: (selectedMusicDrop as any)?.discoveredAt || new Date(),
+              repReward: (selectedMusicDrop as any)?.repReward || 15,
+              spawnTime: (selectedMusicDrop as any)?.spawnTime || new Date(),
+              expiresAt: (selectedMusicDrop as any)?.expiresAt || new Date(Date.now() + 30 * 60 * 1000)
             }}
+            onUnlockTrack={async (drop) => {
+              // Handle both Drop and MusicDrop types
+              let musicDrop: any;
+              
+              if ('lat' in drop) {
+                // It's a Drop type, convert to MusicDrop
+                musicDrop = {
+                  id: drop.id || '',
+                  position: [drop.lat, drop.lng],
+                  trackUrl: drop.trackUrl || '',
+                  trackName: drop.trackName || '',
+                  source: drop.source || 'Spotify',
+                  discovered: true,
+                  discoveredAt: new Date(),
+                  repReward: 15,
+                  spawnTime: drop.timestamp || new Date(),
+                  expiresAt: new Date(Date.now() + 30 * 60 * 1000)
+                };
+              } else {
+                // It's already a MusicDrop
+                musicDrop = drop;
+              }
+              
+              // Call the hook's unlock function
+              const success = await unlockMusicTrack(musicDrop);
+              
+              if (success) {
+                // Update local unlockedTracks state to sync with Firestore
+                if (userProfile) {
+                  const newTracks = [...(userProfile.unlockedTracks || []), musicDrop.trackUrl || ''];
+                  setUserProfile(prev => prev ? {
+                    ...prev,
+                    unlockedTracks: newTracks
+                  } : null);
+                  setUnlockedTracks(newTracks);
+                  
+                  // Show success notification
+                  setRepNotification({
+                    show: true,
+                    amount: musicDrop.repReward || 15,
+                    message: `🎵 Music Drop Unlocked: ${musicDrop.trackName || 'Unknown Track'}!`
+                  });
+                }
+              }
+              
+              // Return void as expected by the component
+            }}
+            onCollectTrack={handleCollectTrack}
+            isTrackCollected={userProfile?.unlockedTracks?.includes(selectedMusicDrop.trackUrl) || false}
+            onReplaceWithDropType={handleMusicDropReplacement}
             onClose={() => setSelectedMusicDrop(null)}
           />
         )}
@@ -3456,7 +3978,111 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           );
         })}
 
-        {/* East Auckland location markers */}
+        {/* Random Music Drops */}
+        {musicDrops.map((drop) => (
+          <Marker
+            key={drop.id}
+            position={[drop.position[0], drop.position[1]]}
+            icon={(() => {
+              // Create a custom icon using the MusicDropMarker component
+              const element = document.createElement('div');
+              // We'll render the MusicDropMarker to this element
+              // For now, use a simple icon
+              return new (require('leaflet').DivIcon)({
+                html: `
+                  <div style="
+                    position: relative;
+                    width: 36px;
+                    height: 36px;
+                    background: ${drop.discovered 
+                      ? 'radial-gradient(circle, #8b5cf6 0%, #7c3aed 50%, #6d28d9 100%)'
+                      : 'radial-gradient(circle, #64748b 0%, #475569 50%, #334155 100%)'};
+                    border: 3px solid white;
+                    border-radius: 50%;
+                    box-shadow: ${drop.discovered
+                      ? '0 4px 15px rgba(139, 92, 246, 0.6), 0 0 20px rgba(139, 92, 246, 0.3)'
+                      : '0 4px 15px rgba(100, 116, 139, 0.6), 0 0 20px rgba(100, 116, 139, 0.3)'};
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    animation: ${drop.discovered ? 'pulseGlow 2s ease-in-out infinite' : 'none'};
+                    cursor: pointer;
+                    filter: ${drop.discovered ? 'grayscale(0%)' : 'grayscale(100%) brightness(0.5)'};
+                  ">
+                    <span style="font-size: 18px; ${drop.discovered ? '' : 'filter: brightness(0.5);'}">🎵</span>
+                    ${drop.discovered ? `
+                      <div style="
+                        position: absolute;
+                        top: -8px;
+                        right: -8px;
+                        width: 16px;
+                        height: 16px;
+                        background: #10b981;
+                        border: 2px solid white;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 10px;
+                        font-weight: bold;
+                      ">
+                        ✓
+                      </div>
+                    ` : ''}
+                  </div>
+                  <style>
+                    @keyframes pulseGlow {
+                      0%, 100% { 
+                        box-shadow: 0 4px 15px rgba(139, 92, 246, 0.6), 0 0 20px rgba(139, 92, 246, 0.3);
+                      }
+                      50% { 
+                        box-shadow: 0 6px 25px rgba(139, 92, 246, 0.8), 0 0 35px rgba(139, 92, 246, 0.5);
+                      }
+                    }
+                  </style>
+                `,
+                iconSize: [36, 36],
+                iconAnchor: [18, 18],
+                popupAnchor: [0, -18]
+              });
+            })()}
+            eventHandlers={{
+              click: () => {
+                if (drop.discovered) {
+                  // Open DropTypeModal to replace the discovered drop
+                  setPendingDropPosition({ 
+                    lat: drop.position[0], 
+                    lng: drop.position[1] 
+                  });
+                  setSelectedMusicDrop({
+                    id: drop.id,
+                    lat: drop.position[0],
+                    lng: drop.position[1],
+                    trackUrl: drop.trackUrl,
+                    trackName: drop.trackName,
+                    source: drop.source,
+                    createdBy: user?.uid || '',
+                    timestamp: new Date(),
+                    likes: [],
+                    username: userProfile?.username || 'Unknown',
+                    userProfilePic: userProfile?.profilePicUrl || generateAvatarUrl(user?.uid || '', userProfile?.username || 'Unknown'),
+                    discovered: true,
+                    discoveredAt: drop.discoveredAt || new Date(),
+                    repReward: drop.repReward,
+                    spawnTime: drop.spawnTime,
+                    expiresAt: drop.expiresAt
+                  } as any);
+                  setShowDropTypeModal(true);
+
+                  if (mapRef.current) {
+                    mapRef.current.closePopup();
+                  }
+                }
+                // Undiscovered drops remain unclickable - do nothing
+              }
+            }}
+          />
+        ))}
         {(!gpsPosition || !isTracking) && Object.entries(newZealandLocations).map(([name, info]) => (
           <Marker 
             key={name} 
@@ -3493,6 +4119,140 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           </Marker>
         ))}
       </MapContainer>
+
+        {/* Map Control Buttons */}
+        {gpsPosition && (
+          <div style={{
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            zIndex: 1000,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}>
+            {/* Button 6 - Music Scan */}
+            <button
+              onClick={() => {
+                console.log('Music Scan clicked');
+                if (musicScan) {
+                  musicScan();
+                }
+              }}
+              disabled={musicDropsScanning}
+              style={{
+                width: '50px',
+                height: '50px',
+                padding: '0',
+                border: `2px solid ${musicDropsScanning ? '#8b5cf6' : '#8b5cf6'}`,
+                borderRadius: '8px',
+                backgroundColor: musicDropsScanning ? 'rgba(139, 92, 246, 0.8)' : 'rgba(139, 92, 246, 0.9)',
+                cursor: musicDropsScanning ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '20px',
+                boxShadow: '0 2px 5px rgba(139, 92, 246, 0.4)',
+                transition: 'all 0.2s ease',
+                position: 'relative',
+              }}
+              onMouseEnter={(e) => {
+                if (!musicDropsScanning) {
+                  e.currentTarget.style.backgroundColor = 'rgba(124, 58, 237, 0.95)';
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!musicDropsScanning) {
+                  e.currentTarget.style.backgroundColor = 'rgba(139, 92, 246, 0.9)';
+                  e.currentTarget.style.transform = 'scale(1)';
+                }
+              }}
+              title="🎵 Scan for Music Drops (300m)"
+            >
+              <div style={{
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '100%',
+                height: '100%'
+              }}>
+                <div style={{
+                  fontSize: '20px',
+                  color: 'white',
+                  position: 'relative'
+                }}>
+                  🎵
+                </div>
+              </div>
+            </button>
+
+            {/* Radar Scanner Button */}
+            <button
+              onClick={() => {
+                console.log('Radar Scanner clicked');
+                setShowRadarScanner(true);
+              }}
+              style={{
+                width: '50px',
+                height: '50px',
+                padding: '0',
+                border: '2px solid #3b82f6',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(59, 130, 246, 0.9)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '20px',
+                boxShadow: '0 2px 5px rgba(59, 130, 246, 0.4)',
+                transition: 'all 0.2s ease',
+                position: 'relative',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(30, 64, 175, 0.95)';
+                e.currentTarget.style.transform = 'scale(1.05)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.9)';
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
+              title="📡 Radar Scanner (300m)"
+            >
+              <div style={{
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '100%',
+                height: '100%'
+              }}>
+                <div style={{
+                  fontSize: '20px',
+                  color: 'white',
+                  position: 'relative'
+                }}>
+                  📡
+                </div>
+                {/* Active indicator when scanner is open */}
+                {showRadarScanner && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '-2px',
+                    right: '-2px',
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    background: '#10b981',
+                    boxShadow: '0 0 8px #10b981',
+                    animation: 'pulse 1s infinite'
+                  }} />
+                )}
+              </div>
+            </button>
+          </div>
+        )}
 
       {/* Drop Type Selection Modal */}
       <DropTypeModal

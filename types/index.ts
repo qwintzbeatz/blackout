@@ -6,6 +6,7 @@ import { GraffitiType } from '@/constants/graffitiTypes';
 // Re-export for convenience
 export type { SurfaceType } from '@/constants/surfaces';
 export type { GraffitiType } from '@/constants/graffitiTypes';
+export type { Gender } from '@/constants/markers';
 
 export interface UserProfile {
   uid: string;

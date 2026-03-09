@@ -7,22 +7,46 @@ import { User as FirebaseUser } from "firebase/auth";
 import { getTrackNameFromUrl, getTrackPlatform, isSpotifyUrl, getSpotifyEmbedUrl, getSoundCloudEmbedUrl } from "@/lib/utils/dropHelpers";
 import { deleteDrop, likeDrop, unlikeDrop } from "@/lib/firebase/drops";
 
-interface MusicDropPopupProps {
-  drop: Drop;
-  user: FirebaseUser | null;
-  onLikeUpdate: (dropId: string, newLikes: string[]) => void;
-  onClose?: () => void;
+// MusicDrop type for the hook
+interface MusicDrop {
+  id: string;
+  position: [number, number];
+  trackUrl: string;
+  trackName: string;
+  source: string;
+  discovered: boolean;
+  discoveredAt: Date;
+  repReward: number;
+  spawnTime: Date;
+  expiresAt: Date;
 }
 
-const MusicDropPopup: React.FC<MusicDropPopupProps> = ({ drop, user, onLikeUpdate, onClose }) => {
+// Type guard to check if a drop has likes property (i.e., it's a Firestore Drop)
+function hasLikesProperty(drop: (Drop & { position?: [number, number] }) | MusicDrop): drop is Drop & { position?: [number, number] } {
+  return 'likes' in drop;
+}
+
+interface MusicDropPopupProps {
+  drop: (Drop & { position?: [number, number] }) | MusicDrop;
+  onClose: () => void;
+  onUnlockTrack: (drop: (Drop & { position?: [number, number] }) | MusicDrop) => Promise<void>;
+  user?: FirebaseUser | null;
+  onLikeUpdate?: (dropId: string, newLikes: string[]) => void;
+  onCollectTrack?: (trackUrl: string, trackName: string) => void;
+  isTrackCollected?: boolean;
+  onReplaceWithDropType?: (dropId: string, dropType: 'marker' | 'photo' | 'music') => void;
+}
+
+const MusicDropPopup: React.FC<MusicDropPopupProps> = (props) => {
+  const { drop, user, onLikeUpdate, onClose, isTrackCollected } = props;
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(drop.likes?.length || 0);
+  const [likeCount, setLikeCount] = useState(0);
   const [embedUrl, setEmbedUrl] = useState<string>("");
   const [isDeleting, setIsDeleting] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   
-  const isOwner = user?.uid === drop.createdBy;
+  const isOwner = user?.uid === ('createdBy' in drop ? drop.createdBy : undefined);
   const isSpotify = isSpotifyUrl(drop.trackUrl || "");
   const isSoundCloud = drop.trackUrl?.includes('soundcloud.com') || false;
   const trackPlatform = getTrackPlatform(drop.trackUrl || "");
@@ -38,16 +62,18 @@ const MusicDropPopup: React.FC<MusicDropPopupProps> = ({ drop, user, onLikeUpdat
   }, [isSpotify, isSoundCloud, drop.trackUrl]);
 
   useEffect(() => {
-    if (drop.likes && user) {
+    // Only handle likes for Drop type (Firestore drops), not MusicDrop type
+    // Use type guard to safely check if drop has likes property
+    if (hasLikesProperty(drop) && drop.likes && user) {
       setIsLiked(drop.likes.includes(user.uid));
       setLikeCount(drop.likes.length);
     }
-  }, [drop.likes, user]);
+  }, [drop, user]); // Use drop as dependency instead of drop.likes
 
   const handleLike = async () => {
     if (!user) return;
     
-    const firestoreId = drop.firestoreId || drop.id;
+    const firestoreId = 'firestoreId' in drop ? drop.firestoreId || drop.id : drop.id;
     if (!firestoreId) return;
 
     try {
@@ -61,12 +87,14 @@ const MusicDropPopup: React.FC<MusicDropPopupProps> = ({ drop, user, onLikeUpdat
       
       if (success) {
         const newLikes = isLiked 
-          ? drop.likes?.filter((id) => id !== user.uid) || [] 
-          : [...(drop.likes || []), user.uid];
+          ? ('likes' in drop && drop.likes ? drop.likes.filter((id) => id !== user.uid) : []) 
+          : ('likes' in drop && drop.likes ? [...drop.likes, user.uid] : [user.uid]);
         
         setIsLiked(!isLiked);
         setLikeCount(newLikes.length);
-        onLikeUpdate(firestoreId, newLikes);
+        if (onLikeUpdate) {
+          onLikeUpdate(firestoreId, newLikes);
+        }
       }
     } catch (error) {
       console.error('Error updating like:', error);
@@ -87,7 +115,7 @@ const MusicDropPopup: React.FC<MusicDropPopupProps> = ({ drop, user, onLikeUpdat
   const handleDelete = async () => {
     if (!user || !isOwner) return;
     
-    const firestoreId = drop.firestoreId || drop.id;
+    const firestoreId = 'firestoreId' in drop ? drop.firestoreId || drop.id : drop.id;
     if (!firestoreId) return;
 
     if (!window.confirm('Are you sure you want to delete this music drop? This action cannot be undone.')) {
@@ -185,7 +213,7 @@ const MusicDropPopup: React.FC<MusicDropPopupProps> = ({ drop, user, onLikeUpdat
             }}>
               🎵 {trackPlatform || "Track"}
             </div>
-            <span style={{ fontSize: "12px", color: "#64748b" }}>{formatTimeAgo(drop.timestamp)}</span>
+            <span style={{ fontSize: "12px", color: "#64748b" }}>{'timestamp' in drop ? formatTimeAgo(drop.timestamp) : 'Unknown time'}</span>
             {isOwner && (
               <span style={{
                 fontSize: "10px",
@@ -204,19 +232,19 @@ const MusicDropPopup: React.FC<MusicDropPopupProps> = ({ drop, user, onLikeUpdat
           <h2 style={{ fontSize: "24px", fontWeight: "700", color: "#fff", margin: "0 0 12px", lineHeight: 1.2 }}>{trackName}</h2>
 
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            {drop.userProfilePic ? (
+            {'userProfilePic' in drop && drop.userProfilePic ? (
               <img src={drop.userProfilePic} alt={drop.username} style={{ width: "28px", height: "28px", borderRadius: "50%", border: "2px solid " + accentColor, objectFit: "cover" }} />
             ) : (
               <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: accentColor, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: "bold", color: "white" }}>
-                {(drop.username || "a")[0]?.toUpperCase()}
+                {('username' in drop && drop.username) ? (drop.username || "a")[0]?.toUpperCase() : "A"}
               </div>
             )}
-            <span style={{ fontSize: "14px", color: "#94a3b8" }}>{drop.username}</span>
+            <span style={{ fontSize: "14px", color: "#94a3b8" }}>{'username' in drop ? drop.username : 'Unknown'}</span>
           </div>
         </div>
 
         <div style={{ padding: "20px 24px", flex: 1 }}>
-          {drop.photoUrl ? (
+          {'photoUrl' in drop && drop.photoUrl ? (
             <div style={{ width: "100%", height: "180px", background: "url(" + drop.photoUrl + ") center/cover", borderRadius: "16px", position: "relative", boxShadow: "0 10px 30px rgba(0, 0, 0, 0.4)" }}>
               <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(26, 26, 46, 0.95) 0%, transparent 50%)", borderRadius: "16px" }} />
               <div style={{ position: "absolute", bottom: "12px", left: "16px" }}>
@@ -298,7 +326,7 @@ const MusicDropPopup: React.FC<MusicDropPopupProps> = ({ drop, user, onLikeUpdat
 
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: "14px", fontWeight: "600", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{trackName}</div>
-            <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>{drop.username}</div>
+            <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>{'username' in drop ? drop.username : 'Unknown'}</div>
           </div>
 
           <button onClick={handleLike} disabled={!user} style={{
@@ -318,7 +346,144 @@ const MusicDropPopup: React.FC<MusicDropPopupProps> = ({ drop, user, onLikeUpdat
             </svg>
           </button>
           <span style={{ fontSize: "13px", color: isLiked ? "#ef4444" : "#64748b", fontWeight: "600" }}>{likeCount}</span>
+          
+          {/* Track Collection Status */}
+          {isTrackCollected && (
+            <div style={{
+              marginLeft: "auto",
+              background: "rgba(16, 185, 129, 0.2)",
+              border: "1px solid rgba(16, 185, 129, 0.4)",
+              color: "#10b981",
+              padding: "6px 12px",
+              borderRadius: "12px",
+              fontSize: "12px",
+              fontWeight: "bold",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px"
+            }}>
+              <span>🎵</span>
+              Collected
+            </div>
+          )}
         </div>
+
+        {/* Drop Type Selection for Discovered Music Drops with No Song */}
+        {'discovered' in drop && drop.discovered && (!drop.trackUrl || !drop.trackName) && (
+          <div style={{ padding: "20px 24px 28px", borderTop: "1px solid rgba(255, 255, 255, 0.1)" }}>
+            <div style={{ fontSize: "14px", fontWeight: "600", color: "#fff", marginBottom: "16px", textAlign: "center" }}>
+              Choose Your Reward
+            </div>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+              {/* Marker Option */}
+              <button 
+                onClick={() => {
+                  if (props.onReplaceWithDropType) {
+                    props.onReplaceWithDropType(drop.id, 'marker');
+                  }
+                }}
+                style={{
+                  padding: "16px 12px",
+                  background: "linear-gradient(135deg, #10b981, #059669)",
+                  border: "1px solid rgba(16, 185, 129, 0.5)",
+                  borderRadius: "12px",
+                  color: "white",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "8px",
+                  transition: "transform 0.2s, opacity 0.2s",
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.opacity = "0.9";
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.opacity = "1";
+                }}
+              >
+                <div style={{ fontSize: "24px" }}>📍</div>
+                <div style={{ fontSize: "12px", fontWeight: "bold" }}>Marker</div>
+                <div style={{ fontSize: "10px", opacity: 0.8 }}>Quick Tag</div>
+              </button>
+
+              {/* Photo Option */}
+              <button 
+                onClick={() => {
+                  if (props.onReplaceWithDropType) {
+                    props.onReplaceWithDropType(drop.id, 'photo');
+                  }
+                }}
+                style={{
+                  padding: "16px 12px",
+                  background: "linear-gradient(135deg, #3b82f6, #2563eb)",
+                  border: "1px solid rgba(59, 130, 246, 0.5)",
+                  borderRadius: "12px",
+                  color: "white",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "8px",
+                  transition: "transform 0.2s, opacity 0.2s",
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.opacity = "0.9";
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.opacity = "1";
+                }}
+              >
+                <div style={{ fontSize: "24px" }}>📸</div>
+                <div style={{ fontSize: "12px", fontWeight: "bold" }}>Photo</div>
+                <div style={{ fontSize: "10px", opacity: 0.8 }}>Capture</div>
+              </button>
+
+              {/* Music Option */}
+              <button 
+                onClick={() => {
+                  if (props.onReplaceWithDropType) {
+                    props.onReplaceWithDropType(drop.id, 'music');
+                  }
+                }}
+                style={{
+                  padding: "16px 12px",
+                  background: "linear-gradient(135deg, #8a2be2, #6a1bb2)",
+                  border: "1px solid rgba(138, 43, 226, 0.5)",
+                  borderRadius: "12px",
+                  color: "white",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "8px",
+                  transition: "transform 0.2s, opacity 0.2s",
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.opacity = "0.9";
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.opacity = "1";
+                }}
+              >
+                <div style={{ fontSize: "24px" }}>🎵</div>
+                <div style={{ fontSize: "12px", fontWeight: "bold" }}>Music</div>
+                <div style={{ fontSize: "10px", opacity: 0.8 }}>Track</div>
+              </button>
+            </div>
+
+            <div style={{ fontSize: "11px", color: "#64748b", marginTop: "12px", textAlign: "center" }}>
+              Select a drop type to replace this music drop
+            </div>
+          </div>
+        )}
       </div>
       <style>{`
         @keyframes popIn {

@@ -5,6 +5,8 @@ import { useEffect, useState, useRef } from 'react';
 import { UserMarker } from '@/lib/utils/types';
 import GPSMarker from './GPSMarker';
 import UserMarkerComponent from './UserMarkerComponent';
+import MusicDropMarker from './MusicDropMarker';
+import MusicDropPopup from './MusicDropPopup';
 
 // Dynamically import leaflet only on client side
 const MapContainer = dynamic(
@@ -31,7 +33,14 @@ interface MapComponentProps {
   onGoToMarker?: (marker: UserMarker) => void;
   userRank?: string;
   useDarkTiles?: boolean;
-  onAddMarkerAtPosition?: (position: { lat: number; lng: number }) => void; // Add this prop
+  onAddMarkerAtPosition?: (position: { lat: number; lng: number }) => void;
+  // Music drops props
+  musicDrops?: any[];
+  onMusicDropClick?: (drop: any) => void;
+  musicScan?: () => void;
+  isMusicScanning?: boolean;
+  photoScan?: () => void;
+  fullAreaScan?: (bounds: [[number, number], [number, number]]) => void;
 }
 
 const MapComponent: React.FC<MapComponentProps> = ({
@@ -49,11 +58,33 @@ const MapComponent: React.FC<MapComponentProps> = ({
   onGoToMarker,
   userRank = 'TOY',
   useDarkTiles = false,
-  onAddMarkerAtPosition // Use this prop
+  onAddMarkerAtPosition,
+  // Music drops props
+  musicDrops = [],
+  onMusicDropClick,
+  musicScan,
+  isMusicScanning = false,
+  photoScan,
+  fullAreaScan
 }) => {
   const [mapReady, setMapReady] = useState(false);
   const [mapInstance, setMapInstance] = useState<any>(null);
   const mapRef = useRef<any>(null);
+  
+  // GPS centering animation state
+  const [isGPSCentering, setIsGPSCentering] = useState(false);
+  
+  // Music drop functionality - now passed as props
+  // const {
+  //   musicDrops,
+  //   discoveredMusicDrops,
+  //   scanForMusicDrops,
+  //   unlockMusicTrack,
+  //   isScanning,
+  //   musicScan,
+  //   photoScan,
+  //   fullAreaScan
+  // } = useMusicDrops(null, gpsPosition);
 
   // Initialize Leaflet icons only on client side
   useEffect(() => {
@@ -97,40 +128,30 @@ const MapComponent: React.FC<MapComponentProps> = ({
     }
   };
 
-  // Button 5: Place marker at current GPS location
+  // Button 5: Unified Music Scanner - Center map and scan for music drops
   const handleButton5Click = () => {
-    console.log('Button 5 clicked - Place marker at current location');
+    console.log('Button 5 clicked - Unified Music Scanner: Center map and scan for music');
     
-    if (gpsPosition) {
+    if (gpsPosition && mapInstance) {
       console.log('GPS Position available:', gpsPosition);
       
-      // If we have onAddMarkerAtPosition callback, use it
-      if (onAddMarkerAtPosition) {
-        onAddMarkerAtPosition({ lat: gpsPosition[0], lng: gpsPosition[1] });
-      } 
-      // Otherwise, trigger the onMapClick with GPS position
-      else if (onMapClick) {
-        onMapClick({ lat: gpsPosition[0], lng: gpsPosition[1] });
-        console.log('Marker placed at:', gpsPosition[0], gpsPosition[1]);
+      // Set centering state for animation
+      setIsGPSCentering(true);
+      
+      // Center the map on GPS position
+      mapInstance.setView(gpsPosition, zoom);
+      console.log('Map centered on GPS position');
+      
+      // Trigger music scan
+      if (musicScan) {
+        musicScan();
+        console.log('Music scan triggered');
       }
       
-      // Optionally, show a visual feedback on the map
-      if (mapInstance) {
-        // Add a temporary visual feedback
-        const { CircleMarker } = require('leaflet');
-        const circle = new CircleMarker(gpsPosition, {
-          radius: 8,
-          color: '#FF0000',
-          fillColor: '#FF0000',
-          fillOpacity: 0.5,
-          weight: 2
-        }).addTo(mapInstance);
-        
-        // Remove after 1 second
-        setTimeout(() => {
-          circle.remove();
-        }, 1000);
-      }
+      // Reset animation state after 1 second
+      setTimeout(() => {
+        setIsGPSCentering(false);
+      }, 1000);
     } else {
       console.log('No GPS position available');
     }
@@ -150,10 +171,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
   const handleButton4Click = () => {
     console.log('Button 4 clicked');
-  };
-
-  const handleButton6Click = () => {
-    console.log('Button 6 clicked');
   };
 
   const handleButton7Click = () => {
@@ -216,6 +233,23 @@ const MapComponent: React.FC<MapComponentProps> = ({
             gpsPosition={gpsPosition}
             userRank={userRank}
             currentUserId={undefined}
+          />
+        ))}
+
+        {/* Music Drop Markers */}
+        {musicDrops.map((drop) => (
+          <MusicDropMarker
+            key={drop.id}
+            drop={drop}
+            onClick={(clickedDrop) => {
+              console.log('Music drop clicked:', clickedDrop);
+              if (onMusicDropClick) {
+                onMusicDropClick(clickedDrop);
+              }
+            }}
+            isDiscovered={drop.discovered}
+            gpsPosition={gpsPosition}
+            scanRadius={100} // 100m scan radius
           />
         ))}
       </MapContainer>
@@ -386,40 +420,125 @@ const MapComponent: React.FC<MapComponentProps> = ({
         gap: '10px',
         zIndex: 1000
       }}>
-        {/* Button 5 - Place marker at current location */}
+        {/* Button 5 - Unified Music Scanner (GPS + Music) */}
         <button
           onClick={handleButton5Click}
+          disabled={!gpsPosition || isGPSCentering}
           style={{
             width: '50px',
             height: '50px',
             padding: '0',
-            border: `2px solid ${gpsPosition ? '#2196F3' : '#999'}`,
+            border: '1px solid rgba(255, 255, 255, 0.1)',
             borderRadius: '8px',
-            backgroundColor: gpsPosition ? 'rgba(33, 150, 243, 0.9)' : 'rgba(200, 200, 200, 0.9)',
-            cursor: gpsPosition ? 'pointer' : 'not-allowed',
+            backgroundColor: gpsPosition ? 'rgba(15, 23, 42, 0.9)' : 'rgba(200, 200, 200, 0.9)',
+            cursor: gpsPosition && !isGPSCentering ? 'pointer' : 'not-allowed',
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '20px', // Slightly smaller for icon
-            boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-            transition: 'all 0.2s ease',
+            fontSize: '11px',
+            color: 'rgb(245, 158, 11)',
+            boxShadow: 'rgba(0, 0, 0, 0.3) 0px 4px 12px',
+            transition: '0.3s',
+            minWidth: '60px',
+            gap: '2px',
             position: 'relative',
           }}
           onMouseEnter={(e) => {
-            if (gpsPosition) {
-              e.currentTarget.style.backgroundColor = 'rgba(30, 136, 229, 0.95)';
+            if (gpsPosition && !isGPSCentering) {
+              e.currentTarget.style.backgroundColor = 'rgba(15, 23, 42, 0.95)';
               e.currentTarget.style.transform = 'scale(1.05)';
             }
           }}
           onMouseLeave={(e) => {
-            if (gpsPosition) {
-              e.currentTarget.style.backgroundColor = 'rgba(33, 150, 243, 0.9)';
+            if (gpsPosition && !isGPSCentering) {
+              e.currentTarget.style.backgroundColor = 'rgba(15, 23, 42, 0.9)';
               e.currentTarget.style.transform = 'scale(1)';
             }
           }}
-          title={gpsPosition ? "Place marker at current location" : "GPS not available"}
+          title={gpsPosition ? "🎵 GPS Music Scanner: Center map and scan for music drops" : "GPS not available"}
         >
           {/* GPS icon with marker */}
+          <div style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+            height: '100%'
+          }}>
+            <div style={{
+              fontSize: '16px',
+              color: gpsPosition ? 'rgb(245, 158, 11)' : '#666',
+              position: 'relative',
+              marginBottom: '2px'
+            }}>
+              📍🎵
+            </div>
+            <div style={{
+              fontSize: '9px',
+              color: gpsPosition ? 'rgb(245, 158, 11)' : '#666',
+              fontWeight: 'bold',
+              textAlign: 'center',
+              lineHeight: '1'
+            }}>
+              SCAN
+            </div>
+            {isGPSCentering && (
+              <div style={{
+                position: 'absolute',
+                top: '-2px',
+                left: '-2px',
+                right: '-2px',
+                bottom: '-2px',
+                border: '2px solid rgba(245, 158, 11, 0.8)',
+                borderRadius: '50%',
+                animation: 'scanPulse 1s ease-out infinite',
+                pointerEvents: 'none'
+              }} />
+            )}
+          </div>
+        </button>
+
+        {/* Button 7 - Photo Scan */}
+        <button
+          onClick={() => {
+            console.log('Button 7 clicked - Photo Scan');
+            if (gpsPosition && photoScan) {
+              photoScan();
+            }
+          }}
+          disabled={!gpsPosition || isMusicScanning}
+          style={{
+            width: '50px',
+            height: '50px',
+            padding: '0',
+            border: `2px solid ${gpsPosition ? (isMusicScanning ? '#10b981' : '#10b981') : '#999'}`,
+            borderRadius: '8px',
+            backgroundColor: gpsPosition ? (isMusicScanning ? 'rgba(16, 185, 129, 0.8)' : 'rgba(16, 185, 129, 0.9)') : 'rgba(200, 200, 200, 0.9)',
+            cursor: gpsPosition && !isMusicScanning ? 'pointer' : 'not-allowed',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '20px',
+            boxShadow: gpsPosition ? '0 2px 5px rgba(16, 185, 129, 0.4)' : 'none',
+            transition: 'all 0.2s ease',
+            position: 'relative',
+          }}
+          onMouseEnter={(e) => {
+            if (gpsPosition && !isMusicScanning) {
+              e.currentTarget.style.backgroundColor = 'rgba(5, 150, 105, 0.95)';
+              e.currentTarget.style.transform = 'scale(1.05)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (gpsPosition && !isMusicScanning) {
+              e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.9)';
+              e.currentTarget.style.transform = 'scale(1)';
+            }
+          }}
+          title={gpsPosition ? "📸 Scan for Photo Drops (250m)" : "GPS not available"}
+        >
           <div style={{
             position: 'relative',
             display: 'flex',
@@ -433,96 +552,97 @@ const MapComponent: React.FC<MapComponentProps> = ({
               color: gpsPosition ? 'white' : '#666',
               position: 'relative'
             }}>
-              📍
+              📸
             </div>
+            {isMusicScanning && (
+              <div style={{
+                position: 'absolute',
+                top: '-2px',
+                left: '-2px',
+                right: '-2px',
+                bottom: '-2px',
+                border: '2px solid rgba(16, 185, 129, 0.8)',
+                borderRadius: '50%',
+                animation: 'scanPulse 1s ease-out infinite',
+                pointerEvents: 'none'
+              }} />
+            )}
           </div>
         </button>
 
+        {/* Button 8 - Full Area Scan */}
         <button
-          onClick={handleButton6Click}
+          onClick={() => {
+            console.log('Button 8 clicked - Full Area Scan');
+            if (mapInstance && fullAreaScan) {
+              const bounds = mapInstance.getBounds();
+              const mapBounds: [[number, number], [number, number]] = [
+                [bounds.getSouth(), bounds.getWest()],
+                [bounds.getNorth(), bounds.getEast()]
+              ];
+              fullAreaScan(mapBounds);
+            }
+          }}
+          disabled={isMusicScanning}
           style={{
             width: '50px',
             height: '50px',
             padding: '0',
-            border: '2px solid #333',
+            border: `2px solid ${isMusicScanning ? '#f59e0b' : '#f59e0b'}`,
             borderRadius: '8px',
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            cursor: 'pointer',
+            backgroundColor: isMusicScanning ? 'rgba(245, 158, 11, 0.8)' : 'rgba(245, 158, 11, 0.9)',
+            cursor: !isMusicScanning ? 'pointer' : 'not-allowed',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '24px',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+            fontSize: '20px',
+            boxShadow: '0 2px 5px rgba(245, 158, 11, 0.4)',
             transition: 'all 0.2s ease',
+            position: 'relative',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(245, 245, 245, 0.95)';
-            e.currentTarget.style.transform = 'scale(1.05)';
+            if (!isMusicScanning) {
+              e.currentTarget.style.backgroundColor = 'rgba(217, 119, 6, 0.95)';
+              e.currentTarget.style.transform = 'scale(1.05)';
+            }
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
-            e.currentTarget.style.transform = 'scale(1)';
+            if (!isMusicScanning) {
+              e.currentTarget.style.backgroundColor = 'rgba(245, 158, 11, 0.9)';
+              e.currentTarget.style.transform = 'scale(1)';
+            }
           }}
+          title="🗺️ Scan entire map area"
         >
-          <span style={{ color: '#666' }}>6</span>
-        </button>
-
-        <button
-          onClick={handleButton7Click}
-          style={{
-            width: '50px',
-            height: '50px',
-            padding: '0',
-            border: '2px solid #333',
-            borderRadius: '8px',
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            cursor: 'pointer',
+          <div style={{
+            position: 'relative',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '24px',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-            transition: 'all 0.2s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(245, 245, 245, 0.95)';
-            e.currentTarget.style.transform = 'scale(1.05)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
-            e.currentTarget.style.transform = 'scale(1)';
-          }}
-        >
-          <span style={{ color: '#666' }}>7</span>
-        </button>
-
-        <button
-          onClick={handleButton8Click}
-          style={{
-            width: '50px',
-            height: '50px',
-            padding: '0',
-            border: '2px solid #333',
-            borderRadius: '8px',
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '24px',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-            transition: 'all 0.2s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(245, 245, 245, 0.95)';
-            e.currentTarget.style.transform = 'scale(1.05)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
-            e.currentTarget.style.transform = 'scale(1)';
-          }}
-        >
-          <span style={{ color: '#666' }}>8</span>
+            width: '100%',
+            height: '100%'
+          }}>
+            <div style={{
+              fontSize: '20px',
+              color: 'white',
+              position: 'relative'
+            }}>
+              🗺️
+            </div>
+            {isMusicScanning && (
+              <div style={{
+                position: 'absolute',
+                top: '-2px',
+                left: '-2px',
+                right: '-2px',
+                bottom: '-2px',
+                border: '2px solid rgba(245, 158, 11, 0.8)',
+                borderRadius: '50%',
+                animation: 'scanPulse 1s ease-out infinite',
+                pointerEvents: 'none'
+              }} />
+            )}
+          </div>
         </button>
       </div>
 
@@ -532,6 +652,19 @@ const MapComponent: React.FC<MapComponentProps> = ({
           0% { opacity: 1; }
           50% { opacity: 0.5; }
           100% { opacity: 1; }
+        }
+        
+        @keyframes scanPulse {
+          0% { 
+            transform: scale(0.8);
+            opacity: 1;
+            border-color: rgba(245, 158, 11, 0.8);
+          }
+          100% { 
+            transform: scale(1.2);
+            opacity: 0;
+            border-color: rgba(245, 158, 11, 0);
+          }
         }
       `}</style>
     </div>

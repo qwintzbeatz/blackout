@@ -1,5 +1,6 @@
 // Add the useGPSTracker content from above
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { detectDevicePerformance } from '@/utils';
 
 type GeoError = {
   code?: number;
@@ -42,6 +43,26 @@ export const useGPSTracker = () => {
   const [isTracking, setIsTracking] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const watchIdRef = useRef<number | null>(null);
+  const lastUpdateRef = useRef<number>(0);
+  
+  // Mobile performance optimization
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const performanceLevel = detectDevicePerformance();
+  
+  // Get optimized intervals based on device performance
+  const getOptimizedIntervals = () => {
+    if (isMobile) {
+      switch (performanceLevel) {
+        case 'low':
+          return { throttle: 3000, timeout: 15000, maxAge: 5000 }; // 3s throttle
+        case 'medium':
+          return { throttle: 2000, timeout: 10000, maxAge: 3000 }; // 2s throttle
+        case 'high':
+          return { throttle: 1000, timeout: 8000, maxAge: 2000 };  // 1s throttle
+      }
+    }
+    return { throttle: 1000, timeout: 10000, maxAge: 2000 }; // Desktop defaults
+  };
 
   const getInitialLocation = useCallback(() => {
     if (typeof window === 'undefined' || !navigator.geolocation) {
@@ -116,13 +137,19 @@ export const useGPSTracker = () => {
         setPosition([pos.coords.latitude, pos.coords.longitude]);
         setAccuracy(pos.coords.accuracy);
 
-        // Start continuous tracking
+        // Start continuous tracking with throttled updates
+        const intervals = getOptimizedIntervals();
         const watchId = navigator.geolocation.watchPosition(
           (watchPos) => {
-            setPosition([watchPos.coords.latitude, watchPos.coords.longitude]);
-            setAccuracy(watchPos.coords.accuracy);
-            setSpeed(watchPos.coords.speed || null);
-            setHeading(watchPos.coords.heading || null);
+            const now = Date.now();
+            // Throttle updates based on device performance
+            if (now - lastUpdateRef.current > intervals.throttle) {
+              setPosition([watchPos.coords.latitude, watchPos.coords.longitude]);
+              setAccuracy(watchPos.coords.accuracy);
+              setSpeed(watchPos.coords.speed || null);
+              setHeading(watchPos.coords.heading || null);
+              lastUpdateRef.current = now;
+            }
           },
           (err: GeolocationPositionError) => {
             console.error('GPS watch error:', err);

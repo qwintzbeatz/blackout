@@ -21,10 +21,11 @@ import { UserProfile } from '@/lib/types/blackout';
 import CharacterSelection from '@/components/CharacterSelection';
 import { Gender } from '@/types';
 import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
-import { initializeUnlockedColors, getDefaultColorForCrew, CrewId } from '@/utils/colorUnlocks';
+import { initializeUnlockedColors, getDefaultColorForCrew } from '@/utils/colorUnlocks';
+import { CrewId } from '@/constants/markers';
 
 interface CrewData {
-  id: string;
+  id: CrewId;
   name: string;
   leader: string;
   description: string;
@@ -122,7 +123,7 @@ export default function SelectCrewPage() {
   }, [username, gender, user, selectedCrew]);
   
   const handleSelectCrew = (crew: CrewData) => {
-    setSelectedCrew(crew.id);
+    setSelectedCrew(crew.id || '');
     setSelectedCrewName(crew.name);
     setError(null);
   };
@@ -214,7 +215,7 @@ export default function SelectCrewPage() {
           createdAt: Timestamp.now(),
           createdBy: user.uid,
           rep: 0,
-          color: selectedCrewData.color,
+          color: selectedCrewData.colors.primary,
           description: selectedCrewData.description,
           bonus: selectedCrewData.bonus
         });
@@ -687,15 +688,15 @@ export default function SelectCrewPage() {
                 style={{
                   padding: '20px',
                   backgroundColor: selectedCrew === crew.id ? 
-                    `rgba(${parseInt(crew.color.slice(1, 3), 16)}, ${parseInt(crew.color.slice(3, 5), 16)}, ${parseInt(crew.color.slice(5, 7), 16)}, 0.2)` : 
+                    `rgba(${parseInt(crew.colors.primary.slice(1, 3), 16)}, ${parseInt(crew.colors.primary.slice(3, 5), 16)}, ${parseInt(crew.colors.primary.slice(5, 7), 16)}, 0.2)` : 
                     'rgba(255,255,255,0.05)',
                   border: selectedCrew === crew.id ? 
-                    `2px solid ${crew.color}` : '1px solid rgba(255,255,255,0.1)',
+                    `2px solid ${crew.colors.primary}` : '1px solid rgba(255,255,255,0.1)',
                   borderRadius: '12px',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
                   transform: selectedCrew === crew.id ? 'translateY(-2px)' : 'none',
-                  boxShadow: selectedCrew === crew.id ? `0 8px 25px rgba(${parseInt(crew.color.slice(1, 3), 16)}, ${parseInt(crew.color.slice(3, 5), 16)}, ${parseInt(crew.color.slice(5, 7), 16)}, 0.3)` : 'none'
+                  boxShadow: selectedCrew === crew.id ? `0 8px 25px rgba(${parseInt(crew.colors.primary.slice(1, 3), 16)}, ${parseInt(crew.colors.primary.slice(3, 5), 16)}, ${parseInt(crew.colors.primary.slice(5, 7), 16)}, 0.3)` : 'none'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px' }}>
@@ -703,11 +704,11 @@ export default function SelectCrewPage() {
                     width: '60px',
                     height: '60px',
                     borderRadius: '50%',
-                    backgroundColor: crew.color,
+                    backgroundColor: crew.colors.primary,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: crew.accentColor,
+                    color: crew.colors.secondary,
                     fontWeight: 'bold',
                     fontSize: '24px'
                   }}>
@@ -717,7 +718,7 @@ export default function SelectCrewPage() {
                     <div style={{ 
                       fontSize: '20px', 
                       fontWeight: 'bold',
-                      color: crew.color
+                      color: crew.colors.primary
                     }}>
                       {crew.name}
                     </div>
@@ -735,9 +736,9 @@ export default function SelectCrewPage() {
                   padding: '10px',
                   backgroundColor: 'rgba(0,0,0,0.2)',
                   borderRadius: '8px',
-                  borderLeft: `3px solid ${crew.color}`
+                  borderLeft: `3px solid ${crew.colors.primary}`
                 }}>
-                  <div style={{ fontSize: '13px', fontWeight: 'bold', color: crew.color, marginBottom: '5px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 'bold', color: crew.colors.primary, marginBottom: '5px' }}>
                     🎯 Crew Bonus:
                   </div>
                   <div style={{ fontSize: '13px', color: '#cbd5e1' }}>
@@ -749,7 +750,7 @@ export default function SelectCrewPage() {
                   <div style={{
                     marginTop: '15px',
                     padding: '8px',
-                    background: `linear-gradient(135deg, ${crew.color}, ${crew.accentColor})`,
+                    background: `linear-gradient(135deg, ${crew.colors.primary}, ${crew.colors.secondary})`,
                     color: 'white',
                     textAlign: 'center',
                     borderRadius: '6px',
@@ -824,7 +825,7 @@ export default function SelectCrewPage() {
             style={{
               padding: '15px 30px',
               background: selectedCrew ? 
-                `linear-gradient(135deg, ${CREWS.find(c => c.id === selectedCrew)?.color || '#4dabf7'}, ${CREWS.find(c => c.id === selectedCrew)?.accentColor || '#3b82f6'})` : 
+                `linear-gradient(135deg, ${CREWS.find(c => c.id === selectedCrew)?.colors.primary || '#4dabf7'}, ${CREWS.find(c => c.id === selectedCrew)?.colors.secondary || '#3b82f6'})` : 
                 'linear-gradient(135deg, #6b7280, #4b5563)',
               color: 'white',
               border: 'none',
@@ -839,7 +840,7 @@ export default function SelectCrewPage() {
             onMouseOver={(e) => {
               if (!submitting && selectedCrew && username.trim()) {
                 e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = `0 8px 25px rgba(${parseInt(CREWS.find(c => c.id === selectedCrew)?.color?.slice(1, 3) || '77')}, ${parseInt(CREWS.find(c => c.id === selectedCrew)?.color?.slice(3, 5) || '171')}, ${parseInt(CREWS.find(c => c.id === selectedCrew)?.color?.slice(5, 7) || '247')}, 0.3)`;
+                e.currentTarget.style.boxShadow = `0 8px 25px rgba(${parseInt(CREWS.find(c => c.id === selectedCrew)?.colors.primary?.slice(1, 3) || '77')}, ${parseInt(CREWS.find(c => c.id === selectedCrew)?.colors.primary?.slice(3, 5) || '171')}, ${parseInt(CREWS.find(c => c.id === selectedCrew)?.colors.primary?.slice(5, 7) || '247')}, 0.3)`;
               }
             }}
             onMouseOut={(e) => {

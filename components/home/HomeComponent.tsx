@@ -59,6 +59,7 @@ import { useMarkers } from '@/hooks/useMarkers';
 import { Crew } from '@/lib/types/blackout';
 import { CREWS } from '@/data/crews';
 import { useGPSTracker } from '@/hooks/useGPSTracker';
+import { useMusicDrops } from '@/hooks/useMusicDrops';
 import { EnhancedErrorBoundary } from '@/src/components/ui/EnhancedErrorBoundary';
 import { ErrorRecoveryPanel } from '@/src/components/ui/ErrorRecoveryPanel';
 import { useErrorHandler } from '@/src/hooks/useErrorHandler';
@@ -582,6 +583,18 @@ const HomeComponent = () => {
     isLoading: gpsLoading
   } = useGPSTracker();
   
+  // Music Drops integration
+  const {
+    musicDrops,
+    activeMusicDrops,
+    discoveredMusicDrops,
+    isScanning: musicDropsScanning,
+    scanResults,
+    musicScan,
+    unlockMusicTrack,
+    discoverMusicDrop
+  } = useMusicDrops(user, gpsPosition);
+  
   // Drop states
   const [pendingDropPosition, setPendingDropPosition] = useState<[number, number] | null>(null);
   const [selectedTrackForMusicDrop, setSelectedTrackForMusicDrop] = useState<string | null>(null);
@@ -1104,6 +1117,14 @@ const HomeComponent = () => {
               }
             }}
             userProfile={userProfile || undefined}
+            // Music drops props
+            musicDrops={musicDrops}
+            onMusicDropClick={(drop) => {
+              console.log('Music drop clicked:', drop);
+              // Handle music drop interaction
+            }}
+            musicScan={musicScan}
+            isMusicScanning={musicDropsScanning}
           />
 
           {/* CONNECTION STATUS */}

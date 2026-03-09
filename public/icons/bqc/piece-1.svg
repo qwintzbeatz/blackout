@@ -1,2 +1,50 @@
-<?xml version="1.0" ?><!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
-<svg fill="#000000" width="800px" height="800px" viewBox="0 0 100 100" data-name="Layer 1" id="Layer_1" xmlns="http://www.w3.org/2000/svg"><title/><path d="M34.15,82h-10V59.42A2.42,2.42,0,0,1,26.6,57h7.55ZM75.82,59.42A2.42,2.42,0,0,0,73.4,57H65.85V82h10ZM44.83,82H38.15V37.43a1.28,1.28,0,0,1,1.28-1.29H42V30.3a1.3,1.3,0,0,1,1.3-1.3h4.55V20.19a2.19,2.19,0,1,1,4.38,0V29h4.55A1.3,1.3,0,0,1,58,30.3v5.84h2.53a1.28,1.28,0,0,1,1.28,1.29V82H55.17V71.79H44.83ZM43.06,45.59A1.37,1.37,0,0,0,44.43,47H55.57a1.37,1.37,0,0,0,1.37-1.37V43.33A1.37,1.37,0,0,0,55.57,42H44.43a1.37,1.37,0,0,0-1.37,1.37Zm0,9.24a1.37,1.37,0,0,0,1.37,1.37H55.57a1.37,1.37,0,0,0,1.37-1.37V52.57a1.37,1.37,0,0,0-1.37-1.37H44.43a1.37,1.37,0,0,0-1.37,1.37Zm1.37,10.61H55.57a1.37,1.37,0,0,0,1.37-1.36V61.81a1.37,1.37,0,0,0-1.37-1.37H44.43a1.37,1.37,0,0,0-1.37,1.37v2.27A1.37,1.37,0,0,0,44.43,65.44Z"/></svg>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
+
+<svg
+   fill="#000000"
+   width="800px"
+   height="800px"
+   viewBox="0 0 100 100"
+   data-name="Layer 1"
+   id="Layer_1"
+   version="1.1"
+   sodipodi:docname="piece-1.svg"
+   inkscape:version="1.4.3 (0d15f75, 2025-12-25)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1" />
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="0.91875"
+     inkscape:cx="400"
+     inkscape:cy="400.54422"
+     inkscape:window-width="1920"
+     inkscape:window-height="974"
+     inkscape:window-x="-11"
+     inkscape:window-y="-11"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="Layer_1" />
+  <title
+     id="title1" />
+  <rect
+     style="fill:#008000;stroke-width:0.125"
+     id="rect1"
+     width="77.823128"
+     height="83.809525"
+     x="13.061225"
+     y="6.9387755" />
+  <path
+     d="M34.15,82h-10V59.42A2.42,2.42,0,0,1,26.6,57h7.55ZM75.82,59.42A2.42,2.42,0,0,0,73.4,57H65.85V82h10ZM44.83,82H38.15V37.43a1.28,1.28,0,0,1,1.28-1.29H42V30.3a1.3,1.3,0,0,1,1.3-1.3h4.55V20.19a2.19,2.19,0,1,1,4.38,0V29h4.55A1.3,1.3,0,0,1,58,30.3v5.84h2.53a1.28,1.28,0,0,1,1.28,1.29V82H55.17V71.79H44.83ZM43.06,45.59A1.37,1.37,0,0,0,44.43,47H55.57a1.37,1.37,0,0,0,1.37-1.37V43.33A1.37,1.37,0,0,0,55.57,42H44.43a1.37,1.37,0,0,0-1.37,1.37Zm0,9.24a1.37,1.37,0,0,0,1.37,1.37H55.57a1.37,1.37,0,0,0,1.37-1.37V52.57a1.37,1.37,0,0,0-1.37-1.37H44.43a1.37,1.37,0,0,0-1.37,1.37Zm1.37,10.61H55.57a1.37,1.37,0,0,0,1.37-1.36V61.81a1.37,1.37,0,0,0-1.37-1.37H44.43a1.37,1.37,0,0,0-1.37,1.37v2.27A1.37,1.37,0,0,0,44.43,65.44Z"
+     id="path1" />
+</svg>
