@@ -7,42 +7,47 @@ import useStoryNotificationTracker from '@/hooks/useStoryNotificationTracker';
 import useLoadingManager from '@/hooks/useLoadingManager';
 import useSafeOperation from '@/hooks/useSafeOperation';
 
-import { 
-  doc, 
-  setDoc, 
-  getDoc, 
+import {
+  doc,
+  setDoc,
+  getDoc,
   updateDoc,
-  collection, 
-  addDoc, 
-  query, 
-  where, 
-  getDocs, 
+  collection,
+  addDoc,
+  query,
+  where,
+  getDocs,
   deleteDoc,
   Timestamp,
   orderBy,
   limit,
-  serverTimestamp as firestoreServerTimestamp 
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase/config';
 import { characters } from '@/data/characters';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut, 
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
   onAuthStateChanged,
-  User as FirebaseUser
+  User as FirebaseUser,
 } from 'firebase/auth';
 
-// Import extracted components
+// Extracted components
 import LoginScreen from '@/components/auth/LoginScreen';
 import BottomNavigation from '@/components/navigation/BottomNavigation';
 import ProfileStats from '@/components/profile/ProfileStats';
 import DropTypeModal from '@/components/modals/DropTypeModal';
 import SongSelectionModal from '@/components/modals/SongSelectionModal';
 import LegendPanel from '@/components/ui/LegendPanel';
+import OfflineJoystick from '@/components/ui/OfflineJoystick';
+
+// Panel Components
+import PhotosPanel from '@/components/panels/PhotosPanel';
+import MapControlPanel from '@/components/panels/MapControlPanel';
+import MusicPanel from '@/components/panels/MusicPanel';
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import React from 'react';
+import React, { memo } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 
@@ -54,11 +59,10 @@ import PhotoDropPopup from '@/components/photo/PhotoDropPopup';
 import MarkerDropPopup from '@/components/marker/MarkerDropPopup';
 import DirectMessaging from '@/components/DirectMessaging';
 import { uploadImageToImgBB } from '@/lib/services/imgbb';
-import { saveDropToFirestore, loadAllDrops, deleteUserDrops, deleteDrop } from '@/lib/firebase/drops';
+import { saveDropToFirestore, loadAllDrops, deleteUserDrops } from '@/lib/firebase/drops';
 import CrewChatPanel from '@/components/chat/CrewChatPanel';
 
 import { BlackbookPanel } from '@/components/blackbook/BlackbookPanel';
-import { useFirebaseAuth } from '@/hooks/useFirebaseAuth';
 import { useMarkers } from '@/hooks/useMarkers';
 import { useMusicPlayer, getRandomStartTrack } from '@/hooks/useMusicPlayer';
 import { useDropCreation } from '@/hooks/useDropCreation';
@@ -71,7 +75,6 @@ import { useMusicDrops } from '@/hooks/useMusicDrops';
 import { EnhancedErrorBoundary } from '@/src/components/ui/EnhancedErrorBoundary';
 import { ErrorRecoveryPanel } from '@/src/components/ui/ErrorRecoveryPanel';
 import { useErrorHandler } from '@/src/hooks/useErrorHandler';
-import ErrorTest from '@/components/ui/ErrorTest';
 import ProfileSetupSticker from '@/components/ProfileSetupSticker';
 import { SurfaceGraffitiSelector } from '@/components/ui/SurfaceGraffitiSelector';
 import { RepNotification } from '@/components/ui/RepNotification';
@@ -83,19 +86,19 @@ import { FACEBOOK_VIDEOS, getVideoName, getFacebookEmbedUrl, getRandomVideo } fr
 import { HIPHOP_TRACKS } from '@/constants/tracks';
 import { fullScreenStyle, loadingSpinnerStyle, panelBaseStyle, buttonBaseStyle, primaryButtonStyle, secondaryButtonStyle, successButtonStyle, dangerButtonStyle, inputBaseStyle, flexCenterStyle, flexBetweenStyle, flexColumnStyle, titleTextStyle, subtitleTextStyle, colors, gradients } from './pageStyles';
 import { MarkerName, MarkerDescription, Gender, MARKER_COLORS, MARKER_NAMES, MARKER_DESCRIPTIONS, CrewId } from '@/constants/markers';
-import { SurfaceType, GraffitiType } from '@/types';
+import { SurfaceType, GraffitiType, UserProfile, TopPlayer, TopCrew, Drop, UserMarker } from '@/types';
 import { SURFACES } from '@/constants/surfaces';
 import { GRAFFITI_TYPES } from '@/constants/graffitiTypes';
 import { createSprayCanDivIcon } from '@/components/map/SprayCanIcon';
 import MemoizedMarker from '@/components/map/MemoizedMarker';
 import { getCrewColor } from '@/utils/crewTheme';
-import { 
-  migrateMarkerNameToSurface, 
+import {
+  migrateMarkerNameToSurface,
   migrateMarkerDescriptionToGraffiti,
   getSurfaceOptions,
   getGraffitiTypeOptions,
   SURFACE_TO_MARKER_NAME,
-  GRAFFITI_TO_MARKER_DESCRIPTION
+  GRAFFITI_TO_MARKER_DESCRIPTION,
 } from '@/utils/typeMapping';
 import { calculateRep, RepResult, calculateEnhancedRank, getRankColor, getRankProgress } from '@/utils/repCalculator';
 import { initializeUnlockedColors, getDefaultColorForCrew, ALL_COLORS } from '@/utils/colorUnlocks';
@@ -104,268 +107,56 @@ import { calculateDistance as calculateDistanceHelper, getTrackNameFromUrl as ge
 import { unlockRandomSpotifyTrack, unlockRandomSoundCloudTrack, unlockRandomTrack } from '@/lib/utils/musicUnlocks';
 import { NEW_ZEALAND_LOCATIONS, NZ_BOUNDS, NZ_CENTER, NZ_DEFAULT_ZOOM, GPS_DEFAULT_ZOOM } from '@/constants/locations';
 import { detectDevicePerformance, panelStyle } from '@/utils';
+
+// Import extracted utilities and hooks
+import { calculateRepForMarker, calculateRank, calculateLevel, calculateBoundsFromMarkers, createSoundCloudIframeUrl, generateAvatarUrl } from '@/utils/homeHelpers';
+import { usePerformanceMonitor } from '@/hooks/usePerformanceMonitor';
+import { FirestoreMarker } from '@/lib/types/firestoreTypes';
+import { useFirebaseDataLoaders } from '@/hooks/useFirebaseDataLoaders';
+import { useAuthHandlers } from '@/hooks/useAuthHandlers';
+import { useMusicPlayerControls } from '@/hooks/useMusicPlayerControls';
+import { useSaveMarker } from '@/hooks/useSaveMarker';
+import { useMusicDropReplacement } from '@/hooks/useMusicDropReplacement';
+import { useMapActions } from '@/hooks/useMapActions';
 import {
-  UserProfile,
-  TopPlayer,
-  TopCrew,
   SoundCloudTrack,
   CrewData,
   Comment,
-  UserMarker,
-  Drop,
   NearbyCrewMember,
   CrewChatMessage,
   DirectMessage,
   DirectChat,
-  CrewChatUnreadStatus
+  CrewChatUnreadStatus,
 } from '@/lib/types/blackout';
 
-// 🔧 PERFORMANCE: Enable SoundCloud for music playback functionality
-const ENABLE_SOUNDCLOUD = false;
-
-// PERFORMANCE OPTIMIZATIONS:
-// - Component splitting: CrewChatPanel, MusicPlayer, ProfilePanel extracted
-// - State management: useMemo, useCallback, React.memo implemented
-// - Memory cleanup: Proper event listener cleanup in useEffect
-// - Bundle reduction: Separated concerns into modular components
-
-// Advanced REP Calculation Functions
-const calculateRepForMarker = (
-  markerName: MarkerName, 
-  markerDescription: MarkerDescription,
-  distanceFromCenter: number | null,
-  surface?: SurfaceType,
-  graffitiType?: GraffitiType
-): { rep: number; breakdown?: RepResult['breakdown'] } => {
-  // Use new system if surface and graffiti type are provided
-  if (surface && graffitiType) {
-    const options = {
-      isHeaven: ['rooftop', 'bridge'].includes(surface),
-      isMovingTarget: ['train', 'truck', 'van'].includes(surface),
-      isHighRisk: ['speed_camera', 'traffic_light'].includes(surface),
-      hasStreakBonus: distanceFromCenter !== null && distanceFromCenter <= 50
-    };
-    
-    const result = calculateRep(surface, graffitiType, options);
-    return { rep: result.rep, breakdown: result.breakdown };
-  }
-  
-  // Fallback to old system for backward compatibility
-  let rep = 10; // Base REP for placing any marker
-  
-  if (distanceFromCenter && distanceFromCenter <= 50) {
-    rep += 5;
-  }
-  
-  switch (markerDescription) {
-    case 'Piece/Bombing':
-    case 'Burner/Heater':
-      rep += 15;
-      break;
-    case 'Throw-Up':
-    case 'Roller/Blockbuster':
-      rep += 10;
-      break;
-    case 'Stencil/Brand/Stamp':
-    case 'Paste-Up/Poster':
-      rep += 8;
-      break;
-    case 'Tag/Signature':
-      rep += 5;
-      break;
-    default:
-      rep += 3;
-  }
-  
-  return { rep };
-};
-
-const calculateRank = (rep: number): string => {
-  // Use the enhanced rank calculation from repCalculator
-  return calculateEnhancedRank(rep);
-};
-
-const calculateLevel = (rep: number): number => {
-  return Math.floor(rep / 100) + 1;
-};
-
-// Helper function to calculate bounds from markers
-const calculateBoundsFromMarkers = (markers: UserMarker[]): [[number, number], [number, number]] | null => {
-  if (markers.length === 0) return null;
-  
-  const lats = markers.map(m => m.position[0]);
-  const lngs = markers.map(m => m.position[1]);
-  
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
-  
-  return [[minLat, minLng], [maxLat, maxLng]];
-};
-
-// Function to create SoundCloud iframe URL
-const createSoundCloudIframeUrl = (trackUrl: string): string => {
-  const params = new URLSearchParams({
-    url: trackUrl,
-    color: 'ff5500',
-    auto_play: 'false',
-    hide_related: 'true',
-    show_comments: 'false',
-    show_user: 'false',
-    show_reposts: 'false',
-    show_teaser: 'false',
-    visual: 'false',
-    sharing: 'false',
-    buying: 'false',
-    download: 'false',
-    show_playcount: 'false',
-    show_artwork: 'false',
-    show_playlist: 'false'
-  });
-  
-  return `https://w.soundcloud.com/player/?${params.toString()}`;
-};
-
-// Updated avatar generator function with gender-specific avatars
-const generateAvatarUrl = (userId: string, username: string, gender?: Gender): string => {
-  const seed = username || userId;
-  
-  // Define avatar styles based on gender
-  let avatarStyle = 'open-peeps'; // default style
-  
-  if (gender === 'male') {
-    avatarStyle = 'adventurer'; // boyish/ masculine style
-  } else if (gender === 'female') {
-    avatarStyle = 'avataaars'; // girlish/ feminine style
-  } else if (gender === 'other') {
-    avatarStyle = 'bottts'; // alien/robot style for 'other'
-  } else if (gender === 'prefer-not-to-say') {
-    avatarStyle = 'identicon'; // android/geometric style
-  }
-  
-  // Color palette for avatars
-  const colors = [
-    '4dabf7', '10b981', '8b5cf6', 'f59e0b', 'ec4899', 'f97316',
-    '3b82f6', '06b6d4', '8b5cf6', 'ef4444', '84cc16', '14b8a6'
-  ];
-  const selectedColor = colors[Math.floor(Math.random() * colors.length)];
-  
-  // Construct URL based on style
-  let url = '';
-  
-    switch (avatarStyle) {
-    case 'adventurer': // Male (boyish)
-      url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}`;
-      break;
-      
-    case 'avataaars': // Female (girlish)
-      url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}`;
-      break;
-      
-    case 'bottts': // Other (alien/robot)
-      url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}`;
-      break;
-      
-    case 'identicon': // Prefer not to say (android/geometric)
-      url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=${selectedColor}`;
-      break;
-      
-    default: // open-peeps as fallback
-      url = `https://api.dicebear.com/7.x/open-peeps/svg?seed=${seed}&backgroundColor=${selectedColor}`;
-  }
-  
-  return url;
-};
-
 // Dynamically import leaflet only on client side
-const MapContainer = dynamic(
-  () => import('react-leaflet').then((mod) => mod.MapContainer),
-  { ssr: false }
-);
-const TileLayer = dynamic(
-  () => import('react-leaflet').then((mod) => mod.TileLayer),
-  { ssr: false }
-);
-const Marker = dynamic(
-  () => import('react-leaflet').then((mod) => mod.Marker),
-  { ssr: false }
-);
-const Popup = dynamic(
-  () => import('react-leaflet').then((mod) => mod.Popup),
-  { ssr: false }
-);
-const Circle = dynamic(
-  () => import('react-leaflet').then((mod) => mod.Circle),
-  { ssr: false }
-);
-
-// Firestore Marker Interface
-interface FirestoreMarker {
-  position: [number, number];
-  name: string;
-  description: MarkerDescription;
-  color: string;
-  timestamp: Timestamp;
-  userId: string;
-  username: string;
-  userProfilePic: string;
-  createdAt: Timestamp;
-  distanceFromCenter: number | null;
-  repEarned: number;
-  specialType?: 'rainbow' | 'glow' | 'metallic' | null;
-  // New fields for surface and graffiti type
-  surface?: string;
-  graffitiType?: string;
-  styleId?: string;
-  crewId?: string;
-}
-
-// Custom hook for performance monitoring
-const usePerformanceMonitor = () => {
-  const renderCount = useRef(0);
-  
-  
-
-  useEffect(() => {
-    renderCount.current += 1;
-    
-    if (renderCount.current > 50) {
-      console.warn('High render count detected. Check for infinite loops.');
-    }
-  }, []);
-  
-  const logPerformance = useCallback((operation: string, startTime: number) => {
-    const duration = performance.now() - startTime;
-    if (duration > 100) {
-      console.warn(`Slow operation (${operation}): ${duration.toFixed(2)}ms`);
-    }
-  }, []);
-  
-  return { logPerformance };
-};
+const MapContainer = dynamic(() => import('react-leaflet').then((mod) => mod.MapContainer), { ssr: false });
+const TileLayer = dynamic(() => import('react-leaflet').then((mod) => mod.TileLayer), { ssr: false });
+const Marker = dynamic(() => import('react-leaflet').then((mod) => mod.Marker), { ssr: false });
+const Popup = dynamic(() => import('react-leaflet').then((mod) => mod.Popup), { ssr: false });
+const Circle = dynamic(() => import('react-leaflet').then((mod) => mod.Circle), { ssr: false });
 
 const HomeComponent = () => {
   const { hasRecentErrors } = useErrorHandler();
   const { logPerformance } = usePerformanceMonitor();
   const { loadingStates, setLoading, isLoading } = useLoadingManager();
   const { safeOperation } = useSafeOperation();
-  
+
   // ========== STATE DECLARATIONS ==========
   const [mapReady, setMapReady] = useState(false);
   const [zoom, setZoom] = useState<number>(5);
-  
+
   const [showStoryPanel, setShowStoryPanel] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [isClient, setIsClient] = useState(false);
   const [show50mRadius, setShow50mRadius] = useState(true);
   const [userMarkers, setUserMarkers] = useState<UserMarker[]>([]);
   const [nextMarkerNumber, setNextMarkerNumber] = useState(1);
-  
+
   // Offline/Online mode states
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [lastKnownPosition, setLastKnownPosition] = useState<[number, number] | null>(null);
-  
+
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
@@ -374,15 +165,14 @@ const HomeComponent = () => {
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [loadingMarkers, setLoadingMarkers] = useState(false);
-  const [isLoadingMarkers, setIsLoadingMarkers] = useState(false);
-  
+
   // NPC Welcome Notification State
   const [npcWelcomeNotification, setNpcWelcomeNotification] = useState<{
     show: boolean;
     leaderName: string;
     message: string;
   } | null>(null);
-  
+
   // User profile states
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   // Use ref to always get current userProfile in callbacks (avoids stale closure)
@@ -398,16 +188,16 @@ const HomeComponent = () => {
   const [showCrewChat, setShowCrewChat] = useState(false);
   const [profileCrewChoice, setProfileCrewChoice] = useState<'crew' | 'solo'>('crew');
   const [profileCrewName, setProfileCrewName] = useState('');
-  
+
   // Marker color states
   const [selectedMarkerColor, setSelectedMarkerColor] = useState('#10b981');
   const [selectedSpecialType, setSelectedSpecialType] = useState<'rainbow' | 'glow' | 'metallic' | null>(null);
-  
+
   // Surface and graffiti type states (new)
-  const [selectedSurface, setSelectedSurface] = useState<SurfaceType>('wall' as SurfaceType);
-  const [selectedGraffitiType, setSelectedGraffitiType] = useState<GraffitiType>('tag' as GraffitiType);
-  
-  // Radius expansion state (removed crew detection, keeping basic radius)
+  const [selectedSurface, setSelectedSurface] = useState<SurfaceType>('wall');
+  const [selectedGraffitiType, setSelectedGraffitiType] = useState<GraffitiType>('tag');
+
+  // Radius expansion state
   const [expandedRadius, setExpandedRadius] = useState(50);
 
   // Audio player states - Spotify only
@@ -418,15 +208,15 @@ const HomeComponent = () => {
   const [unlockedTracks, setUnlockedTracks] = useState<string[]>(getRandomStartTrack());
   const startupAudioRef = useRef<HTMLAudioElement | null>(null);
   const startupAutoplayAttemptedRef = useRef(false);
-  
+
   // REP Notification state
-  const [repNotification, setRepNotification] = useState<{ 
-    show: boolean, 
-    amount: number, 
-    message: string, 
-    breakdown?: RepResult['breakdown'] 
+  const [repNotification, setRepNotification] = useState<{
+    show: boolean;
+    amount: number;
+    message: string;
+    breakdown?: RepResult['breakdown'];
   } | null>(null);
-  
+
   // Drop states
   const [drops, setDrops] = useState<Drop[]>([]);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
@@ -436,31 +226,30 @@ const HomeComponent = () => {
   const [selectedMarkerType, setSelectedMarkerType] = useState<MarkerDescription>('Tag/Signature');
   const [selectedTrackForMusicDrop, setSelectedTrackForMusicDrop] = useState<string | null>(null);
 
-  
   // Last marker date for streak bonus
   const [lastMarkerDate, setLastMarkerDate] = useState<string | null>(null);
-  
+
   // Top players state
   const [topPlayers, setTopPlayers] = useState<TopPlayer[]>([]);
   const [showTopPlayers, setShowTopPlayers] = useState(false);
-  
+
   // Top crews state
   const [topCrews, setTopCrews] = useState<TopCrew[]>([]);
   const [showTopCrews, setShowTopCrews] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [showPerformanceSettings, setShowPerformanceSettings] = useState(false);
-  
+
   // Filter toggle
   const [showOnlyMyDrops, setShowOnlyMyDrops] = useState(false);
-  
+
   // Error state
   const [error, setError] = useState<string | null>(null);
   const [showErrorRecovery, setShowErrorRecovery] = useState(false);
   const [recoveryError, setRecoveryError] = useState<Error | null>(null);
-  
+
   // Selected marker state
   const [selectedMarker, setSelectedMarker] = useState<UserMarker | null>(null);
-  
+
   // Panel control states
   const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [showPhotosPanel, setShowPhotosPanel] = useState(false);
@@ -474,8 +263,7 @@ const HomeComponent = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [iframeHeight, setIframeHeight] = useState(166);
 
-  
-  // 🆕 Mission notification state
+  // Mission notification state
   const [missionNotification, setMissionNotification] = useState<{
     show: boolean;
     title: string;
@@ -489,108 +277,129 @@ const HomeComponent = () => {
   // Crew selection state
   const [selectedCrew, setSelectedCrew] = useState<CrewId | ''>('');
   const [crewChoice, setCrewChoice] = useState<'crew' | 'solo'>('crew');
-  
-  // 🆕 Selected Music Drop for full-screen modal
+
+  // Selected Music Drop for full-screen modal
   const [selectedMusicDrop, setSelectedMusicDrop] = useState<Drop | null>(null);
-  
-  // 🆕 Drop replacement state
+
+  // Drop replacement state
   const [replacingDropId, setReplacingDropId] = useState<string | null>(null);
-  
-  // 🆕 Selected Photo Drop for full-screen modal
+
+  // Selected Photo Drop for full-screen modal
   const [selectedPhotoDrop, setSelectedPhotoDrop] = useState<Drop | null>(null);
-  
-  // 🆕 Radar Scanner State
+
+  // Radar Scanner State
   const [showRadarScanner, setShowRadarScanner] = useState(false);
-  
-  // 🆕 Song Unlock Modal state
+
+  // Song Unlock Modal state
   const [songUnlockModal, setSongUnlockModal] = useState<{
     isOpen: boolean;
     trackUrl: string;
     trackName: string;
     source: string;
   } | null>(null);
-  
-  // 🆕 Video Unlock Modal state
+
+  // Video Unlock Modal state
   const [videoUnlockModal, setVideoUnlockModal] = useState<{
     isOpen: boolean;
     videoUrl: string;
     source: string;
   } | null>(null);
-  
-  // 🆕 Recently unlocked track state - displayed prominently in music panel
+
+  // Recently unlocked track state
   const [recentlyUnlocked, setRecentlyUnlocked] = useState<{
     url: string;
     name: string;
     source: 'Spotify' | 'SoundCloud';
   } | null>(null);
-  
-  // 🆕 Loading state for drop creation (prevents rapid clicks)
+
+  // Loading state for drop creation (prevents rapid clicks)
   const [isCreatingDrop, setIsCreatingDrop] = useState(false);
-  
-  // 🆕 Song selection modal state
+
+  // Song selection modal state
   const [showSongSelection, setShowSongSelection] = useState(false);
-  
-  // 🆕 GPS Scan animation state
+
+  // GPS Scan animation state
   const [isScanning, setIsScanning] = useState(false);
-  
-  // 🆕 Music drop scanning state
+
+  // Music drop scanning state
   const [isMusicScanning, setIsMusicScanning] = useState(false);
   const [lastScanTime, setLastScanTime] = useState<number>(0);
-  const [discoveredTracks, setDiscoveredTracks] = useState<Array<{
-    trackUrl: string;
-    trackName: string;
-    source: string;
-    position: [number, number];
-  }>>([]);
-  
-  // ========== UNIFIED PANEL TOGGLE FUNCTION ==========
-  const togglePanel = useCallback((panel: 'profile' | 'photos' | 'messages' | 'map' | 'music' | 'story' | 'crewchat' | 'none') => {
-    // First, close all panels
-    setShowProfilePanel(false);
-    setShowPhotosPanel(false);
-    setShowMessagesPanel(false);
-    setShowMapPanel(false);
-    setShowMusicPanel(false);
-    setShowStoryPanel(false);
-    setShowCrewChat(false);
-    
-    // Then open the requested panel (if not 'none')
-    if (panel !== 'none') {
-      switch (panel) {
-        case 'profile':
-          setShowProfilePanel(true);
-          break;
-        case 'photos':
-          setShowPhotosPanel(true);
-          break;
-        case 'messages':
-          setShowMessagesPanel(true);
-          break;
-        case 'map':
-          setShowMapPanel(true);
-          break;
-        case 'music':
-          if (startupAudioRef.current) {
-            startupAudioRef.current.pause();
-            startupAudioRef.current.currentTime = 0;
-          }
-          setShowMusicPanel(true);
-          break;
-        case 'story':
-          setShowStoryPanel(true);
-          break;
-        case 'crewchat':
-          setShowCrewChat(true);
-          break;
-      }
-    }
+  const [discoveredTracks, setDiscoveredTracks] = useState<
+    Array<{
+      trackUrl: string;
+      trackName: string;
+      source: string;
+      position: [number, number];
+    }>
+  >([]);
+
+  // Story data (missions)
+  const [storyData, setStoryData] = useState<{
+    activeMissions: string[];
+    completedMissions: string[];
+    storyProgress: number;
+    currentAct: number;
+  } | null>(null);
+
+  // isMounted ref to prevent state updates after unmount
+  const isMounted = useRef(true);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
   }, []);
 
-  // Convenience function to close all panels
+  // ========== UNIFIED PANEL TOGGLE FUNCTION ==========
+  const togglePanel = useCallback(
+    (panel: 'profile' | 'photos' | 'messages' | 'map' | 'music' | 'story' | 'crewchat' | 'none') => {
+      // First, close all panels
+      setShowProfilePanel(false);
+      setShowPhotosPanel(false);
+      setShowMessagesPanel(false);
+      setShowMapPanel(false);
+      setShowMusicPanel(false);
+      setShowStoryPanel(false);
+      setShowCrewChat(false);
+
+      // Then open the requested panel (if not 'none')
+      if (panel !== 'none') {
+        switch (panel) {
+          case 'profile':
+            setShowProfilePanel(true);
+            break;
+          case 'photos':
+            setShowPhotosPanel(true);
+            break;
+          case 'messages':
+            setShowMessagesPanel(true);
+            break;
+          case 'map':
+            setShowMapPanel(true);
+            break;
+          case 'music':
+            if (startupAudioRef.current) {
+              startupAudioRef.current.pause();
+              startupAudioRef.current.currentTime = 0;
+            }
+            setShowMusicPanel(true);
+            break;
+          case 'story':
+            setShowStoryPanel(true);
+            break;
+          case 'crewchat':
+            setShowCrewChat(true);
+            break;
+        }
+      }
+    },
+    []
+  );
+
   const closeAllPanels = useCallback(() => {
     togglePanel('none');
   }, [togglePanel]);
-  
+
   // ========== PROFILE PICTURE UPLOAD ==========
   const handleProfilePicUpload = async (file: File) => {
     if (!user || !userProfile) {
@@ -599,24 +408,24 @@ const HomeComponent = () => {
     }
 
     try {
-      // Upload to ImgBB
       const profilePicUrl = await uploadImageToImgBB(file);
-      
-      // Update Firestore
+
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, {
         profilePicUrl: profilePicUrl,
-        lastActive: Timestamp.now()
+        lastActive: Timestamp.now(),
       });
-      
-      // Update local state
-      setUserProfile(prev => prev ? {
-        ...prev,
-        profilePicUrl: profilePicUrl
-      } : null);
-      
+
+      setUserProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              profilePicUrl: profilePicUrl,
+            }
+          : null
+      );
+
       alert('✅ Profile picture updated successfully!');
-      
     } catch (error) {
       console.error('Error uploading profile picture:', error);
       alert('Failed to upload profile picture. Please try again.');
@@ -626,31 +435,26 @@ const HomeComponent = () => {
   // ========== PERFORMANCE SETTINGS ==========
   const [crewDetectionEnabled, setCrewDetectionEnabled] = useState(false);
   const [markerQuality, setMarkerQuality] = useState<'low' | 'medium' | 'high'>('medium');
-  
+
   // Dynamic quality settings
-  const [graphicsQuality, setGraphicsQuality] = useState<'low' | 'medium' | 'high'>(
-    detectDevicePerformance()
-  );
+  const [graphicsQuality, setGraphicsQuality] = useState<'low' | 'medium' | 'high'>(detectDevicePerformance());
 
   // Marker limits based on quality
   const markerLimit = graphicsQuality === 'low' ? 12 : graphicsQuality === 'medium' ? 25 : 50;
-  
+
   // ========== PERFORMANCE MEMOIZATION ==========
-  // Memoize markers by user
   const markersByUser = useMemo(() => {
-    const byUser = userMarkers.reduce((acc, marker) => {
-      const userId = marker.userId || 'unknown';
-      if (!acc[userId]) {
-        acc[userId] = [];
-      }
-      acc[userId].push(marker);
-      return acc;
-    }, {} as Record<string, UserMarker[]>);
-    
-    return byUser;
+    return userMarkers.reduce(
+      (acc, marker) => {
+        const userId = marker.userId || 'unknown';
+        if (!acc[userId]) acc[userId] = [];
+        acc[userId].push(marker);
+        return acc;
+      },
+      {} as Record<string, UserMarker[]>
+    );
   }, [userMarkers]);
 
-  // Memoize filtered markers
   const filteredMarkers = useMemo(() => {
     if (showOnlyMyDrops && user) {
       return markersByUser[user.uid] || [];
@@ -658,31 +462,26 @@ const HomeComponent = () => {
     return userMarkers.slice(0, markerLimit);
   }, [userMarkers, showOnlyMyDrops, user, markerLimit, markersByUser]);
 
-  // Memoize marker bounds
   const markerBounds = useMemo(() => {
     return calculateBoundsFromMarkers(userMarkers);
   }, [userMarkers]);
-  
+
   // ========== REFS ==========
   const mapRef = useRef<L.Map | null>(null);
-  
-  // 🆕 Story Manager Context
-  const [storyManagerInitialized, setStoryManagerInitialized] = useState(false);
 
   // ========== HOOKS ==========
-const {
-  position: gpsPosition,
-  accuracy,
-  speed,
-  heading,
-  error: gpsError,
-  isTracking,
-  isLoading: gpsLoading,
-  startTracking,
-  stopTracking
-} = useGPSTracker();
+  const {
+    position: gpsPosition,
+    accuracy,
+    speed,
+    heading,
+    error: gpsError,
+    isTracking,
+    isLoading: gpsLoading,
+    startTracking,
+    stopTracking,
+  } = useGPSTracker();
 
-  // 🆕 MUSIC DROPS HOOK
   const {
     musicDrops,
     activeMusicDrops,
@@ -692,447 +491,312 @@ const {
     musicScan,
     unlockMusicTrack,
     discoverMusicDrop,
-    replaceMusicDropWithDropType
+    replaceMusicDropWithDropType,
   } = useMusicDrops(user, gpsPosition);
 
-  // 🆕 Handle music drop unlocking with proper state sync
-  const handleMusicDropUnlock = useCallback(async (drop: any) => {
-    if (!drop.discovered) return false;
-    
+  // ========== DATA LOADING FUNCTIONS (defined early) ==========
+  const loadAllMarkers = useCallback(async (): Promise<void> => {
+    const startTime = performance.now();
+    setLoadingMarkers(true);
     try {
-      // Call the hook's unlock function
-      const success = await unlockMusicTrack(drop);
-      
-      if (success && user && userProfile) {
-        // Update local state to sync with Firestore
-        const currentTracks = userProfile.unlockedTracks || [];
-        const newTracks = [...currentTracks, drop.trackUrl];
-        
-        // Update user profile state
-        setUserProfile(prev => prev ? {
-          ...prev,
-          unlockedTracks: newTracks
-        } : null);
-        
-        // Update local unlockedTracks state
-        setUnlockedTracks(newTracks);
-        
-        // Show success notification
-        setRepNotification({
-          show: true,
-          amount: drop.repReward || 15,
-          message: `🎵 Music Drop Unlocked: ${drop.trackName}!`
+      const markerLimit = markerQuality === 'low' ? 12 : markerQuality === 'medium' ? 25 : 50;
+      const q = query(collection(db, 'markers'), orderBy('createdAt', 'desc'), limit(markerLimit));
+
+      const querySnapshot = await getDocs(q);
+      const loadedMarkers: UserMarker[] = [];
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data() as FirestoreMarker;
+        loadedMarkers.push({
+          id: `marker-${doc.id}`,
+          firestoreId: doc.id,
+          position: data.position,
+          name: data.name as MarkerName,
+          description: data.description as MarkerDescription,
+          color: data.color || '#10b981',
+          timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(),
+          userId: data.userId,
+          username: data.username || 'Anonymous',
+          userProfilePic: data.userProfilePic || generateAvatarUrl(data.userId, data.username),
+          distanceFromCenter: data.distanceFromCenter ?? undefined,
+          repEarned: data.repEarned || 0,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+          specialType: data.specialType || null,
+          // Use stored values, fallback to defaults if missing
+          surface: data.surface || ('wall' as SurfaceType),
+          graffitiType: data.graffitiType || ('tag' as GraffitiType),
+          styleId: data.styleId || undefined,
         });
-        
-        console.log('🎵 Music drop unlocked and synced:', newTracks);
-        return true;
-      }
-      
-      return false;
+      });
+
+      loadedMarkers.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      if (isMounted.current) setUserMarkers(loadedMarkers);
     } catch (error) {
-      console.error('Error handling music drop unlock:', error);
-      return false;
+      console.error('Error loading all markers:', error);
+    } finally {
+      setLoadingMarkers(false);
+      logPerformance('loadAllMarkers', startTime);
     }
-  }, [user, userProfile, unlockMusicTrack]);
+  }, [markerQuality, logPerformance, isMounted]);
 
-  // 🆕 Replace discovered music drop with selected drop type
-  // 🆕 Handle music drop replacement with rewards
-  const handleMusicDropReplacement = useCallback(async (dropId: string, dropType: 'marker' | 'photo' | 'music') => {
-    if (!user || !userProfile) return null;
-    if (isCreatingDrop) return null;
-
-    setIsCreatingDrop(true);
-
+  const loadTopPlayers = useCallback(async (): Promise<void> => {
     try {
-      // 🆕 CAPTURE DROP DATA BEFORE REMOVAL - Get the original drop data for reward calculation
-      const originalDrop =
-        musicDrops.find(drop => drop.id === dropId) ||
-        drops.find(drop => drop.id === dropId || drop.firestoreId === dropId);
-      
-      if (!originalDrop) {
-        console.warn(`⚠️ Could not find original drop with ID: ${dropId}`);
-        return null;
-      }
-      
-      // 🆕 NOW remove the music drop from ephemeral hook state
-      const replacementData = replaceMusicDropWithDropType(dropId, dropType);
+      const usersRef = collection(db, 'users');
+      const usersSnapshot = await getDocs(usersRef);
 
-      // Also remove from Firestore-backed drops (in case the user tapped a persisted drop)
-      setDrops(prev => prev.filter(d => d.id !== dropId && d.firestoreId !== dropId));
+      const allUsers: TopPlayer[] = [];
 
-      // If the drop existed in Firestore, delete it there too so other users can't still see it
-      const firestoreDrop = drops.find(d => d.id === dropId || d.firestoreId === dropId);
-      if (firestoreDrop && firestoreDrop.firestoreId) {
-        // fire-and-forget, we don't need to block the UI
-        deleteDrop(firestoreDrop.firestoreId).catch(err => console.error('Error deleting drop from Firestore:', err));
-      }
-      
-      if (!replacementData) {
-        console.warn('⚠️ Replacement data not found');
-        return null;
-      }
-      
-      // 🆕 CREATE NEW DROP AT THE SAME LOCATION
-      let newDropId: string | null = null;
-      let dropRepReward = 0;
-      const dropLat = 'position' in originalDrop ? originalDrop.position[0] : originalDrop.lat;
-      const dropLng = 'position' in originalDrop ? originalDrop.position[1] : originalDrop.lng;
-      
-      try {
-        if (dropType === 'marker') {
-          // Create a new marker drop - Awards 5 REP
-          dropRepReward = 5;
-          const newMarker: UserMarker = {
-            id: `temp-${Date.now()}`,
-            position: [dropLat, dropLng],
-            name: selectedMarkerType || 'Tag',
-            description: GRAFFITI_TO_MARKER_DESCRIPTION[selectedGraffitiType] || 'tag',
-            color: selectedMarkerColor,
-            timestamp: new Date(),
-            userId: user.uid,
-            username: userProfile.username,
-            userProfilePic: userProfile.profilePicUrl,
-            surface: selectedSurface as any,
-            graffitiType: selectedGraffitiType as any,
-            specialType: selectedSpecialType,
-            styleId: userProfileRef.current?.selectedGraffitiStyle
-          };
-          newDropId = await saveMarkerToFirestore(newMarker);
-        } else if (dropType === 'photo') {
-          // Create a new photo drop - Awards 10 REP
-          dropRepReward = 10;
-          const newPhotoDrop: Drop = {
-            lat: dropLat,
-            lng: dropLng,
-            photoUrl: 'https://via.placeholder.com/400x400?text=Music+Drop+Replacement',
-            createdBy: user.uid,
-            timestamp: new Date(),
-            likes: [],
-            username: userProfile.username,
-            userProfilePic: userProfile.profilePicUrl
-          };
-          newDropId = await saveDropToFirestore(newPhotoDrop);
-        } else if (dropType === 'music') {
-          // Create a new music drop - Awards 0 REP (but consumes a track)
-          dropRepReward = 0;
-          const tracks = userProfile.unlockedTracks ?? unlockedTracks;
-          if (tracks.length > 0) {
-            const trackToDrop = tracks[0];
-            const newMusicDrop: Drop = {
-              lat: dropLat,
-              lng: dropLng,
-              trackUrl: trackToDrop,
-              createdBy: user.uid,
-              timestamp: new Date(),
-              likes: [],
-              username: userProfile.username,
-              userProfilePic: userProfile.profilePicUrl
-            };
-            newDropId = await saveDropToFirestore(newMusicDrop);
-            
-            // Update user profile to remove the used track
-            const newTracks = tracks.filter(t => t !== trackToDrop);
-            const userRef = doc(db, 'users', user.uid);
-            await updateDoc(userRef, {
-              unlockedTracks: newTracks,
-              lastActive: Timestamp.now()
-            });
-            setUserProfile(prev => prev ? { ...prev, unlockedTracks: newTracks } : null);
-            setUnlockedTracks(newTracks);
+      usersSnapshot.forEach((doc) => {
+        const data = doc.data();
+        allUsers.push({
+          uid: data.uid,
+          username: data.username,
+          profilePicUrl: data.profilePicUrl,
+          rank: data.rank,
+          rep: data.rep || 0,
+          level: data.level || 1,
+          totalMarkers: data.totalMarkers || 0,
+          lastActive: data.lastActive?.toDate() || new Date(),
+        });
+      });
+
+      const sortedUsers = allUsers
+        .filter((user) => user.username && user.rep > 0)
+        .sort((a, b) => b.rep - a.rep)
+        .slice(0, 3);
+
+      const playersWithPositions = await Promise.all(
+        sortedUsers.map(async (player) => {
+          try {
+            const markersQuery = query(
+              collection(db, 'markers'),
+              where('userId', '==', player.uid),
+              orderBy('createdAt', 'desc'),
+              limit(1)
+            );
+
+            const markersSnapshot = await getDocs(markersQuery);
+
+            if (!markersSnapshot.empty) {
+              const latestMarker = markersSnapshot.docs[0].data();
+              return {
+                ...player,
+                position: latestMarker.position,
+              };
+            }
+          } catch (error) {
+            console.error(`Error getting position for ${player.username}:`, error);
           }
-        }
-        
-        if (newDropId) {
-          console.log(`✅ New ${dropType} drop created at [${dropLat}, ${dropLng}] - REP: +${dropRepReward}`);
-          // Refresh drops list
-          await loadDrops();
-          await loadAllMarkers();
-        }
-      } catch (error) {
-        console.error(`❌ Error creating ${dropType} drop:`, error);
-      }
-      
-      // Calculate rewards based on replacement type
-      let rewardTrackUrl = '';
-      let rewardTrackName = '';
-      let rewardSource = '';
-      let rewardMessage = '';
-      
-      switch (dropType) {
-        case 'marker':
-          // Marker replacement uses the same unlock path as a normal marker drop
-          const currentTracks = userProfile.unlockedTracks && userProfile.unlockedTracks.length > 0
-            ? userProfile.unlockedTracks
-            : getRandomStartTrack();
-          const spotifyResult = unlockRandomSpotifyTrack(currentTracks);
-          const newTracks = spotifyResult.newTracks;
-          const trackUnlocked = newTracks.length > currentTracks.length;
-          const unlockedTrackUrl = trackUnlocked ? newTracks[newTracks.length - 1] : '';
-          const unlockedTrackName = trackUnlocked ? getTrackNameFromUrlHelper(unlockedTrackUrl) : '';
+          return player;
+        })
+      );
 
-          rewardTrackUrl = unlockedTrackUrl;
-          rewardTrackName = unlockedTrackName;
-          rewardSource = 'Spotify';
+      if (isMounted.current) setTopPlayers(playersWithPositions);
+    } catch (error) {
+      console.error('Error loading top players:', error);
+    }
+  }, [isMounted]);
 
-          // Keep unlocked tracks synced even when no new track is available
-          const userRef = doc(db, 'users', user.uid);
-          await updateDoc(userRef, {
-            unlockedTracks: newTracks,
-            lastActive: Timestamp.now()
-          });
+  const loadTopCrews = useCallback(async (): Promise<void> => {
+    try {
+      const crewsRef = collection(db, 'crews');
+      const crewsSnapshot = await getDocs(crewsRef);
 
-          setUserProfile(prev => prev ? {
-            ...prev,
-            unlockedTracks: newTracks
-          } : null);
+      const allCrews: TopCrew[] = [];
 
+      crewsSnapshot.forEach((doc) => {
+        const data = doc.data();
+        allCrews.push({
+          crewId: data.id || doc.id,
+          name: data.name,
+          totalRep: data.rep || 0,
+          memberCount: data.members ? data.members.length : 0,
+          color: data.color || '#4dabf7',
+          accentColor: data.accentColor || '#339af0',
+          description: data.description || '',
+          leaderName: data.leader || 'Unknown',
+          leaderUsername: data.leaderUsername || 'Unknown',
+          leaderProfilePicUrl: data.leaderProfilePicUrl || generateAvatarUrl(doc.id, data.leader || 'Unknown'),
+          createdAt: data.createdAt?.toDate() || new Date(),
+          lastActive: data.lastActive?.toDate() || new Date(),
+        });
+      });
+
+      const sortedCrews = allCrews
+        .filter((crew) => crew.name && crew.totalRep > 0)
+        .sort((a, b) => b.totalRep - a.totalRep)
+        .slice(0, 3);
+
+      if (isMounted.current) setTopCrews(sortedCrews);
+    } catch (error) {
+      console.error('Error loading top crews:', error);
+    }
+  }, [isMounted]);
+
+  const loadDrops = useCallback(async (): Promise<void> => {
+    try {
+      const loadedDrops = await loadAllDrops();
+      const dropLimit = markerQuality === 'low' ? 30 : markerQuality === 'medium' ? 75 : 150;
+      const limitedDrops = (loadedDrops as Drop[]).slice(0, dropLimit).map((drop) => ({
+        ...drop,
+        id: drop.id || drop.firestoreId || `drop-${Date.now()}-${Math.random()}`,
+        firestoreId: drop.firestoreId || drop.id,
+      }));
+      if (isMounted.current) setDrops(limitedDrops);
+    } catch (error) {
+      console.error('Error loading drops:', error);
+    }
+  }, [markerQuality, isMounted]);
+
+  // ========== SAVE MARKER HOOK (depends on loadTopPlayers) ==========
+  const { saveMarkerToFirestore, calculateStreakBonus } = useSaveMarker({
+    user,
+    userProfile,
+    lastMarkerDate,
+    setLastMarkerDate,
+    setUserProfile,
+    setRepNotification,
+    setNpcWelcomeNotification,
+    loadTopPlayers,
+  });
+
+  // ========== MUSIC DROP REPLACEMENT HOOK (depends on saveMarkerToFirestore, loadDrops, loadAllMarkers) ==========
+  const { handleMusicDropReplacement } = useMusicDropReplacement({
+    user,
+    userProfile,
+    userProfileRef,
+    isCreatingDrop,
+    drops,
+    musicDrops,
+    unlockedTracks,
+    selectedMarkerType,
+    selectedMarkerColor,
+    selectedSurface,
+    selectedGraffitiType,
+    selectedSpecialType,
+    setIsCreatingDrop,
+    setDrops,
+    setUserProfile,
+    setUnlockedTracks,
+    setSelectedMusicDrop,
+    setShowDropTypeModal,
+    setPendingDropPosition,
+    setRepNotification,
+    setRecentlyUnlocked,
+    setSongUnlockModal,
+    setVideoUnlockModal,
+    replaceMusicDropWithDropType,
+    saveMarkerToFirestore,
+    loadDrops,
+    loadAllMarkers,
+  });
+
+  const handleMusicDropUnlock = useCallback(
+    async (drop: any) => {
+      if (!drop.discovered) return false;
+
+      try {
+        const success = await unlockMusicTrack(drop);
+
+        if (success && user && userProfile) {
+          const currentTracks = userProfile.unlockedTracks || [];
+          const newTracks = [...currentTracks, drop.trackUrl || ''];
+
+          setUserProfile((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  unlockedTracks: newTracks,
+                }
+              : null
+          );
           setUnlockedTracks(newTracks);
 
-          if (trackUnlocked) {
-            rewardMessage = unlockedTrackName + ' Unlocked!\\n' + (selectedMarkerType || 'Marker') + ' marker placed!';
-
-            setSongUnlockModal({
-              isOpen: true,
-              trackUrl: unlockedTrackUrl,
-              trackName: unlockedTrackName,
-              source: 'MARKER DROP'
-            });
-          } else {
-            rewardMessage = (selectedMarkerType || 'Marker') + ' marker placed!';
-          }
-          break;
-          
-        case 'photo':
-          // Photo replacement uses the same unlock path as a normal GPS photo drop
-          const photoTracks = userProfile.unlockedTracks && userProfile.unlockedTracks.length > 0
-            ? userProfile.unlockedTracks
-            : getRandomStartTrack();
-          const soundcloudResult = unlockRandomSoundCloudTrack(photoTracks);
-          const newPhotoTracks = soundcloudResult.newTracks;
-          const photoTrackUnlocked = newPhotoTracks.length > photoTracks.length;
-          const unlockedPhotoTrackUrl = photoTrackUnlocked ? newPhotoTracks[newPhotoTracks.length - 1] : '';
-          const unlockedPhotoTrackName = photoTrackUnlocked ? getTrackNameFromUrlHelper(unlockedPhotoTrackUrl) : '';
-
-          rewardTrackUrl = unlockedPhotoTrackUrl;
-          rewardTrackName = unlockedPhotoTrackName;
-          rewardSource = 'SoundCloud';
-
-          const photoUserRef = doc(db, 'users', user.uid);
-          await updateDoc(photoUserRef, {
-            unlockedTracks: newPhotoTracks,
-            lastActive: Timestamp.now()
+          setRepNotification({
+            show: true,
+            amount: drop.repReward || 15,
+            message: `🎵 Music Drop Unlocked: ${drop.trackName || 'Unknown Track'}!`,
           });
 
-          setUserProfile(prev => prev ? {
-            ...prev,
-            unlockedTracks: newPhotoTracks
-          } : null);
+          console.log('🎵 Music drop unlocked and synced:', newTracks);
+          return true;
+        }
 
-          setUnlockedTracks(newPhotoTracks);
-
-          if (photoTrackUnlocked) {
-            rewardMessage = 'NEW TRACK UNLOCKED!\\n\\n' + unlockedPhotoTrackName;
-
-            setSongUnlockModal({
-              isOpen: true,
-              trackUrl: unlockedPhotoTrackUrl,
-              trackName: unlockedPhotoTrackName,
-              source: 'GPS PHOTO DROP'
-            });
-          } else {
-            rewardMessage = 'Photo drop placed!';
-          }
-          break;
-          
-        case 'music':
-          // Music drop replacement unlocks Facebook video
-          const currentVideos = userProfile.unlockedVideos || [];
-          const availableVideos = FACEBOOK_VIDEOS.filter(v => !currentVideos.includes(v));
-          
-          if (availableVideos.length > 0) {
-            const randomVideo = availableVideos[Math.floor(Math.random() * availableVideos.length)];
-            const newVideos = [...currentVideos, randomVideo];
-            
-            rewardTrackUrl = randomVideo;
-            rewardTrackName = getVideoName(randomVideo);
-            rewardSource = 'Facebook Video';
-            rewardMessage = `🎬 Music Drop Replacement: Unlocked ${rewardTrackName}!`;
-            
-            // Update user profile with new video
-            const userRef = doc(db, 'users', user.uid);
-            await updateDoc(userRef, {
-              unlockedVideos: newVideos,
-              lastActive: Timestamp.now()
-            });
-            
-            setUserProfile(prev => prev ? {
-              ...prev,
-              unlockedVideos: newVideos
-            } : null);
-            
-            // Show video unlock modal
-            setVideoUnlockModal({
-              isOpen: true,
-              videoUrl: randomVideo,
-              source: 'MUSIC DROP REPLACEMENT'
-            });
-          } else {
-            rewardMessage = '🎬 Music Drop Replacement: All Facebook videos already unlocked!';
-          }
-          break;
+        return false;
+      } catch (error) {
+        console.error('Error handling music drop unlock:', error);
+        return false;
       }
-      
-      // 🆕 Enhanced logging before notification
-      const repAmount = ('repReward' in originalDrop ? originalDrop.repReward : 15) || 15;
-      const totalRep = dropType === 'marker' ? dropRepReward : repAmount + dropRepReward;
-      
-      console.log(`✅ Ready to show replacement notification:`, {
-        dropType,
-        originalDropTrackName: ('trackName' in originalDrop ? originalDrop.trackName : 'Unknown'),
-        rewardMessage,
-        rewardTrackName,
-        unlockedReward: repAmount,
-        newDropReward: dropRepReward,
-        totalRep
-      });
-      
-      // 🆕 Update notification message to include new drop REP
-      let finalMessage = rewardMessage;
-      if (dropRepReward > 0) {
-        finalMessage += ` (+${dropRepReward} REP for new ${dropType} drop)`;
-      }
-      
-      // Show success notification with total REP
-      setRepNotification({
-        show: true,
-        amount: totalRep,
-        message: finalMessage
-      });
-      
-      // Set recently unlocked track for music panel display (if it's a track)
-      if (rewardTrackUrl && rewardSource !== 'Facebook Video') {
-        setRecentlyUnlocked({
-          url: rewardTrackUrl,
-          name: rewardTrackName,
-          source: rewardSource as 'Spotify' | 'SoundCloud'
-        });
-      }
-      
-      console.log(`🎵 ${dropType} drop replacement completed:`, {
-        originalDrop: 'trackName' in originalDrop ? originalDrop.trackName : 'Unknown',
-        reward: rewardTrackName,
-        source: rewardSource,
-        totalRepRewarded: totalRep
-      });
-      
-      // Close the music drop popup and reset modal
-      setSelectedMusicDrop(null);
-      setShowDropTypeModal(false);
-      setPendingDropPosition(null);
-      
-      return replacementData;
-    } catch (error) {
-      console.error('Error handling music drop replacement:', error);
-      return null;
-    } finally {
-      setIsCreatingDrop(false);
-    }
-  }, [user, userProfile, replaceMusicDropWithDropType, setSelectedMusicDrop, drops, isCreatingDrop]);
+    },
+    [user, userProfile, unlockMusicTrack]
+  );
 
-  // 🆕 TIME OF DAY HOOK - Day/Night weather system
-  const { 
-    hour, 
-    isNight, 
-    timeString, 
-    sunPosition,
-    theme 
-  } = useTimeOfDay();
-
-  // 🆕 CREW CHAT UNREAD TRACKER HOOK
+  const { hour, isNight, timeString, sunPosition, theme } = useTimeOfDay();
   const { hasUnreadMessages, unreadCount, markCrewChatAsRead } = useCrewChatUnreadTracker();
-  // 🆕 STORY NOTIFICATION TRACKER HOOK
   const { hasNewStoryContent, activeMissionCount, markStoryContentAsViewed } = useStoryNotificationTracker();
 
-  // Derive GPS status from state
   const gpsStatus = gpsLoading ? 'acquiring' : gpsError ? 'error' : isTracking ? 'tracking' : 'idle';
 
   // ========== CLEANUP EFFECT ==========
   useEffect(() => {
     const intervals: NodeJS.Timeout[] = [];
-    
-    // Clean up map listeners
     const mapInstance = mapRef.current;
-    
+
     return () => {
-      // Clear all intervals
       intervals.forEach(clearInterval);
-      
-      // Clean up map listeners
       if (mapInstance) {
         mapInstance.off('click');
       }
-      
-      // Clean up SoundCloud iframes
       const soundCloudIframes = document.querySelectorAll('iframe[src*="soundcloud.com"]');
-      soundCloudIframes.forEach(iframe => {
-        iframe.remove();
-      });
+      soundCloudIframes.forEach((iframe) => iframe.remove());
     };
   }, []);
 
-  // ========== ADD THIS NEW USEEFFECT RIGHT HERE ==========
   useEffect(() => {
-    // Component mounted successfully
     console.log('Map component initialized');
   }, []);
-
 
   // ========== MOBILE DETECTION & RESPONSIVE IFRAME ==========
   useEffect(() => {
     const checkMobile = () => {
-      const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-                             window.innerWidth < 768;
+      const isMobileDevice =
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+        window.innerWidth < 768;
       setIsMobile(isMobileDevice);
-      
-      // Set iframe height based on screen size
+
       if (window.innerWidth < 480) {
-        setIframeHeight(120); // Small phones
+        setIframeHeight(120);
       } else if (window.innerWidth < 768) {
-        setIframeHeight(140); // Tablets/large phones
+        setIframeHeight(140);
       } else {
-        setIframeHeight(166); // Desktop
+        setIframeHeight(166);
       }
     };
-    
-    // Check on mount
+
     checkMobile();
-    
-    // Listen for resize and orientation changes
     window.addEventListener('resize', checkMobile);
     window.addEventListener('orientationchange', checkMobile);
-    
+
     return () => {
       window.removeEventListener('resize', checkMobile);
       window.removeEventListener('orientationchange', checkMobile);
     };
   }, []);
 
-  // ========== AUTOPLAY MUSIC ON MAP LOAD - MOBILE OPTIMIZED ==========
+  // ========== AUTOPLAY MUSIC ON MAP LOAD ==========
   useEffect(() => {
-    // Only try autoplay if we have tracks and haven't attempted yet
     if (unlockedTracks.length > 0 && !isPlaying) {
-      // Mobile devices get longer delay to prevent performance issues
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      const delay = isMobile ? 2000 : 1000; // 2s for mobile, 1s for desktop
-      
+      const delay = isMobile ? 2000 : 1000;
+
       const autoplayTimer = setTimeout(() => {
         setIsPlaying(true);
         console.log('Attempting autoplay...');
       }, delay);
-      
+
       return () => clearTimeout(autoplayTimer);
     }
-  }, [unlockedTracks.length]); // Run when tracks change
+  }, [unlockedTracks.length]);
 
   // ========== STARTUP AUTOPLAY: LOCAL CLASSIC TRACK ==========
   useEffect(() => {
@@ -1146,7 +810,6 @@ const {
     startupAudio.volume = volume;
     startupAudioRef.current = startupAudio;
 
-    // Best-effort autoplay; browser may still block without prior user gesture.
     startupAudio.play().catch((error) => {
       console.log('Startup autoplay blocked:', error);
     });
@@ -1170,17 +833,16 @@ const {
   // Fix marker colors on page refresh - only apply favoriteColor to markers without an explicit color
   useEffect(() => {
     if (userProfile?.favoriteColor && userMarkers.length > 0) {
-      // Only fix markers that have NO color set (undefined/null), preserve individual colors
-      const updatedMarkers = userMarkers.map(marker => {
+      const updatedMarkers = userMarkers.map((marker) => {
         if (marker.userId === user?.uid && !marker.color) {
           return {
             ...marker,
-            color: userProfile.favoriteColor || '#10b981'
+            color: userProfile.favoriteColor || '#10b981',
           };
         }
         return marker;
       });
-      
+
       if (updatedMarkers.some((marker, index) => marker.color !== userMarkers[index].color)) {
         setUserMarkers(updatedMarkers);
       }
@@ -1198,13 +860,11 @@ const {
 
   const togglePlay = () => {
     if (unlockedTracks.length === 0) return;
-    
     setIsPlaying(!isPlaying);
   };
 
   const playNextTrack = () => {
     if (unlockedTracks.length === 0) return;
-    
     const nextIndex = (currentTrackIndex + 1) % unlockedTracks.length;
     setCurrentTrackIndex(nextIndex);
     setIsPlaying(true);
@@ -1212,7 +872,6 @@ const {
 
   const playPreviousTrack = () => {
     if (unlockedTracks.length === 0) return;
-    
     const prevIndex = currentTrackIndex > 0 ? currentTrackIndex - 1 : unlockedTracks.length - 1;
     setCurrentTrackIndex(prevIndex);
     setIsPlaying(true);
@@ -1220,168 +879,13 @@ const {
 
   const getCurrentTrackName = () => {
     if (unlockedTracks.length === 0) return 'No tracks unlocked';
-    
     const track = unlockedTracks[currentTrackIndex];
     return getTrackNameFromUrlHelper(track);
   };
-  
+
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newVolume = parseFloat(e.target.value);
     setVolume(newVolume);
-  };
-
-  const calculateStreakBonus = (): number => {
-    const today = new Date().toDateString();
-    if (lastMarkerDate === today) {
-      return 0;
-    }
-    setLastMarkerDate(today);
-    return 25;
-  };
-
-  const loadAllMarkers = async (): Promise<void> => {
-    const startTime = performance.now();
-    setLoadingMarkers(true);
-    try {
-      // 🔧 PERFORMANCE: Dynamic limit based on marker quality
-      const markerLimit = markerQuality === 'low' ? 12 : markerQuality === 'medium' ? 25 : 50;
-      const q = query(
-        collection(db, 'markers'),
-        orderBy('createdAt', 'desc'),
-        limit(markerLimit)
-      );
-      
-      const querySnapshot = await getDocs(q);
-        const loadedMarkers: UserMarker[] = [];
-        
-        querySnapshot.forEach((doc) => {
-          const data = doc.data() as FirestoreMarker;
-          loadedMarkers.push({
-            id: `marker-${doc.id}`,
-            firestoreId: doc.id,
-            position: data.position,
-            name: data.name as MarkerName,
-            description: data.description as MarkerDescription,
-            color: data.color || '#10b981',
-            timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(),
-            userId: data.userId,
-            username: data.username || 'Anonymous',
-            userProfilePic: data.userProfilePic || generateAvatarUrl(data.userId, data.username),
-            distanceFromCenter: data.distanceFromCenter ?? undefined,
-            repEarned: data.repEarned || 0,
-            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
-            specialType: data.specialType || null,
-            // Load missing style fields with proper defaults
-            surface: 'wall' as any,
-            graffitiType: 'tag' as any,
-            styleId: data.styleId || undefined
-          });
-        });
-      
-      loadedMarkers.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-      setUserMarkers(loadedMarkers);
-      
-    } catch (error) {
-      console.error('Error loading all markers:', error);
-    } finally {
-      setLoadingMarkers(false);
-      logPerformance('loadAllMarkers', startTime);
-    }
-  };
-
-  const loadTopPlayers = async (): Promise<void> => {
-    try {
-      const usersRef = collection(db, 'users');
-      const usersSnapshot = await getDocs(usersRef);
-      
-      const allUsers: TopPlayer[] = [];
-      
-      usersSnapshot.forEach((doc) => {
-        const data = doc.data();
-        allUsers.push({
-          uid: data.uid,
-          username: data.username,
-          profilePicUrl: data.profilePicUrl,
-          rank: data.rank,
-          rep: data.rep || 0,
-          level: data.level || 1,
-          totalMarkers: data.totalMarkers || 0,
-          lastActive: data.lastActive?.toDate() || new Date()
-        });
-      });
-      
-      const sortedUsers = allUsers
-        .filter(user => user.username && user.rep > 0)
-        .sort((a, b) => b.rep - a.rep)
-        .slice(0, 3);
-      
-      const playersWithPositions = await Promise.all(
-        sortedUsers.map(async (player) => {
-          try {
-            const markersQuery = query(
-              collection(db, 'markers'),
-              where('userId', '==', player.uid),
-              orderBy('createdAt', 'desc'),
-              limit(1)
-            );
-            
-            const markersSnapshot = await getDocs(markersQuery);
-            
-            if (!markersSnapshot.empty) {
-              const latestMarker = markersSnapshot.docs[0].data();
-              return {
-                ...player,
-                position: latestMarker.position
-              };
-            }
-          } catch (error) {
-            console.error(`Error getting position for ${player.username}:`, error);
-          }
-          
-          return player;
-        })
-      );
-      
-      setTopPlayers(playersWithPositions);
-    } catch (error) {
-      console.error('Error loading top players:', error);
-    }
-  };
-
-  const loadTopCrews = async (): Promise<void> => {
-    try {
-      const crewsRef = collection(db, 'crews');
-      const crewsSnapshot = await getDocs(crewsRef);
-      
-      const allCrews: TopCrew[] = [];
-      
-      crewsSnapshot.forEach((doc) => {
-        const data = doc.data();
-        allCrews.push({
-          crewId: data.id || doc.id,
-          name: data.name,
-          totalRep: data.rep || 0,
-          memberCount: data.members ? data.members.length : 0,
-          color: data.color || '#4dabf7',
-          accentColor: data.accentColor || '#339af0',
-          description: data.description || '',
-          leaderName: data.leader || 'Unknown',
-          leaderUsername: data.leaderUsername || 'Unknown',
-          leaderProfilePicUrl: data.leaderProfilePicUrl || generateAvatarUrl(doc.id, data.leader || 'Unknown'),
-          createdAt: data.createdAt?.toDate() || new Date(),
-          lastActive: data.lastActive?.toDate() || new Date()
-        });
-      });
-      
-      const sortedCrews = allCrews
-        .filter(crew => crew.name && crew.totalRep > 0)
-        .sort((a, b) => b.totalRep - a.totalRep)
-        .slice(0, 3);
-      
-      setTopCrews(sortedCrews);
-    } catch (error) {
-      console.error('Error loading top crews:', error);
-    }
   };
 
   const handleProfileSetup = async (data: {
@@ -1394,25 +898,25 @@ const {
       alert('Please enter a username');
       return;
     }
-    
+
     setProfileLoading(true);
-    
+
     try {
       const profilePicUrl = generateAvatarUrl(user.uid, data.username.trim(), data.gender as Gender);
-      
+
       let crewId: CrewId | null = null;
       let crewName: string | null = null;
       const isSolo = data.crewChoice === 'solo';
-      
+
       if (!isSolo && data.selectedCrew) {
         crewId = data.selectedCrew as CrewId;
-        const selectedCrewData = CREWS.find(c => c.id === data.selectedCrew);
+        const selectedCrewData = CREWS.find((c) => c.id === data.selectedCrew);
         crewName = selectedCrewData?.name || null;
-        
+
         const crewsRef = collection(db, 'crews');
         const crewQuery = query(crewsRef, where('id', '==', crewId));
         const crewSnapshot = await getDocs(crewQuery);
-        
+
         if (crewSnapshot.empty) {
           const newCrewRef = doc(crewsRef);
           await setDoc(newCrewRef, {
@@ -1423,407 +927,395 @@ const {
             createdBy: user.uid,
             rep: 0,
             color: selectedCrewData?.colors?.primary || '#4dabf7',
-            description: selectedCrewData?.description || ''
+            description: selectedCrewData?.description || '',
           });
         } else {
           const crewDoc = crewSnapshot.docs[0];
           const currentMembers = crewDoc.data().members || [];
           if (!currentMembers.includes(user.uid)) {
             await updateDoc(doc(db, 'crews', crewDoc.id), {
-              members: [...currentMembers, user.uid]
+              members: [...currentMembers, user.uid],
             });
           }
         }
       }
-      
-      // Initialize unlocked colors based on crew/solo choice
+
       const initialUnlockedColors = initializeUnlockedColors(crewId);
       const initialFavoriteColor = getDefaultColorForCrew(crewId);
-      
-      // Set the selected marker color to the crew's default
+
       setSelectedMarkerColor(initialFavoriteColor);
-      
-      const userProfileData: UserProfile = {
-        uid: user.uid,
-        email: user.email || '',
-        username: data.username.trim(),
-        gender: data.gender as Gender,
-        profilePicUrl: profilePicUrl,
-        rep: 0,
-        level: 1,
-        rank: 'TOY',
-        totalMarkers: 0,
-        favoriteColor: initialFavoriteColor,
-        unlockedColors: initialUnlockedColors,
-        unlockedTracks: getRandomStartTrack(),
-        createdAt: new Date(),
-        lastActive: new Date(),
-        crewId: crewId,
-        crewName: crewName,
-        isSolo: isSolo,
-        crewJoinedAt: crewId ? new Date() : null,
-        crewRank: 'RECRUIT',
-        crewRep: 0,
-        currentAct: 1,
-        storyProgress: 0,
-        markersPlaced: 0,
-        photosTaken: 0,
-        collaborations: 0,
-        blackoutEventsInvestigated: 0,
-        kaiTiakiEvaluationsReceived: 0,
-        hasReceivedCrewWelcomeMessage: false,
-        // Initialize graffiti styles
-        unlockedGraffitiTypes: ['tag'],
-        activeGraffitiStyle: 'tag'
-      };
-      
+
+          const userProfileData: UserProfile = {
+            uid: user.uid,
+            email: user.email || '',
+            username: data.username.trim(),
+            gender: data.gender as Gender,
+            profilePicUrl: profilePicUrl,
+            rep: 0,
+            level: 1,
+            rank: 'TOY',
+            totalMarkers: 0,
+            favoriteColor: initialFavoriteColor,
+            unlockedColors: initialUnlockedColors,
+            unlockedTracks: getRandomStartTrack(),
+            createdAt: new Date(),
+            lastActive: new Date(),
+            crewId: crewId,
+            crewName: crewName,
+            isSolo: isSolo,
+            crewJoinedAt: crewId ? new Date() : null,
+            crewRank: 'RECRUIT',
+            crewRep: 0,
+            currentAct: 1,
+            storyProgress: 0,
+            markersPlaced: 0,
+            photosTaken: 0,
+            collaborations: 0,
+            blackoutEventsInvestigated: 0,
+            kaiTiakiEvaluationsReceived: 0,
+            hasReceivedCrewWelcomeMessage: false,
+            unlockedGraffitiTypes: ['tag'],
+            activeGraffitiStyle: 'tag',
+            unlockedVideos: [],
+            // Story fields
+            activeMissions: [],
+            completedMissions: [],
+          };
+
       const userRef = doc(db, 'users', user.uid);
       await setDoc(userRef, {
         ...userProfileData,
         createdAt: Timestamp.now(),
         lastActive: Timestamp.now(),
-        crewJoinedAt: crewId ? Timestamp.now() : null
+        crewJoinedAt: crewId ? Timestamp.now() : null,
       });
-      
-      const storyRef = doc(db, 'story', user.uid);
-      await setDoc(storyRef, {
-        userId: user.uid,
-        currentAct: 1,
-        storyProgress: 0,
-        completedMissions: [],
-        activeMissions: ['act1_intro'],
-        crewTrust: { bqc: 0, sps: 0, lzt: 0, dgc: 0 },
-        plotRevealed: false,
-        lastUpdated: Timestamp.now()
-      });
-      
-      setUserProfile(userProfileData);
-      
-      // 🎵 START MUSIC DURING PROFILE SETUP
-      // Set up the default track for new users
-      setUnlockedTracks(getRandomStartTrack());
-      setCurrentTrackIndex(0);
-      setIsPlaying(true);
-      
-      setShowProfileSetup(false);
-      setProfileUsername('');
-      setProfileCrewName('');
-      setSelectedCrew('');
-      setProfileCrewChoice('crew');
-      
-      await loadTopPlayers();
-      await loadAllMarkers();
-      
-      // 🎵 Show welcome message with music info
-      setTimeout(() => {
-        alert(`🎉 Welcome to Blackout NZ, ${data.username}!\n\n🎵 Your music is now playing: Blackout - Classic\n\nThe city awaits your tags. Get out there and make your mark!`);
-      }, 500);
-      
-    } catch (error: any) {
-      console.error('Error creating profile:', error);
-      alert(`Failed to create profile: ${error.message}`);
-    } finally {
-      setProfileLoading(false);
-    }
-  };
-  
-  const handleLogin = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault();
-    setAuthError(null);
-    
-    // 🎵 Start playing on user interaction
-    setIsPlaying(true);
-    
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      setShowLogin(false);
-      setEmail('');
-      setPassword('');
-    } catch (error: any) {
-      setAuthError(error.message);
-    }
-  };
 
-  const handleSignup = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault();
-    setAuthError(null);
-    
-    // 🎵 Start playing on user interaction
-    setIsPlaying(true);
-    
-    try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      setShowSignup(false);
-      setEmail('');
-      setPassword('');
-    } catch (error: any) {
-      setAuthError(error.message);
-    }
-  };
+          // Initialize story document
+          const storyRef = doc(db, 'story', user.uid);
+          await setDoc(storyRef, {
+            userId: user.uid,
+            currentAct: 1,
+            storyProgress: 0,
+            completedMissions: [],
+            activeMissions: ['act1_intro'],
+            crewTrust: { bqc: 0, sps: 0, lzt: 0, dgc: 0 },
+            plotRevealed: false,
+            lastUpdated: Timestamp.now(),
+          });
 
-  const handleLogout = async (): Promise<void> => {
-    try {
-      setIsPlaying(false);
-      closeAllPanels(); // Close all panels on logout
-      await signOut(auth);
-    } catch (error: any) {
-      setAuthError(error.message);
-    }
-  };
+          setUserProfile(userProfileData);
+          setStoryData({
+            activeMissions: ['act1_intro'],
+            completedMissions: [],
+            storyProgress: 0,
+            currentAct: 1,
+          });
 
-  const saveFavoriteColor = async (color: string): Promise<void> => {
-    if (!user || !userProfile) return;
-    
-    try {
-      const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, {
-        favoriteColor: color,
-        lastActive: Timestamp.now()
-      });
-      
-      setUserProfile(prev => prev ? {
-        ...prev,
-        favoriteColor: color
-      } : null);
-      
-    } catch (error) {
-      console.error('Error saving favorite color:', error);
-    }
-  };
+          setUnlockedTracks(getRandomStartTrack());
+          setCurrentTrackIndex(0);
+          setIsPlaying(true);
 
-  useEffect(() => {
-    setIsClient(true);
-    
-    if (typeof window !== 'undefined') {
-      import('leaflet').then((L) => {
-        delete (L.Icon.Default.prototype as any)._getIconUrl;
-        L.Icon.Default.mergeOptions({
-          iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-          iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-          shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-        });
-        setMapReady(true);
-      });
-    }
-  }, []);
+          setShowProfileSetup(false);
+          setProfileUsername('');
+          setProfileCrewName('');
+          setSelectedCrew('');
+          setProfileCrewChoice('crew');
 
-  const loadDrops = useCallback(async (): Promise<void> => {
-    try {
-      const loadedDrops = await loadAllDrops();
-      // 🔧 PERFORMANCE: Ultra aggressive drop limiting
-      const dropLimit = markerQuality === 'low' ? 30 : markerQuality === 'medium' ? 75 : 150;
-      const limitedDrops = (loadedDrops as Drop[]).slice(0, dropLimit);
-      setDrops(limitedDrops);
-    } catch (error) {
-      console.error('Error loading drops:', error);
-    }
-  }, [markerQuality]);
+          await loadTopPlayers();
+          await loadAllMarkers();
 
-const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
-  try {
-    const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-    if (userDoc.exists()) {
-      const data = userDoc.data();
-      
-      let profilePicUrl = data.profilePicUrl;
-      if (!profilePicUrl || profilePicUrl === '') {
-        profilePicUrl = generateAvatarUrl(currentUser.uid, data.username, data.gender);
-      }
-      
-      const favoriteColor = data.favoriteColor || '#10b981';
-      setSelectedMarkerColor(favoriteColor);
-
-      const userUnlockedTracks = data.unlockedTracks && data.unlockedTracks.length > 0 
-  ? data.unlockedTracks 
-  : getRandomStartTrack();
-      setUnlockedTracks(userUnlockedTracks);
-
-      // Initialize unlockedColors if not present (for existing users)
-      const userUnlockedColors = data.unlockedColors || initializeUnlockedColors(data.crewId);
-      
-      const userProfileData: UserProfile = {
-        uid: data.uid || currentUser.uid,
-        email: data.email || currentUser.email || '',
-        username: data.username || 'Anonymous',
-        gender: data.gender || 'prefer-not-to-say',
-        profilePicUrl: profilePicUrl,
-        rep: data.rep || 0,
-        level: data.level || 1,
-        rank: data.rank || 'TOY',
-        totalMarkers: data.totalMarkers || 0,
-        favoriteColor: favoriteColor,
-        unlockedColors: userUnlockedColors,
-        unlockedTracks: userUnlockedTracks,
-        createdAt: data.createdAt?.toDate() || new Date(),
-        lastActive: data.lastActive?.toDate() || new Date(),
-        // Make sure crewId is a short code, not Firestore ID
-        crewId: data.crewId || null,
-        crewName: data.crewName || null,
-        isSolo: data.isSolo !== undefined ? data.isSolo : true,
-        crewJoinedAt: data.crewJoinedAt?.toDate() || null,
-        crewRank: data.crewRank || 'RECRUIT',
-        crewRep: data.crewRep || 0,
-        currentAct: data.currentAct || 1,
-        storyProgress: data.storyProgress || 0,
-        markersPlaced: data.markersPlaced || 0,
-        photosTaken: data.photosTaken || 0,
-        collaborations: data.collaborations || 0,
-        blackoutEventsInvestigated: data.blackoutEventsInvestigated || 0,
-        kaiTiakiEvaluationsReceived: data.kaiTiakiEvaluationsReceived || 0,
-        hasReceivedCrewWelcomeMessage: data.hasReceivedCrewWelcomeMessage || false, // Initialize new field
-        unlockedVideos: data.unlockedVideos || []
-      };
-      
-      // Set profile first, then start data loading
-      setUserProfile(userProfileData);
-      setShowProfileSetup(false);
-      
-      // Load additional data after profile is set to avoid race conditions
-      try {
-        await Promise.all([
-          loadTopPlayers(),
-          loadAllMarkers(),
-          loadDrops()
-        ]);
-      } catch (loadError) {
-        console.error('Error loading additional data:', loadError);
-        // Don't fail profile loading if other data fails
-      }
-      
-      return true;
-    } else {
-      setShowProfileSetup(true);
-      setUserProfile(null);
-      return false;
-    }
-  } catch (error) {
-    console.error('Error loading user profile:', error);
-    setShowProfileSetup(true);
-    setUserProfile(null);
-    return false;
-  }
-};
-
-  // Check auth state
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      setLoadingAuth(false);
-      
-      if (currentUser) {
-        setLoadingUserProfile(true);
-        try {
-          // loadUserProfile already fetches top players, markers, and drops internally.
-          // We only call it once here to avoid double-loading data on login.
-          await loadUserProfile(currentUser);
-        } catch (error) {
-          console.error('Error during initialization:', error);
+          setTimeout(() => {
+            alert(`🎉 Welcome to Blackout NZ, ${data.username}!\n\n🎵 Your music is now playing: Blackout - Classic\n\nThe city awaits your tags. Get out there and make your mark!`);
+          }, 500);
+        } catch (error: any) {
+          console.error('Error creating profile:', error);
+          alert(`Failed to create profile: ${error.message}`);
         } finally {
-          setLoadingUserProfile(false);
+          setProfileLoading(false);
         }
-      } else {
-        setUserProfile(null);
-        setUserMarkers([]);
-        setDrops([]);
-        setTopPlayers([]);
-        setShowProfileSetup(false);
-        setNextMarkerNumber(1);
-        setLoadingUserProfile(false);
-        setIsPlaying(false);
-        closeAllPanels(); // Close all panels when logged out
+      };
+
+      const handleLogin = async (e: React.FormEvent): Promise<void> => {
+        e.preventDefault();
+        setAuthError(null);
+        setIsPlaying(true);
+
+        try {
+          await signInWithEmailAndPassword(auth, email, password);
+          setShowLogin(false);
+          setEmail('');
+          setPassword('');
+        } catch (error: any) {
+          setAuthError(error.message);
+        }
+      };
+
+      const handleSignup = async (e: React.FormEvent): Promise<void> => {
+        e.preventDefault();
+        setAuthError(null);
+        setIsPlaying(true);
+
+        try {
+          await createUserWithEmailAndPassword(auth, email, password);
+          setShowSignup(false);
+          setEmail('');
+          setPassword('');
+        } catch (error: any) {
+          setAuthError(error.message);
+        }
+      };
+
+      const handleLogout = async (): Promise<void> => {
+        try {
+          setIsPlaying(false);
+          closeAllPanels();
+          await signOut(auth);
+        } catch (error: any) {
+          setAuthError(error.message);
+        }
+      };
+
+      const saveFavoriteColor = async (color: string): Promise<void> => {
+        if (!user || !userProfile) return;
+
+        try {
+          const userRef = doc(db, 'users', user.uid);
+          await updateDoc(userRef, {
+            favoriteColor: color,
+            lastActive: Timestamp.now(),
+          });
+
+          setUserProfile((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  favoriteColor: color,
+                }
+              : null
+          );
+        } catch (error) {
+          console.error('Error saving favorite color:', error);
+        }
+      };
+
+      useEffect(() => {
+        setIsClient(true);
+
+        if (typeof window !== 'undefined') {
+          import('leaflet').then((L) => {
+            delete (L.Icon.Default.prototype as any)._getIconUrl;
+            L.Icon.Default.mergeOptions({
+              iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+              iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+              shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+            });
+            setMapReady(true);
+          });
+        }
+      }, []);
+
+      const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+
+            let profilePicUrl = data.profilePicUrl;
+            if (!profilePicUrl || profilePicUrl === '') {
+              profilePicUrl = generateAvatarUrl(currentUser.uid, data.username, data.gender);
+            }
+
+            const favoriteColor = data.favoriteColor || '#10b981';
+            setSelectedMarkerColor(favoriteColor);
+
+            const userUnlockedTracks = data.unlockedTracks && data.unlockedTracks.length > 0 ? data.unlockedTracks : getRandomStartTrack();
+            setUnlockedTracks(userUnlockedTracks);
+
+            const userUnlockedColors = data.unlockedColors || initializeUnlockedColors(data.crewId);
+
+            // Load story data
+            const storyDoc = await getDoc(doc(db, 'story', currentUser.uid));
+            let storyFields = {};
+            if (storyDoc.exists()) {
+              const story = storyDoc.data();
+              storyFields = {
+                activeMissions: story.activeMissions || [],
+                completedMissions: story.completedMissions || [],
+                storyProgress: story.storyProgress || 0,
+                currentAct: story.currentAct || 1,
+              };
+              setStoryData(storyFields as any);
+            } else {
+              // Initialize story if missing
+          const defaultStory = {
+            activeMissions: ['act1_intro'],
+            completedMissions: [],
+            storyProgress: 0,
+            currentAct: 1,
+          };
+          setStoryData(defaultStory);
+          storyFields = defaultStory;
+            }
+
+            const userProfileData: UserProfile = {
+              uid: data.uid || currentUser.uid,
+              email: data.email || currentUser.email || '',
+              username: data.username || 'Anonymous',
+              gender: data.gender || 'prefer-not-to-say',
+              profilePicUrl: profilePicUrl,
+              rep: data.rep || 0,
+              level: data.level || 1,
+              rank: data.rank || 'TOY',
+              totalMarkers: data.totalMarkers || 0,
+              favoriteColor: favoriteColor,
+              unlockedColors: userUnlockedColors,
+              unlockedTracks: userUnlockedTracks,
+              createdAt: data.createdAt?.toDate() || new Date(),
+              lastActive: data.lastActive?.toDate() || new Date(),
+              crewId: data.crewId || null,
+              crewName: data.crewName || null,
+              isSolo: data.isSolo !== undefined ? data.isSolo : true,
+              crewJoinedAt: data.crewJoinedAt?.toDate() || null,
+              crewRank: data.crewRank || 'RECRUIT',
+              crewRep: data.crewRep || 0,
+              currentAct: (storyFields as any).currentAct || 1,
+              storyProgress: (storyFields as any).storyProgress || 0,
+              markersPlaced: data.markersPlaced || 0,
+              photosTaken: data.photosTaken || 0,
+              collaborations: data.collaborations || 0,
+              blackoutEventsInvestigated: data.blackoutEventsInvestigated || 0,
+              kaiTiakiEvaluationsReceived: data.kaiTiakiEvaluationsReceived || 0,
+              hasReceivedCrewWelcomeMessage: data.hasReceivedCrewWelcomeMessage || false,
+              unlockedVideos: data.unlockedVideos || [],
+              unlockedGraffitiTypes: data.unlockedGraffitiTypes || ['tag'],
+              activeGraffitiStyle: data.activeGraffitiStyle || 'tag',
+              selectedGraffitiStyle: data.selectedGraffitiStyle,
+              selectedStyleVariant: data.selectedStyleVariant,
+              // Story fields
+              activeMissions: (storyFields as any).activeMissions,
+              completedMissions: (storyFields as any).completedMissions,
+            };
+
+            setUserProfile(userProfileData);
+            setShowProfileSetup(false);
+
+            try {
+              await Promise.all([loadTopPlayers(), loadAllMarkers(), loadDrops()]);
+            } catch (loadError) {
+              console.error('Error loading additional data:', loadError);
+            }
+
+            return true;
+          } else {
+            setShowProfileSetup(true);
+            setUserProfile(null);
+            return false;
+          }
+        } catch (error) {
+          console.error('Error loading user profile:', error);
+          setShowProfileSetup(true);
+          setUserProfile(null);
+          return false;
+        }
+      };
+
+      // Check auth state
+      useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+          setUser(currentUser);
+          setLoadingAuth(false);
+
+          if (currentUser) {
+            setLoadingUserProfile(true);
+            try {
+              await loadUserProfile(currentUser);
+            } catch (error) {
+              console.error('Error during initialization:', error);
+            } finally {
+              setLoadingUserProfile(false);
+            }
+          } else {
+            setUserProfile(null);
+            setUserMarkers([]);
+            setDrops([]);
+            setTopPlayers([]);
+            setShowProfileSetup(false);
+            setNextMarkerNumber(1);
+            setLoadingUserProfile(false);
+            setIsPlaying(false);
+            closeAllPanels();
+          }
+        });
+
+        return () => unsubscribe();
+      }, []); // loadDrops is now defined above, but this effect runs once on mount
+
+      // Sync unlocked tracks from userProfile when profile loads
+      useEffect(() => {
+        if (userProfile?.unlockedTracks && userProfile.unlockedTracks.length > 0) {
+          setUnlockedTracks(userProfile.unlockedTracks);
+        }
+      }, [userProfile?.unlockedTracks]);
+
+  const handleCollectTrack = useCallback(
+    async (trackUrl: string, trackName: string) => {
+      if (!user || !userProfile) {
+        alert('Please sign in first!');
+        return;
       }
-    });
-    
-    return () => unsubscribe();
-  }, [loadDrops]);
 
-  // Initialize Story Manager when user is authenticated
-  useEffect(() => {
-    if (user && userProfile) {
-      setStoryManagerInitialized(true);
-    } else {
-      setStoryManagerInitialized(false);
-    }
-  }, [user, userProfile]);
+      const currentTracks = userProfile.unlockedTracks || [];
+      if (currentTracks.includes(trackUrl)) {
+        alert('🎵 This track is already in your collection!');
+        return;
+      }
 
-  // 🎵 Sync unlocked tracks from userProfile when profile loads
-  useEffect(() => {
-    if (userProfile?.unlockedTracks && userProfile.unlockedTracks.length > 0) {
-      // Sync unlocked tracks from user profile
-      setUnlockedTracks(userProfile.unlockedTracks);
-    }
-  }, [userProfile]);
+      try {
+        const newTracks = [...currentTracks, trackUrl];
 
-  // 🎵 Also sync when userProfile is updated with new tracks
-  useEffect(() => {
-    if (userProfile?.unlockedTracks && userProfile.unlockedTracks.length > 0) {
-      console.log('🔄 Syncing unlockedTracks from userProfile:', userProfile.unlockedTracks);
-      setUnlockedTracks(userProfile.unlockedTracks);
-    }
-  }, [userProfile?.unlockedTracks]);
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, {
+          unlockedTracks: newTracks,
+          lastActive: Timestamp.now(),
+        });
 
-  // 🎵 Handle track collection from Spotify player
-  const handleCollectTrack = useCallback(async (trackUrl: string, trackName: string) => {
-    if (!user || !userProfile) {
-      alert('Please sign in first!');
-      return;
-    }
+        setUserProfile((prev) =>
+          prev
+            ? {
+                ...prev,
+                unlockedTracks: newTracks,
+              }
+            : null
+        );
+        setUnlockedTracks(newTracks);
 
-    // Check if track is already collected
-    const currentTracks = userProfile.unlockedTracks || [];
-    if (currentTracks.includes(trackUrl)) {
-      alert('🎵 This track is already in your collection!');
-      return;
-    }
+        setRepNotification({
+          show: true,
+          amount: 0,
+          message: `🎵 Track Collected: ${trackName}!`,
+        });
 
-    try {
-      // Add track to collection
-      const newTracks = [...currentTracks, trackUrl];
-      
-      // Update Firestore
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
-        unlockedTracks: newTracks,
-        lastActive: Timestamp.now()
-      });
-      
-      // Update local state
-      setUserProfile(prev => prev ? {
-        ...prev,
-        unlockedTracks: newTracks
-      } : null);
-      
-      setUnlockedTracks(newTracks);
-      
-      // Show success notification
-      setRepNotification({
-        show: true,
-        amount: 0,
-        message: `🎵 Track Collected: ${trackName}!`
-      });
-      
-      console.log('🎵 Track collected successfully:', trackName);
-      
-    } catch (error) {
-      console.error('Error collecting track:', error);
-      alert('Failed to collect track. Please try again.');
-    }
-  }, [user, userProfile]);
+        console.log('🎵 Track collected successfully:', trackName);
+      } catch (error) {
+        console.error('Error collecting track:', error);
+        alert('Failed to collect track. Please try again.');
+      }
+    },
+    [user, userProfile]
+  );
 
-  // Dynamic logo functions
   const getLogoSrc = (crewId: CrewId | null | undefined): string => {
-    // Map crew IDs to logo files
     switch (crewId) {
-      case 'bqc': // Blaqwt Crew
-        return '/botoplogo1.svg'; // Default logo for Blaqwt Crew
-      case 'sps': // Spontaneous
-        return '/botoplogo2.svg'; // Different logo for Spontaneous
-      case 'lzt': // Luzunt
-        return '/botoplogo3.svg'; // Different logo for Luzunt
-      case 'dgc': // Don't Get Capped
-        return '/botoplogo4.svg'; // Different logo for Don't Get Capped
-      default: // Solo or unknown crew
-        return '/botoplogo.svg'; // Default logo for solo players
+      case 'bqc':
+        return '/botoplogo1.svg';
+      case 'sps':
+        return '/botoplogo2.svg';
+      case 'lzt':
+        return '/botoplogo3.svg';
+      case 'dgc':
+        return '/botoplogo4.svg';
+      default:
+        return '/botoplogo.svg';
     }
   };
 
@@ -1842,18 +1334,18 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     }
   };
 
-  
-
   useEffect(() => {
     loadDrops();
   }, [loadDrops]);
 
-  
   useEffect(() => {
     if (gpsPosition && !mapCenter) {
       const [lat, lng] = gpsPosition;
-      const withinNZ = lat >= NZ_BOUNDS[0][0] && lat <= NZ_BOUNDS[1][0] &&
-                      lng >= NZ_BOUNDS[0][1] && lng <= NZ_BOUNDS[1][1];
+      const withinNZ =
+        lat >= NZ_BOUNDS[0][0] &&
+        lat <= NZ_BOUNDS[1][0] &&
+        lng >= NZ_BOUNDS[0][1] &&
+        lng <= NZ_BOUNDS[1][1];
 
       if (withinNZ) {
         setMapCenter(gpsPosition);
@@ -1879,422 +1371,268 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     }
   }, [gpsPosition, isTracking, zoom]);
 
-  const centerMap = useCallback((coords: [number, number], zoomLevel: number = 15) => {
-    setMapCenter(coords);
-    setZoom(zoomLevel);
-    
-    if (mapRef.current) {
-      mapRef.current.setView(coords, zoomLevel);
-    }
-  }, []);
+  // UPDATED: Handle photo selection with GPS extraction and ImgBB upload
+  const handlePhotoSelect = useCallback(
+    async (photoData: { url: string; file: File; location?: { lat: number; lng: number } }) => {
+      if (!user || !userProfile) return;
+      if (isCreatingDrop) return;
 
-  const saveMarkerToFirestore = async (marker: UserMarker): Promise<string | null> => {
-    if (!user || !userProfile) return null;
-    
-    try {
-      // Use new advanced REP calculation
-      const repResult = calculateRepForMarker(
-        marker.name, 
-        marker.description, 
-        marker.distanceFromCenter || null,
-        marker.surface,
-        marker.graffitiType
-      );
-      const streakBonus = calculateStreakBonus();
-      const totalRep = repResult.rep + streakBonus;
-      
-        const markerData = {
-          position: marker.position,
-          name: marker.name,
-          description: marker.description,
-          color: marker.color,
-          timestamp: Timestamp.fromDate(marker.timestamp),
-          userId: user.uid,
+      setIsCreatingDrop(true);
+      setIsUploadingPhoto(true);
+      try {
+        let photoUrl: string;
+
+        try {
+          photoUrl = await uploadImageToImgBB(photoData.file);
+        } catch (uploadError: any) {
+          console.error('ImgBB upload failed:', uploadError);
+          alert(`Photo upload failed: ${uploadError.message}. Please try a smaller image.`);
+          setIsUploadingPhoto(false);
+          return;
+        }
+
+        let dropLat: number, dropLng: number;
+        let usePhotoLocation = false;
+
+        if (photoData.location) {
+          dropLat = photoData.location.lat;
+          dropLng = photoData.location.lng;
+          usePhotoLocation = true;
+
+          const withinNZ =
+            dropLat >= NZ_BOUNDS[0][0] &&
+            dropLat <= NZ_BOUNDS[1][0] &&
+            dropLng >= NZ_BOUNDS[0][1] &&
+            dropLng <= NZ_BOUNDS[1][1];
+
+          if (!withinNZ) {
+            alert('⚠️ This photo was taken outside New Zealand.\n\nThe drop will be placed at your current location instead.');
+            if (gpsPosition) {
+              dropLat = gpsPosition[0];
+              dropLng = gpsPosition[1];
+              usePhotoLocation = false;
+            } else {
+              throw new Error('Photo location outside NZ and no GPS available');
+            }
+          }
+        } else {
+          if (!pendingDropPosition) {
+            throw new Error('No drop position available');
+          }
+          dropLat = pendingDropPosition.lat;
+          dropLng = pendingDropPosition.lng;
+        }
+
+        const newDrop: Drop = {
+          id: `drop-${Date.now()}-${Math.random()}`,
+          firestoreId: '',
+          lat: dropLat,
+          lng: dropLng,
+          photoUrl,
+          createdBy: user.uid,
+          timestamp: new Date(),
+          likes: [],
           username: userProfile.username,
           userProfilePic: userProfile.profilePicUrl,
-          createdAt: firestoreServerTimestamp(),
-          distanceFromCenter: marker.distanceFromCenter || null,
-          repEarned: totalRep,
-          // New surface and graffiti type fields
-          surface: marker.surface || migrateMarkerNameToSurface(marker.name),
-          graffitiType: marker.graffitiType || migrateMarkerDescriptionToGraffiti(marker.description),
-          repBreakdown: repResult.breakdown,
-          // Special color effect (rainbow, glow, metallic)
-          specialType: marker.specialType || null,
-          // Persist selected graffiti style/font so rendering matches user selection
-          ...(marker.styleId || userProfile.selectedGraffitiStyle
-            ? { styleId: marker.styleId || userProfile.selectedGraffitiStyle }
-            : {})
+          photoMetadata: {
+            hasLocation: usePhotoLocation,
+            originalLat: photoData.location?.lat,
+            originalLng: photoData.location?.lng,
+            timestamp: new Date(photoData.file.lastModified),
+          },
         };
-      const docRef = await addDoc(collection(db, 'markers'), markerData);
-      
-      const newRep = userProfile.rep + totalRep;
-      const newRank = calculateRank(newRep);
-      const newLevel = calculateLevel(newRep);
-      
-      const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, {
-          rep: newRep,
-        rank: newRank,
-        level: newLevel,
-        totalMarkers: userProfile.totalMarkers + 1,
-        lastActive: Timestamp.now()
-      });
-      
-      setUserProfile(prev => prev ? {
-        ...prev,
-        rep: newRep,
-        rank: newRank,
-        level: newLevel,
-        totalMarkers: prev.totalMarkers + 1
-      } : null);
-      
-      await loadTopPlayers();
-      
-      let message = 'Marker placed!';
-      if (streakBonus > 0) {
-        message = '🔥 Daily Streak Bonus!';
-      } else if (marker.description === 'Piece/Bombing' || marker.description === 'Burner/Heater') {
-        message = '🔥 BOMBING REP!';
-      }
-      
-      setRepNotification({
-        show: true,
-        amount: totalRep,
-        message: message,
-        breakdown: repResult.breakdown
-      });
 
-      // Check if user just placed their first drop and send welcome message if needed
-      if (userProfile.crewId && !userProfile.hasReceivedCrewWelcomeMessage) {
-        const crewLeaderName = CREWS.find(c => c.id === userProfile.crewId)?.leader;
-        const leaderCharacter = characters.find(char => char.name.includes(crewLeaderName || ''));
+        const dropId = await saveDropToFirestore(newDrop);
 
-        if (leaderCharacter) {
-          const greetingMessage = 
-            `${leaderCharacter.name.replace('👑 ', '')}: Awesome first tag, ${userProfile.username}! Keep it up. This city won't tag itself. 🎨`;
-          
-          setNpcWelcomeNotification({
-            show: true,
-            leaderName: leaderCharacter.name.replace('👑 ', ''),
-            message: greetingMessage,
+        if (dropId) {
+          console.log('📸 Photo drop created:', {
+            dropId,
+            photoUrl: newDrop.photoUrl,
+            hasGPSLocation: usePhotoLocation,
+            location: usePhotoLocation ? `${dropLat}, ${dropLng}` : 'Manual placement',
           });
 
-          // Update user profile in Firestore to mark message as sent
+          const repEarned = usePhotoLocation ? 15 : 10;
+          const newRep = (userProfile.rep || 0) + repEarned;
+          const newRank = calculateRank(newRep);
+          const newLevel = calculateLevel(newRep);
+
+          const currentTracks = userProfile.unlockedTracks && userProfile.unlockedTracks.length > 0 ? userProfile.unlockedTracks : getRandomStartTrack();
+          const unlockResult = unlockRandomSoundCloudTrack(currentTracks);
+          const newTracks = unlockResult.newTracks;
+
           const userRef = doc(db, 'users', user.uid);
           await updateDoc(userRef, {
-            hasReceivedCrewWelcomeMessage: true,
-            lastActive: Timestamp.now()
+            rep: newRep,
+            rank: newRank,
+            level: newLevel,
+            unlockedTracks: newTracks,
+            lastActive: Timestamp.now(),
+            photosTaken: (userProfile.photosTaken || 0) + 1,
           });
 
-                      // Update local userProfile state
-                      setUserProfile(prev => prev ? {
-                        ...prev,
-                        hasReceivedCrewWelcomeMessage: true
-                      } : null);
-                    }
-                  }
-          
-                  // Check for mission completion: "First Tags" (act1_intro) after 3rd drop
-                  const newTotalMarkers = (userProfile.totalMarkers || 0) + 1;
-                  if (newTotalMarkers === 3 && userProfile.activeMissions?.includes('act1_intro')) {
-                    const storyRef = doc(db, 'story', user.uid);
-                    await updateDoc(storyRef, {
-                      activeMissions: (userProfile.activeMissions || []).filter(id => id !== 'act1_intro'),
-                      completedMissions: [...(userProfile.completedMissions || []), 'act1_intro'],
-                      storyProgress: (userProfile.storyProgress || 0) + 1, // Increment story progress
-                      lastUpdated: Timestamp.now()
-                    });
-          
-                    // Update local userProfile state for active/completed missions and story progress
-                    setUserProfile(prev => prev ? {
-                      ...prev,
-                      activeMissions: prev.activeMissions?.filter(id => id !== 'act1_intro') || [],
-                      completedMissions: [...(prev.completedMissions || []), 'act1_intro'],
-                      storyProgress: (prev.storyProgress || 0) + 1,
-                    } : null);
-          
-                    // Optional: Show a notification for mission completion
-                    setRepNotification({
-                      show: true,
-                      amount: 0, // No direct REP from mission completion here, handled by mission rewards
-                      message: 'MISSION COMPLETE: First Tags! 🎉',
-                    });
-                  }
-                
-                return docRef.id;
-              } catch (error) {
-                console.error('Error saving marker to Firestore:', error);
-                return null;
-              }
-            };
-  // UPDATED: Handle photo selection with GPS extraction and ImgBB upload
-  const handlePhotoSelect = useCallback(async (photoData: { 
-    url: string; 
-    file: File; 
-    location?: { lat: number; lng: number } 
-  }) => {
-    if (!user || !userProfile) {
-      return;
-    }
-    if (isCreatingDrop) {
-      return;
-    }
+          setUserProfile((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  rep: newRep,
+                  rank: newRank,
+                  level: newLevel,
+                  unlockedTracks: newTracks,
+                  photosTaken: (prev.photosTaken || 0) + 1,
+                }
+              : prev
+          );
 
-    setIsCreatingDrop(true);
-    setIsUploadingPhoto(true);
-    try {
-      // First, upload the photo to ImgBB to get a proper URL
-      let photoUrl: string;
-      
-      try {
-        photoUrl = await uploadImageToImgBB(photoData.file);
-      } catch (uploadError: any) {
-        console.error('ImgBB upload failed:', uploadError);
-        alert(`Photo upload failed: ${uploadError.message}. Please try a smaller image.`);
-        setIsUploadingPhoto(false);
-        return;
-      }
-      
-      // Determine where to place the drop
-      let dropLat: number, dropLng: number;
-      let usePhotoLocation = false;
+          console.log('📸 PHOTO DROP: Saved newTracks to state:', newTracks);
+          setUnlockedTracks(newTracks);
 
-      if (photoData.location) {
-        // Use the photo's GPS location
-        dropLat = photoData.location.lat;
-        dropLng = photoData.location.lng;
-        usePhotoLocation = true;
-        
-        // Check if photo location is within New Zealand bounds
-        const withinNZ = dropLat >= NZ_BOUNDS[0][0] && dropLat <= NZ_BOUNDS[1][0] &&
-                        dropLng >= NZ_BOUNDS[0][1] && dropLng <= NZ_BOUNDS[1][1];
-        
-        if (!withinNZ) {
-          alert('⚠️ This photo was taken outside New Zealand.\n\nThe drop will be placed at your current location instead.');
-          if (gpsPosition) {
-            dropLat = gpsPosition[0];
-            dropLng = gpsPosition[1];
-            usePhotoLocation = false;
-          } else {
-            throw new Error('Photo location outside NZ and no GPS available');
+          setDrops((prev) => [{ ...newDrop, firestoreId: dropId, id: dropId }, ...prev]);
+
+          if ((selectedMusicDrop as any)?.discovered && selectedMusicDrop?.id) {
+            replaceMusicDropWithDropType(selectedMusicDrop.id, 'photo');
+            setSelectedMusicDrop(null);
           }
-        }
-      } else {
-        // Use pending drop position (manual placement)
-        if (!pendingDropPosition) {
-          throw new Error('No drop position available');
-        }
-        dropLat = pendingDropPosition.lat;
-        dropLng = pendingDropPosition.lng;
-      }
+          setShowPhotoModal(false);
+          setPendingDropPosition(null);
 
-      const newDrop: Drop = {
-        lat: dropLat,
-        lng: dropLng,
-        photoUrl,
-        createdBy: user.uid,
-        timestamp: new Date(),
-        likes: [],
-        username: userProfile.username,
-        userProfilePic: userProfile.profilePicUrl,
-        photoMetadata: {
-          hasLocation: usePhotoLocation,
-          originalLat: photoData.location?.lat,
-          originalLng: photoData.location?.lng,
-          timestamp: new Date(photoData.file.lastModified)
-        }
-      };
+          const trackUnlocked = newTracks.length > currentTracks.length;
+          const unlockedTrackName = trackUnlocked ? getTrackNameFromUrlHelper(newTracks[newTracks.length - 1]) : '';
+          const unlockedTrackUrl = trackUnlocked ? newTracks[newTracks.length - 1] : '';
 
-      const dropId = await saveDropToFirestore(newDrop);
-      
-      if (dropId) {
-        console.log('📸 Photo drop created:', {
-          dropId,
-          photoUrl: newDrop.photoUrl,
-          hasGPSLocation: usePhotoLocation,
-          location: usePhotoLocation ? `${dropLat}, ${dropLng}` : 'Manual placement'
-        });
-        
-        // Reward for GPS-tagged photos
-        const repEarned = usePhotoLocation ? 15 : 10;
-        const newRep = (userProfile.rep || 0) + repEarned;
-        const newRank = calculateRank(newRep);
-        const newLevel = calculateLevel(newRep);
-
-        const currentTracks = userProfile.unlockedTracks && userProfile.unlockedTracks.length > 0 
-          ? userProfile.unlockedTracks 
-          : getRandomStartTrack();
-        // 📸 PHOTO DROP: Unlocks SoundCloud tracks only
-        const unlockResult = unlockRandomSoundCloudTrack(currentTracks);
-        const newTracks = unlockResult.newTracks;
-
-        const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, {
-          rep: newRep,
-          rank: newRank,
-          level: newLevel,
-          unlockedTracks: newTracks,
-          lastActive: Timestamp.now(),
-          photosTaken: (userProfile.photosTaken || 0) + 1
-        });
-
-        setUserProfile(prev => prev ? {
-          ...prev,
-          rep: newRep,
-          rank: newRank,
-          level: newLevel,
-          unlockedTracks: newTracks,
-          photosTaken: (prev.photosTaken || 0) + 1
-        } : prev);
-
-        console.log('📸 PHOTO DROP: Saved newTracks to state:', newTracks);
-        setUnlockedTracks(newTracks);
-
-        setDrops(prev => [{ ...newDrop, firestoreId: dropId, id: `drop-${dropId}` }, ...prev]);
-        
-
-        // If this photo was placed over a discovered music drop, remove that music drop now
-        const replacementDropId = selectedMusicDrop?.id || selectedMusicDrop?.firestoreId;
-        if ((selectedMusicDrop as any)?.discovered && replacementDropId) {
-          replaceMusicDropWithDropType(replacementDropId, 'photo');
-          setSelectedMusicDrop(null);
-        }
-        setShowPhotoModal(false);
-        setPendingDropPosition(null);
-
-        const trackUnlocked = newTracks.length > currentTracks.length;
-        const unlockedTrackName = trackUnlocked ? getTrackNameFromUrlHelper(newTracks[newTracks.length - 1]) : '';
-        const unlockedTrackUrl = trackUnlocked ? newTracks[newTracks.length - 1] : '';
-
-        if (trackUnlocked) {
-          // Show full-screen celebration modal
-          setSongUnlockModal({
-            isOpen: true,
-            trackUrl: unlockedTrackUrl,
-            trackName: unlockedTrackName,
-            source: 'GPS PHOTO DROP'
-          });
-          
-          // 🆕 Set recently unlocked track for music panel display
-          const isSpotifyTrack = unlockedTrackUrl.includes('open.spotify.com');
-          setRecentlyUnlocked({
-            url: unlockedTrackUrl,
-            name: unlockedTrackName,
-            source: isSpotifyTrack ? 'Spotify' : 'SoundCloud'
-          });
-        }
-
-        const trackUnlockedMessage = trackUnlocked 
-          ? `🎵 NEW TRACK UNLOCKED! 🎵\n\n${unlockedTrackName}`
-          : null;
-
-        setRepNotification({
-          show: true,
-          amount: repEarned,
-          message: trackUnlockedMessage || `📸 Photo Drop Placed! +${repEarned} REP`
-        });
-
-        // Center map on the drop location
-        if (mapRef.current) {
-          mapRef.current.setView([dropLat, dropLng], 17);
-        }
-
-        // Check if user just placed their first drop and send welcome message if needed
-        if (userProfile.crewId && !userProfile.hasReceivedCrewWelcomeMessage) {
-          const crewLeaderName = CREWS.find(c => c.id === userProfile.crewId)?.leader;
-          const leaderCharacter = characters.find(char => char.name.includes(crewLeaderName || ''));
-
-          if (leaderCharacter) {
-            const greetingMessage = 
-              `${leaderCharacter.name.replace('👑 ', '')}: Your photo drops are lighting up the city, ${userProfile.username}! Keep snapping and making history. 📸`;
-            
-            setNpcWelcomeNotification({
-              show: true,
-              leaderName: leaderCharacter.name.replace('👑 ', ''),
-              message: greetingMessage,
+          if (trackUnlocked) {
+            setSongUnlockModal({
+              isOpen: true,
+              trackUrl: unlockedTrackUrl,
+              trackName: unlockedTrackName,
+              source: 'GPS PHOTO DROP',
             });
 
-            // Update user profile in Firestore to mark message as sent
-            const userRef = doc(db, 'users', user.uid);
-            await updateDoc(userRef, {
-              hasReceivedCrewWelcomeMessage: true,
-              lastActive: Timestamp.now()
+            const isSpotifyTrack = unlockedTrackUrl.includes('open.spotify.com');
+            setRecentlyUnlocked({
+              url: unlockedTrackUrl,
+              name: unlockedTrackName,
+              source: isSpotifyTrack ? 'Spotify' : 'SoundCloud',
             });
-
-            // Update local userProfile state
-            setUserProfile(prev => prev ? {
-              ...prev,
-              hasReceivedCrewWelcomeMessage: true
-            } : null);
           }
-        }
 
-        // Check for mission completion: "First Tags" (act1_intro) after 3rd drop
-        const newTotalMarkers = (userProfile.totalMarkers || 0) + 1;
-        if (newTotalMarkers === 3 && userProfile.activeMissions?.includes('act1_intro')) {
-          const storyRef = doc(db, 'story', user.uid);
-          await updateDoc(storyRef, {
-            activeMissions: (userProfile.activeMissions || []).filter(id => id !== 'act1_intro'),
-            completedMissions: [...(userProfile.completedMissions || []), 'act1_intro'],
-            storyProgress: (userProfile.storyProgress || 0) + 1, // Increment story progress
-            lastUpdated: Timestamp.now()
-          });
+          const trackUnlockedMessage = trackUnlocked ? `🎵 NEW TRACK UNLOCKED! 🎵\n\n${unlockedTrackName}` : null;
 
-          // Update local userProfile state for active/completed missions and story progress
-          setUserProfile(prev => prev ? {
-            ...prev,
-            activeMissions: prev.activeMissions?.filter(id => id !== 'act1_intro') || [],
-            completedMissions: [...(prev.completedMissions || []), 'act1_intro'],
-            storyProgress: (prev.storyProgress || 0) + 1,
-          } : null);
-
-          // Optional: Show a notification for mission completion
           setRepNotification({
             show: true,
-            amount: 0, // No direct REP from mission completion here, handled by mission rewards
-            message: 'MISSION COMPLETE: First Tags! 🎉',
+            amount: repEarned,
+            message: trackUnlockedMessage || `📸 Photo Drop Placed! +${repEarned} REP`,
           });
+
+          if (mapRef.current) {
+            mapRef.current.setView([dropLat, dropLng], 17);
+          }
+
+          if (userProfile.crewId && !userProfile.hasReceivedCrewWelcomeMessage) {
+            const crewLeaderName = CREWS.find((c) => c.id === userProfile.crewId)?.leader;
+            const leaderCharacter = characters.find((char) => char.name.includes(crewLeaderName || ''));
+
+            if (leaderCharacter) {
+              const greetingMessage = `${leaderCharacter.name.replace('👑 ', '')}: Your photo drops are lighting up the city, ${userProfile.username}! Keep snapping and making history. 📸`;
+
+              setNpcWelcomeNotification({
+                show: true,
+                leaderName: leaderCharacter.name.replace('👑 ', ''),
+                message: greetingMessage,
+              });
+
+              const userRef = doc(db, 'users', user.uid);
+              await updateDoc(userRef, {
+                hasReceivedCrewWelcomeMessage: true,
+                lastActive: Timestamp.now(),
+              });
+
+              setUserProfile((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      hasReceivedCrewWelcomeMessage: true,
+                    }
+                  : null
+              );
+            }
+          }
+
+          const newTotalMarkers = (userProfile.totalMarkers || 0) + 1;
+          if (newTotalMarkers === 3 && storyData?.activeMissions?.includes('act1_intro')) {
+            const storyRef = doc(db, 'story', user.uid);
+            await updateDoc(storyRef, {
+              activeMissions: (storyData.activeMissions || []).filter((id) => id !== 'act1_intro'),
+              completedMissions: [...(storyData.completedMissions || []), 'act1_intro'],
+              storyProgress: (storyData.storyProgress || 0) + 1,
+              lastUpdated: Timestamp.now(),
+            });
+
+            setStoryData((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    activeMissions: prev.activeMissions.filter((id) => id !== 'act1_intro'),
+                    completedMissions: [...prev.completedMissions, 'act1_intro'],
+                    storyProgress: prev.storyProgress + 1,
+                  }
+                : null
+            );
+
+            setUserProfile((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    activeMissions: prev.activeMissions?.filter((id) => id !== 'act1_intro') || [],
+                    completedMissions: [...(prev.completedMissions || []), 'act1_intro'],
+                    storyProgress: (prev.storyProgress || 0) + 1,
+                  }
+                : null
+            );
+
+            setRepNotification({
+              show: true,
+              amount: 0,
+              message: 'MISSION COMPLETE: First Tags! 🎉',
+            });
+          }
+        } else {
+          throw new Error('Failed to save drop');
         }
-      } else {
-        throw new Error('Failed to save drop');
+      } catch (error) {
+        console.error('Error creating drop:', error);
+        alert(`Failed to create drop: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      } finally {
+        setIsUploadingPhoto(false);
+        setIsCreatingDrop(false);
       }
-    } catch (error) {
-      console.error('Error creating drop:', error);
-      alert(`Failed to create drop: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsUploadingPhoto(false);
-      setIsCreatingDrop(false);
-    }
-  }, [user, userProfile, pendingDropPosition, gpsPosition, loadDrops, isCreatingDrop, selectedMusicDrop, replaceMusicDropWithDropType]);
+    },
+    [user, userProfile, pendingDropPosition, gpsPosition, loadDrops, isCreatingDrop, selectedMusicDrop, replaceMusicDropWithDropType, storyData]
+  );
 
   const handleMarkerDrop = useCallback(async () => {
-    if (!user || !userProfile || !pendingDropPosition) {
-      return;
-    }
-    if (isCreatingDrop) {
-      return;
-    }
+    if (!user || !userProfile || !pendingDropPosition) return;
+    if (isCreatingDrop) return;
 
-    // 🆕 Check if we're replacing a discovered music drop
-    if (selectedMusicDrop && selectedMusicDrop.discovered) {
-      await handleMusicDropReplacement(selectedMusicDrop.id, 'marker');
+    if (selectedMusicDrop && (selectedMusicDrop as any).discovered) {
+      if (selectedMusicDrop.id) {
+        await handleMusicDropReplacement(selectedMusicDrop.id, 'marker');
+      }
       setSelectedMusicDrop(null);
       setShowDropTypeModal(false);
       return;
     }
 
-    // 🚫 Rate limit: Set loading state with safety timeout
     setIsCreatingDrop(true);
-    
-    // 🛡️ Safety timeout: Auto-reset after 10 seconds in case of hangs
     const safetyTimeout = setTimeout(() => {
       console.warn('⚠️ Safety timeout: Resetting isCreatingDrop (marker)');
       setIsCreatingDrop(false);
     }, 10000);
-    
+
     try {
       const newDrop: Drop = {
+        id: `drop-${Date.now()}-${Math.random()}`,
+        firestoreId: '',
         lat: pendingDropPosition.lat,
         lng: pendingDropPosition.lng,
         createdBy: user.uid,
@@ -2306,31 +1644,26 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
       const dropId = await saveDropToFirestore(newDrop);
 
-      // DEBUG: Log the current style being used (use ref to get latest)
       const currentUserProfile = userProfileRef.current;
       const isFirstTag = (currentUserProfile?.totalMarkers || 0) === 0;
       const forcedFirstTagStyleId = `${currentUserProfile?.crewId || 'bqc'}-tag-svg-2`;
-      const currentStyleId = isFirstTag
-        ? forcedFirstTagStyleId
-        : currentUserProfile?.selectedGraffitiStyle;
+      const currentStyleId = isFirstTag ? forcedFirstTagStyleId : currentUserProfile?.selectedGraffitiStyle;
+
       console.log('🎨 Creating marker with styleId:', currentStyleId);
 
       const markerData: UserMarker = {
         id: `temp-${Date.now()}`,
         position: [pendingDropPosition.lat, pendingDropPosition.lng],
-        name: SURFACE_TO_MARKER_NAME[selectedSurface],
-        description: GRAFFITI_TO_MARKER_DESCRIPTION[selectedGraffitiType],
+        name: SURFACE_TO_MARKER_NAME[selectedSurface] as MarkerName,
+        description: GRAFFITI_TO_MARKER_DESCRIPTION[selectedGraffitiType] as MarkerDescription,
         color: selectedMarkerColor,
         timestamp: new Date(),
         userId: user.uid,
         username: currentUserProfile?.username,
         userProfilePic: currentUserProfile?.profilePicUrl,
-        // New surface and graffiti type fields
-        surface: selectedSurface as any,
-        graffitiType: selectedGraffitiType as any,
-        // Special color effect
+        surface: selectedSurface,
+        graffitiType: selectedGraffitiType,
         specialType: selectedSpecialType,
-        // Selected graffiti style from Blackbook
         styleId: currentStyleId,
       };
 
@@ -2342,10 +1675,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         const newRank = calculateRank(newRep);
         const newLevel = calculateLevel(newRep);
 
-        const currentTracks = userProfile.unlockedTracks && userProfile.unlockedTracks.length > 0 
-          ? userProfile.unlockedTracks 
-          : getRandomStartTrack();
-        // 📍 MARKER DROP: Unlocks Spotify tracks only
+        const currentTracks = userProfile.unlockedTracks && userProfile.unlockedTracks.length > 0 ? userProfile.unlockedTracks : getRandomStartTrack();
         const unlockResult = unlockRandomSpotifyTrack(currentTracks);
         const newTracks = unlockResult.newTracks;
 
@@ -2355,25 +1685,33 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           level: newLevel,
           rank: newRank,
           unlockedTracks: newTracks,
-          ...(isFirstTag ? {
-            selectedGraffitiStyle: forcedFirstTagStyleId,
-            selectedStyleVariant: forcedFirstTagStyleId,
-            activeGraffitiStyle: 'tag'
-          } : {})
+          ...(isFirstTag
+            ? {
+                selectedGraffitiStyle: forcedFirstTagStyleId,
+                selectedStyleVariant: forcedFirstTagStyleId,
+                activeGraffitiStyle: 'tag',
+              }
+            : {}),
         });
 
-        setUserProfile(prev => prev ? {
-          ...prev,
-          rep: newRep,
-          level: newLevel,
-          rank: newRank,
-          unlockedTracks: newTracks,
-          ...(isFirstTag ? {
-            selectedGraffitiStyle: forcedFirstTagStyleId,
-            selectedStyleVariant: forcedFirstTagStyleId,
-            activeGraffitiStyle: 'tag'
-          } : {})
-        } : null);
+        setUserProfile((prev) =>
+          prev
+            ? {
+                ...prev,
+                rep: newRep,
+                level: newLevel,
+                rank: newRank,
+                unlockedTracks: newTracks,
+                ...(isFirstTag
+                  ? {
+                      selectedGraffitiStyle: forcedFirstTagStyleId,
+                      selectedStyleVariant: forcedFirstTagStyleId,
+                      activeGraffitiStyle: 'tag',
+                    }
+                  : {}),
+              }
+            : null
+        );
 
         console.log('📍 MARKER DROP: Saved newTracks to state:', newTracks);
         setUnlockedTracks(newTracks);
@@ -2383,20 +1721,18 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         const unlockedTrackUrl = trackUnlocked ? newTracks[newTracks.length - 1] : '';
 
         if (trackUnlocked) {
-          // Show full-screen celebration modal
           setSongUnlockModal({
             isOpen: true,
             trackUrl: unlockedTrackUrl,
             trackName: unlockedTrackName,
-            source: 'MARKER DROP'
+            source: 'MARKER DROP',
           });
-          
-          // 🆕 Set recently unlocked track for music panel display
+
           const isSpotifyTrack = unlockedTrackUrl.includes('open.spotify.com');
           setRecentlyUnlocked({
             url: unlockedTrackUrl,
             name: unlockedTrackName,
-            source: isSpotifyTrack ? 'Spotify' : 'SoundCloud'
+            source: isSpotifyTrack ? 'Spotify' : 'SoundCloud',
           });
         }
 
@@ -2413,204 +1749,248 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
 
       setShowDropTypeModal(false);
       setPendingDropPosition(null);
-
     } catch (error) {
       console.error('Error creating marker drop:', error);
       alert(`Failed to create marker drop: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
-      // Clear safety timeout
       clearTimeout(safetyTimeout);
       setIsCreatingDrop(false);
     }
-  }, [user, userProfile, pendingDropPosition, selectedMarkerType, selectedMarkerColor, selectedSurface, selectedGraffitiType, loadDrops, loadAllMarkers, loadTopPlayers, isCreatingDrop]);
+  }, [
+    user,
+    userProfile,
+    pendingDropPosition,
+    selectedMarkerType,
+    selectedMarkerColor,
+    selectedSurface,
+    selectedGraffitiType,
+    selectedSpecialType,
+    loadDrops,
+    loadAllMarkers,
+    loadTopPlayers,
+    isCreatingDrop,
+    selectedMusicDrop,
+    handleMusicDropReplacement,
+  ]);
 
   const handlePhotoDrop = useCallback(() => {
     if (isCreatingDrop) return;
-
-    // Always open photo modal so users can choose/take a real photo
     setShowDropTypeModal(false);
     setShowPhotoModal(true);
   }, [isCreatingDrop]);
 
-  const handleMusicDrop = useCallback(async (trackUrl?: string) => {
-    if (!user || !userProfile || !pendingDropPosition) return;
-    if (isCreatingDrop) return;
+  const handleMusicDrop = useCallback(
+    async (trackUrl?: string) => {
+      if (!user || !userProfile || !pendingDropPosition) return;
+      if (isCreatingDrop) return;
 
-    
-    // 🆕 Check if we're replacing a discovered music drop
-    if (selectedMusicDrop && selectedMusicDrop.discovered) {
-      await handleMusicDropReplacement(selectedMusicDrop.id, 'music');
-      setSelectedMusicDrop(null);
-      setShowDropTypeModal(false);
-      return;
-    }
-    
-    const tracks = userProfile.unlockedTracks ?? unlockedTracks;
-    if (tracks.length === 0) return;
-
-    setIsCreatingDrop(true);
-
-    const trackToDrop = trackUrl || selectedTrackForMusicDrop || tracks[0];
-    try {
-      const newDrop: Drop = {
-        lat: pendingDropPosition.lat,
-        lng: pendingDropPosition.lng,
-        trackUrl: trackToDrop,
-        createdBy: user.uid,
-        timestamp: new Date(),
-        likes: [],
-        username: userProfile.username,
-        userProfilePic: userProfile.profilePicUrl,
-      };
-
-      const dropId = await saveDropToFirestore(newDrop);
-      if (!dropId) throw new Error('Failed to save drop');
-
-      const newTracks = tracks.filter((t) => t !== trackToDrop);
-
-      const userRef = doc(db, 'users', user.uid);
-      setUserProfile((prev) => prev ? { ...prev, unlockedTracks: newTracks } : null);
-      // Update local state IMMEDIATELY for instant UI feedback
-      console.log('🎵 Updated local userProfile with new tracks:', newTracks);
-      await updateDoc(userRef, {
-        unlockedTracks: newTracks,
-        lastActive: Timestamp.now(),
-      });
-
-      setUserProfile((prev) =>
-        prev ? { ...prev, unlockedTracks: newTracks } : null
-      );
-      setUnlockedTracks(newTracks);
-      setSelectedTrackForMusicDrop(null);
-
-      setRepNotification({
-        show: true,
-        amount: 0,
-        message: `Music drop placed! You gave away "${getTrackNameFromUrlHelper(trackToDrop)}". ${newTracks.length === 0 ? "You have no songs left." : `${newTracks.length} track(s) remaining.`}`,
-      });
-
-      // Check if user just placed their first drop and send welcome message if needed
-      if (userProfile.crewId && !userProfile.hasReceivedCrewWelcomeMessage) {
-        const crewLeaderName = CREWS.find(c => c.id === userProfile.crewId)?.leader;
-        const leaderCharacter = characters.find(char => char.name.includes(crewLeaderName || ''));
-
-        if (leaderCharacter) {
-          const greetingMessage = 
-            `${leaderCharacter.name.replace('👑 ', '')}: Your beats are dropping hard, ${userProfile.username}! Keep the soundtrack fresh and the streets vibrant. 🎶`;
-          
-          setNpcWelcomeNotification({
-            show: true,
-            leaderName: leaderCharacter.name.replace('👑 ', ''),
-            message: greetingMessage,
-          });
-
-          // Update user profile in Firestore to mark message as sent
-          const userRef = doc(db, 'users', user.uid);
-          await updateDoc(userRef, {
-            hasReceivedCrewWelcomeMessage: true,
-            lastActive: Timestamp.now()
-          });
-
-          // Update local userProfile state
-          setUserProfile(prev => prev ? {
-            ...prev,
-            hasReceivedCrewWelcomeMessage: true
-          } : null);
+      if (selectedMusicDrop && (selectedMusicDrop as any).discovered) {
+        if (selectedMusicDrop.id) {
+          await handleMusicDropReplacement(selectedMusicDrop.id, 'music');
         }
+        setSelectedMusicDrop(null);
+        setShowDropTypeModal(false);
+        return;
       }
 
-      // Check for mission completion: "First Tags" (act1_intro) after 3rd drop
-      const newTotalMarkers = (userProfile.totalMarkers || 0) + 1;
-      if (newTotalMarkers === 3 && userProfile.activeMissions?.includes('act1_intro')) {
-        const storyRef = doc(db, 'story', user.uid);
-        await updateDoc(storyRef, {
-          activeMissions: (userProfile.activeMissions || []).filter(id => id !== 'act1_intro'),
-          completedMissions: [...(userProfile.completedMissions || []), 'act1_intro'],
-          storyProgress: (userProfile.storyProgress || 0) + 1, // Increment story progress
-          lastUpdated: Timestamp.now()
+      const tracks = userProfile.unlockedTracks ?? unlockedTracks;
+      if (tracks.length === 0) return;
+
+      setIsCreatingDrop(true);
+
+      const trackToDrop = trackUrl || selectedTrackForMusicDrop || tracks[0];
+      try {
+        const newDrop: Drop = {
+          id: `drop-${Date.now()}-${Math.random()}`,
+          firestoreId: '',
+          lat: pendingDropPosition.lat,
+          lng: pendingDropPosition.lng,
+          trackUrl: trackToDrop,
+          createdBy: user.uid,
+          timestamp: new Date(),
+          likes: [],
+          username: userProfile.username,
+          userProfilePic: userProfile.profilePicUrl,
+        };
+
+        const dropId = await saveDropToFirestore(newDrop);
+        if (!dropId) throw new Error('Failed to save drop');
+
+        const newTracks = tracks.filter((t) => t !== trackToDrop);
+
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, {
+          unlockedTracks: newTracks,
+          lastActive: Timestamp.now(),
         });
 
-        // Update local userProfile state for active/completed missions and story progress
-        setUserProfile(prev => prev ? {
-          ...prev,
-          activeMissions: prev.activeMissions?.filter(id => id !== 'act1_intro') || [],
-          completedMissions: [...(prev.completedMissions || []), 'act1_intro'],
-          storyProgress: (prev.storyProgress || 0) + 1,
-        } : null);
+        setUserProfile((prev) =>
+          prev
+            ? {
+                ...prev,
+                unlockedTracks: newTracks,
+              }
+            : null
+        );
+        setUnlockedTracks(newTracks);
+        setSelectedTrackForMusicDrop(null);
 
-        // Optional: Show a notification for mission completion
         setRepNotification({
           show: true,
-          amount: 0, // No direct REP from mission completion here, handled by mission rewards
-          message: 'MISSION COMPLETE: First Tags! 🎉',
+          amount: 0,
+          message: `Music drop placed! You gave away "${getTrackNameFromUrlHelper(trackToDrop)}". ${
+            newTracks.length === 0 ? 'You have no songs left.' : `${newTracks.length} track(s) remaining.`
+          }`,
         });
+
+        if (userProfile.crewId && !userProfile.hasReceivedCrewWelcomeMessage) {
+          const crewLeaderName = CREWS.find((c) => c.id === userProfile.crewId)?.leader;
+          const leaderCharacter = characters.find((char) => char.name.includes(crewLeaderName || ''));
+
+          if (leaderCharacter) {
+            const greetingMessage = `${leaderCharacter.name.replace('👑 ', '')}: Your beats are dropping hard, ${
+              userProfile.username
+            }! Keep the soundtrack fresh and the streets vibrant. 🎶`;
+
+            setNpcWelcomeNotification({
+              show: true,
+              leaderName: leaderCharacter.name.replace('👑 ', ''),
+              message: greetingMessage,
+            });
+
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, {
+              hasReceivedCrewWelcomeMessage: true,
+              lastActive: Timestamp.now(),
+            });
+
+            setUserProfile((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    hasReceivedCrewWelcomeMessage: true,
+                  }
+                : null
+            );
+          }
+        }
+
+        const newTotalMarkers = (userProfile.totalMarkers || 0) + 1;
+        if (newTotalMarkers === 3 && storyData?.activeMissions?.includes('act1_intro')) {
+          const storyRef = doc(db, 'story', user.uid);
+          await updateDoc(storyRef, {
+            activeMissions: (storyData.activeMissions || []).filter((id) => id !== 'act1_intro'),
+            completedMissions: [...(storyData.completedMissions || []), 'act1_intro'],
+            storyProgress: (storyData.storyProgress || 0) + 1,
+            lastUpdated: Timestamp.now(),
+          });
+
+          setStoryData((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  activeMissions: prev.activeMissions.filter((id) => id !== 'act1_intro'),
+                  completedMissions: [...prev.completedMissions, 'act1_intro'],
+                  storyProgress: prev.storyProgress + 1,
+                }
+              : null
+          );
+
+          setUserProfile((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  activeMissions: prev.activeMissions?.filter((id) => id !== 'act1_intro') || [],
+                  completedMissions: [...(prev.completedMissions || []), 'act1_intro'],
+                  storyProgress: (prev.storyProgress || 0) + 1,
+                }
+              : null
+          );
+
+          setRepNotification({
+            show: true,
+            amount: 0,
+            message: 'MISSION COMPLETE: First Tags! 🎉',
+          });
+        }
+
+        await loadDrops();
+        setShowDropTypeModal(false);
+        setPendingDropPosition(null);
+      } catch (e) {
+        console.error('Error creating music drop:', e);
+        alert(`Failed to place music drop: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      } finally {
+        setIsCreatingDrop(false);
       }
+    },
+    [
+      user,
+      userProfile,
+      pendingDropPosition,
+      selectedTrackForMusicDrop,
+      unlockedTracks,
+      loadDrops,
+      selectedMusicDrop,
+      handleMusicDropReplacement,
+      isCreatingDrop,
+      storyData,
+    ]
+  );
 
-      await loadDrops();
-      setShowDropTypeModal(false);
-      setPendingDropPosition(null);
-    } catch (e) {
-      console.error('Error creating music drop:', e);
-      alert(`Failed to place music drop: ${e instanceof Error ? e.message : 'Unknown error'}`);
-    } finally {
-      // 🚫 Rate limit: Reset loading state
-      setIsCreatingDrop(false);
-    }
-  }, [user, userProfile, pendingDropPosition, selectedTrackForMusicDrop, unlockedTracks, loadDrops, selectedMusicDrop, handleMusicDropReplacement, isCreatingDrop]);
-
-  const handleMapClick = useCallback(async (e: L.LeafletMouseEvent) => {
-    if (isOfflineMode) {
-      alert('Cannot place markers in offline mode. Switch to online mode to place drops.');
-      return;
-    }
-
-    if (!user) {
-      alert('Please sign in first!');
-      return;
-    }
-
-    if (loadingUserProfile) {
-      //alert('Loading your profile—try again in a moment.');
-      return;
-    }
-
-    if (showProfileSetup || !userProfile) {
-      alert('Please complete your profile first!');
-      return;
-    }
-
-    // 🚫 Rate limit: Prevent spam drops
-    if (isCreatingDrop) {
-      alert('⏳ Please wait - creating drop...');
-      return;
-    }
-
-    const { lat, lng } = e.latlng;
-
-    // Check if click is within the radius circle
-    if (!gpsPosition) {
-      alert('GPS location not available. Enable location services to place drops.');
-      return;
-    }
-
-    const distanceFromGPS = calculateDistanceHelper(
-      gpsPosition[0],
-      gpsPosition[1],
-      lat,
-      lng
-    );
-
-    if (distanceFromGPS > expandedRadius) {
-      //alert(`❌ Too far! You can only place drops within ${expandedRadius}m of your location.\n\nDistance: ${Math.round(distanceFromGPS)}m`);
-      return;
-    }
-
-    setPendingDropPosition({ lat, lng });
-    setShowDropTypeModal(true);
-  }, [user, userProfile, loadingUserProfile, showProfileSetup, isOfflineMode, gpsPosition, expandedRadius, isCreatingDrop]);
+  // Use useMapActions hook for map and marker operations
+  const {
+    handleMapClick,
+    centerMap,
+    centerOnGPS,
+    updateMarker,
+    deleteMarker,
+    deleteAllMarkers,
+    goToMarker,
+    handleRefreshAll,
+  } = useMapActions({
+    user,
+    userProfile,
+    userMarkers,
+    isCreatingDrop,
+    isOfflineMode,
+    loadingUserProfile,
+    showProfileSetup,
+    gpsPosition,
+    expandedRadius,
+    mapRef,
+    musicScan,
+    setUserMarkers,
+    setUserProfile,
+    setNextMarkerNumber,
+    setMapCenter,
+    setZoom,
+    setIsScanning,
+    setIsRefreshing,
+    setPendingDropPosition,
+    setShowDropTypeModal,
+    setRepNotification,
+    loadAllMarkers,
+    loadTopPlayers,
+    loadDrops,
+  });
 
   // Memoized map click handler for performance
   const memoizedHandleMapClick = useMemo(() => handleMapClick, [handleMapClick]);
+
+  // Effect to attach map click listener when dependencies change
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || isOfflineMode) return;
+
+    const clickHandler = (e: L.LeafletMouseEvent) => {
+      memoizedHandleMapClick(e);
+    };
+    map.on('click', clickHandler);
+    return () => {
+      map.off('click', clickHandler);
+    };
+  }, [memoizedHandleMapClick, isOfflineMode]);
 
   const toggleTracking = () => {
     if (isTracking) {
@@ -2620,153 +2000,31 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     }
   };
 
-  const centerOnGPS = useCallback(() => {
-    if (gpsPosition && mapRef.current) {
-      // Trigger the futuristic scan animation
-      setIsScanning(true);
-      
-      setMapCenter(gpsPosition);
-      setZoom(18);
-      mapRef.current.setView(gpsPosition, 18);
-      
-      // Scan for music drops during the GPS scan animation - use 150m radius
-      if (musicScan) {
-        const discoveredTracks = musicScan(gpsPosition, 150);
-        
-        // Show discovered tracks notification after scan animation
-        setTimeout(() => {
-          if (discoveredTracks && discoveredTracks.length > 0) {
-            setRepNotification({
-              show: true,
-              amount: 0,
-              message: `🎵 GPS Scan Complete: Found ${discoveredTracks.length} track${discoveredTracks.length > 1 ? 's' : ''}!`
-            });
-          } else {
-            setRepNotification({
-              show: true,
-              amount: 0,
-              message: '🎵 GPS Scan Complete: No tracks found in range.'
-            });
-          }
-          setIsScanning(false);
-        }, 2500);
-      } else {
-        // Fallback if musicScan is not available
-        setTimeout(() => {
-          setIsScanning(false);
-        }, 2500);
-      }
-    } else {
-      alert('GPS location not available. Please enable location services.');
-    }
-  }, [gpsPosition, musicScan]);
-
-  const updateMarker = (id: string, updates: Partial<UserMarker>) => {
-    setUserMarkers(prev => 
-      prev.map(marker => 
-        marker.id === id ? { ...marker, ...updates } : marker
-      )
-    );
-  };
-
-  const deleteMarker = async (id: string): Promise<void> => {
-    const markerToDelete = userMarkers.find(marker => marker.id === id);
-    
-    if (markerToDelete?.firestoreId) {
-      try {
-        await deleteDoc(doc(db, 'markers', markerToDelete.firestoreId));
-        
-        if (markerToDelete.userId === user?.uid && userProfile && user) {
-          const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, {
-            totalMarkers: userProfile.totalMarkers - 1
-          });
-          
-          setUserProfile(prev => prev ? {
-            ...prev,
-            totalMarkers: prev.totalMarkers - 1
-          } : null);
-        }
-      } catch (error) {
-        console.error('Error deleting marker from Firestore:', error);
-      }
-    }
-    
-    setUserMarkers(prev => prev.filter(marker => marker.id !== id));
-  };
-
-  const deleteAllMarkers = async (): Promise<void> => {
-    if (userMarkers.length > 0 && window.confirm(`Are you sure you want to delete all ${userMarkers.length} markers?`)) {
-      const userMarkerIds = userMarkers
-        .filter(marker => marker.userId === user?.uid && marker.firestoreId)
-        .map(marker => marker.firestoreId);
-      
-      const deletePromises = userMarkerIds.map(id => 
-        id ? deleteDoc(doc(db, 'markers', id)) : Promise.resolve()
-      );
-      
-      await Promise.all(deletePromises);
-      
-      if (user && userProfile) {
-        const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, {
-          totalMarkers: 0
-        });
-        
-        setUserProfile(prev => prev ? {
-          ...prev,
-          totalMarkers: 0
-        } : null);
-      }
-      
-      setUserMarkers([]);
-      setNextMarkerNumber(1);
-    }
-  };
-
-  const goToMarker = (marker: UserMarker) => {
-    centerMap(marker.position, 18);
-  };
-
-  const newZealandLocations = NEW_ZEALAND_LOCATIONS;
-
-  const handleRefreshAll = async (): Promise<void> => {
-    setIsRefreshing(true);
-    try {
-      await loadAllMarkers();
-      await loadTopPlayers();
-      await loadDrops();
-      console.log('All data refreshed successfully');
-    } catch (error) {
-      console.error('Error refreshing data:', error);
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
   // ========== AUTH LOADING CHECK ==========
   if (loadingAuth) {
     return (
-      <div style={{
-        ...fullScreenStyle,
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#f0f0f0',
-        flexDirection: 'column',
-        gap: '20px'
-      }}>
-        <div style={{
-          width: '50px',
-          height: '50px',
-          border: '5px solid #f3f3f3',
-          borderTop: '5px solid #4dabf7',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
-        }}></div>
-        <div style={{ fontSize: '18px', color: '#374151' }}>
-          Loading...
-        </div>
+      <div
+        style={{
+          ...fullScreenStyle,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: '#f0f0f0',
+          flexDirection: 'column',
+          gap: '20px',
+        }}
+      >
+        <div
+          style={{
+            width: '50px',
+            height: '50px',
+            border: '5px solid #f3f3f3',
+            borderTop: '5px solid #4dabf7',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+          }}
+        ></div>
+        <div style={{ fontSize: '18px', color: '#374151' }}>Loading...</div>
         <style>{`
           @keyframes spin {
             0% { transform: rotate(0deg); }
@@ -2804,9 +2062,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
     );
   }
 
-  
-
-  // ========== PROFILE SETUP UI - HELLO MY NAME IS STICKER ==========
+  // ========== PROFILE SETUP UI ==========
   if (showProfileSetup && user) {
     return (
       <ProfileSetupSticker
@@ -2825,24 +2081,28 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
   // ========== MAP LOADING CHECK ==========
   if (!isClient || !mapReady || gpsLoading) {
     return (
-      <div style={{
-        height: '100vh',
-        width: '100vw',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#f0f0f0',
-        flexDirection: 'column',
-        gap: '20px'
-      }}>
-        <div style={{
-          width: '50px',
-          height: '50px',
-          border: '5px solid #f3f3f3',
-          borderTop: '5px solid #4dabf7',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
-        }}></div>
+      <div
+        style={{
+          height: '100vh',
+          width: '100vw',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: '#f0f0f0',
+          flexDirection: 'column',
+          gap: '20px',
+        }}
+      >
+        <div
+          style={{
+            width: '50px',
+            height: '50px',
+            border: '5px solid #f3f3f3',
+            borderTop: '5px solid #4dabf7',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+          }}
+        ></div>
         <div style={{ fontSize: '18px', color: '#374151' }}>
           {gpsLoading ? 'Getting your location...' : 'Loading map...'}
         </div>
@@ -2861,40 +2121,41 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
   }
 
   return (
-      <div style={{ height: '100vh', width: '100vw', position: 'relative' as const }}>
-        {/* REP Notification */}
-        <RepNotification
-          show={repNotification?.show || false}
-          amount={repNotification?.amount || 0}
-          message={repNotification?.message || ''}
-          breakdown={repNotification?.breakdown}
-          onClose={() => setRepNotification(null)}
+    <div style={{ height: '100vh', width: '100vw', position: 'relative' }}>
+      {/* REP Notification */}
+      <RepNotification
+        show={repNotification?.show || false}
+        amount={repNotification?.amount || 0}
+        message={repNotification?.message || ''}
+        breakdown={repNotification?.breakdown}
+        onClose={() => setRepNotification(null)}
+      />
+
+      {/* 🎵 Song Unlock Modal */}
+      {songUnlockModal && (
+        <SongUnlockModal
+          trackUrl={songUnlockModal.trackUrl}
+          trackName={songUnlockModal.trackName}
+          isOpen={songUnlockModal.isOpen}
+          onClose={() => setSongUnlockModal(null)}
+          unlockSource={songUnlockModal.source}
         />
+      )}
 
-        {/* 🎵 Song Unlock Modal - Full screen celebration when unlocking tracks */}
-        {songUnlockModal && (
-          <SongUnlockModal
-            trackUrl={songUnlockModal.trackUrl}
-            trackName={songUnlockModal.trackName}
-            isOpen={songUnlockModal.isOpen}
-            onClose={() => setSongUnlockModal(null)}
-            unlockSource={songUnlockModal.source}
-          />
-        )}
+      {/* 🎬 Video Unlock Modal */}
+      {videoUnlockModal && (
+        <VideoUnlockModal
+          videoUrl={videoUnlockModal.videoUrl}
+          isOpen={videoUnlockModal.isOpen}
+          onClose={() => setVideoUnlockModal(null)}
+          unlockSource={videoUnlockModal.source}
+        />
+      )}
 
-        {/* 🎬 Video Unlock Modal - Full screen celebration when unlocking videos */}
-        {videoUnlockModal && (
-          <VideoUnlockModal
-            videoUrl={videoUnlockModal.videoUrl}
-            isOpen={videoUnlockModal.isOpen}
-            onClose={() => setVideoUnlockModal(null)}
-            unlockSource={videoUnlockModal.source}
-          />
-        )}
-
-        {/* NPC Welcome Notification */}
-        {npcWelcomeNotification?.show && (
-          <div style={{
+      {/* NPC Welcome Notification */}
+      {npcWelcomeNotification?.show && (
+        <div
+          style={{
             position: 'fixed',
             top: '50%',
             left: '50%',
@@ -2909,77 +2170,87 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
             textAlign: 'center',
             color: '#e0e0e0',
-            animation: 'popIn 0.3s ease-out'
-          }}>
-            <h3 style={{
+            animation: 'popIn 0.3s ease-out',
+          }}
+        >
+          <h3
+            style={{
               fontSize: '24px',
               color: '#10b981',
-              marginBottom: '10px'
-            }}>
-              Welcome to the Crew!
-            </h3>
-            <p style={{
+              marginBottom: '10px',
+            }}
+          >
+            Welcome to the Crew!
+          </h3>
+          <p
+            style={{
               fontSize: '16px',
-              marginBottom: '20px'
-            }}>
-              <strong style={{ color: '#4dabf7' }}>{npcWelcomeNotification.leaderName}:</strong> {npcWelcomeNotification.message}
-            </p>
-            <button
-              onClick={() => setNpcWelcomeNotification(null)}
-              style={{
-                backgroundColor: '#10b981',
-                color: 'white',
-                border: 'none',
-                padding: '10px 20px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseOver={(e) => e.currentTarget.style.opacity = '0.9'}
-              onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
-            >
-              Got it!
-            </button>
-            <style>{`
-              @keyframes popIn {
-                from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-                to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+              marginBottom: '20px',
+            }}
+          >
+            <strong style={{ color: '#4dabf7' }}>{npcWelcomeNotification.leaderName}:</strong>{' '}
+            {npcWelcomeNotification.message}
+          </p>
+          <button
+            onClick={() => setNpcWelcomeNotification(null)}
+            style={{
+              backgroundColor: '#10b981',
+              color: 'white',
+              border: 'none',
+              padding: '10px 20px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseOver={(e) => (e.currentTarget.style.opacity = '0.9')}
+            onMouseOut={(e) => (e.currentTarget.style.opacity = '1')}
+          >
+            Got it!
+          </button>
+          <style>{`
+            @keyframes popIn {
+              from {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.8);
               }
-            `}</style>
-          </div>
-        )}
+              to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+              }
+            }
+          `}</style>
+        </div>
+      )}
 
-      {/* Top-Left Logo - Dynamic based on crew selection and day/night */}
-      <div style={{
-        position: 'fixed',
-        top: '15px',
-        left: '15px',
-        zIndex: 1100,
-        pointerEvents: 'none'
-      }}>
-        <img 
+      {/* Top-Left Logo */}
+      <div
+        style={{
+          position: 'fixed',
+          top: '15px',
+          left: '15px',
+          zIndex: 1100,
+          pointerEvents: 'none',
+        }}
+      >
+        <img
           src={getLogoSrc(userProfile?.crewId as CrewId | null | undefined)}
           alt={getLogoAltText(userProfile?.crewId as CrewId | null | undefined)}
           style={{
             width: '120px',
             height: 'auto',
-            filter: isNight 
-              ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.5)) brightness(0) invert(1)'  // White at night
-              : 'drop-shadow(0 2px 4px rgba(255,255,255,0.3)) brightness(0) saturate(0)',  // Black in day
+            filter: isNight
+              ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.5)) brightness(0) invert(1)'
+              : 'drop-shadow(0 2px 4px rgba(255,255,255,0.3)) brightness(0) saturate(0)',
             opacity: 0.9,
-            transition: 'filter 0.5s ease'
+            transition: 'filter 0.5s ease',
           }}
         />
       </div>
-      
-          
+
       <MapContainer
-        center={
-          isOfflineMode && lastKnownPosition ? lastKnownPosition :
-          mapCenter || NZ_CENTER
-        }
+        center={isOfflineMode && lastKnownPosition ? lastKnownPosition : mapCenter || NZ_CENTER}
         zoom={mapCenter ? zoom : NZ_DEFAULT_ZOOM}
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom={true}
@@ -2991,45 +2262,31 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           if (mapInstance) {
             mapRef.current = mapInstance;
             mapInstance.setMaxBounds(NZ_BOUNDS);
-            
-            // Clean up previous listener
-            mapInstance.off('click');
-            
-            // Use memoized click handler
-            if (!isOfflineMode) {
-              const clickHandler = (e: L.LeafletMouseEvent) => {
-                handleMapClick(e);
-              };
-              mapInstance.on('click', clickHandler);
-            }
           }
         }}
       >
-        {/* 🆕 Tile Layer - Satellite, Day, or Night based on settings */}
+        {/* Tile Layer - Satellite, Day, or Night */}
         {showSatelliteView ? (
-          // Satellite view - Esri World Imagery
           <TileLayer
             attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
             url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
           />
         ) : isNight ? (
-          // Night mode - Dark tiles
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/attribution">CARTO</a>'
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           />
         ) : (
-          // Day mode - Light tiles
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
         )}
-        
+
         {/* User GPS Marker */}
         {gpsPosition && (
           <>
-            <Marker 
+            <Marker
               position={gpsPosition}
               icon={(() => {
                 if (typeof window === 'undefined') return undefined;
@@ -3071,7 +2328,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   `,
                   iconSize: [24, 24],
                   iconAnchor: [12, 12],
-                  popupAnchor: [0, -12]
+                  popupAnchor: [0, -12],
                 });
               })()}
             >
@@ -3087,26 +2344,28 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     {isTracking && speed !== null && speed > 0 && (
                       <div>Speed: {(speed * 3.6).toFixed(1)} km/h</div>
                     )}
-                    {isTracking && heading !== null && (
-                      <div>Heading: {Math.round(heading)}°</div>
-                    )}
-                    <div style={{ 
-                      color: isTracking ? '#10b981' : '#f59e0b', 
-                      marginTop: '5px',
-                      fontWeight: 'bold'
-                    }}>
+                    {isTracking && heading !== null && <div>Heading: {Math.round(heading)}°</div>}
+                    <div
+                      style={{
+                        color: isTracking ? '#10b981' : '#f59e0b',
+                        marginTop: '5px',
+                        fontWeight: 'bold',
+                      }}
+                    >
                       {isTracking ? '✅ Live GPS Tracking Active' : '⚠️ GPS not actively tracking'}
                     </div>
-                    <div style={{ 
-                      marginTop: '10px',
-                      padding: '8px',
-                      backgroundColor: '#f0f9ff',
-                      borderRadius: '6px',
-                      fontSize: '11px'
-                    }}>
+                    <div
+                      style={{
+                        marginTop: '10px',
+                        padding: '8px',
+                        backgroundColor: '#f0f9ff',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                      }}
+                    >
                       <strong>👥 {userMarkers.length} drops visible</strong>
                       <div style={{ marginTop: '4px' }}>
-                        ({userMarkers.filter(m => m.userId === user?.uid).length} yours)
+                        ({userMarkers.filter((m) => m.userId === user?.uid).length} yours)
                       </div>
                     </div>
                   </div>
@@ -3114,113 +2373,76 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               </Popup>
             </Marker>
 
-            {/* Radius GRID pattern - GREEN when online, RED when offline */}
-            {show50mRadius && (() => {
-              const circleCenter = isOfflineMode && lastKnownPosition ? lastKnownPosition : gpsPosition;
-              const gridColor = isOfflineMode ? '#ef4444' : '#10b981'; // Red when offline, Green when online
-              const gridFillOpacity = isOfflineMode ? 0.12 : 0.08;
-              const gridOpacity = isOfflineMode ? 0.7 : 0.6;
-              
-              return (
-              <>
-                {/* Main background circle */}
-                <Circle
-                  center={circleCenter}
-                  radius={expandedRadius}
-                  pathOptions={{
-                    color: gridColor,
-                    fillColor: gridColor,
-                    fillOpacity: gridFillOpacity,
-                    weight: 2,
-                    opacity: gridOpacity,
-                  }}
-                  eventHandlers={{
-                    click: isOfflineMode ? undefined : (e) => handleMapClick(e)
-                  }}
-                >
-                  <Popup>
-                    <div style={{ textAlign: 'center' }}>
-                      <strong style={{ color: gridColor }}>
-                        {isOfflineMode
-                          ? `🔴 Offline Mode: ${expandedRadius}m Radius`
-                          : `🟢 Online Mode: ${expandedRadius}m Radius`}
-                      </strong>
-                      {isOfflineMode && (
-                        <div style={{ fontSize: '12px', color: '#ef4444', marginTop: '5px', fontWeight: 'bold' }}>
-                          📍 GPS tracking paused (Offline Mode)
-                        </div>
-                      )}
-                      <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-                        {isOfflineMode
-                          ? 'Use joystick to explore the map'
-                          : 'Click inside this circle to place drops within ' + expandedRadius + 'm'
-                        }
-                      </div>
-                    </div>
-                  </Popup>
-                </Circle>
-                
-                {/* Concentric circles for grid effect */}
-                {[10, 20, 30, 40, 50].map((radius) => (
-                  radius <= expandedRadius && (
+            {/* Radius GRID pattern */}
+            {show50mRadius &&
+              (() => {
+                const circleCenter = isOfflineMode && lastKnownPosition ? lastKnownPosition : gpsPosition;
+                const gridColor = isOfflineMode ? '#ef4444' : '#10b981';
+                const gridFillOpacity = isOfflineMode ? 0.12 : 0.08;
+                const gridOpacity = isOfflineMode ? 0.7 : 0.6;
+
+                return (
+                  <>
                     <Circle
-                      key={`grid-circle-${radius}`}
                       center={circleCenter}
-                      radius={radius}
+                      radius={expandedRadius}
                       pathOptions={{
                         color: gridColor,
-                        fillColor: 'transparent',
-                        fillOpacity: 0,
-                        weight: 1,
-                        opacity: gridOpacity * 0.5,
+                        fillColor: gridColor,
+                        fillOpacity: gridFillOpacity,
+                        weight: 2,
+                        opacity: gridOpacity,
                       }}
-                      interactive={false}
-                    />
-                  )
-                ))}
-                
-                {/* Radial lines for grid effect - 12 lines every 30 degrees */}
-                {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((angle) => {
-                  // Calculate endpoint for radial line
-                  const R = 6371000; // Earth's radius in meters
-                  const bearingRad = (angle * Math.PI) / 180;
-                  const latRad = (circleCenter[0] * Math.PI) / 180;
-                  const lngRad = (circleCenter[1] * Math.PI) / 180;
-                  const angularDist = expandedRadius / R;
-                  
-                  const endLatRad = Math.asin(
-                    Math.sin(latRad) * Math.cos(angularDist) +
-                    Math.cos(latRad) * Math.sin(angularDist) * Math.cos(bearingRad)
-                  );
-                  const endLngRad = lngRad + Math.atan2(
-                    Math.sin(bearingRad) * Math.sin(angularDist) * Math.cos(latRad),
-                    Math.cos(angularDist) - Math.sin(latRad) * Math.sin(endLatRad)
-                  );
-                  
-                  const endPoint: [number, number] = [
-                    (endLatRad * 180) / Math.PI,
-                    (endLngRad * 180) / Math.PI
-                  ];
-                  
-                  return (
-                    <Circle
-                      key={`grid-line-${angle}`}
-                      center={endPoint}
-                      radius={1}
-                      pathOptions={{
-                        color: 'transparent',
-                        fillColor: 'transparent',
-                        fillOpacity: 0,
-                        weight: 0,
-                        opacity: 0,
-                      }}
-                      interactive={false}
-                    />
-                  );
-                })}
-              </>
-              );
-            })()}
+                    >
+                      <Popup>
+                        <div style={{ textAlign: 'center' }}>
+                          <strong style={{ color: gridColor }}>
+                            {isOfflineMode
+                              ? `🔴 Offline Mode: ${expandedRadius}m Radius`
+                              : `🟢 Online Mode: ${expandedRadius}m Radius`}
+                          </strong>
+                          {isOfflineMode && (
+                            <div
+                              style={{
+                                fontSize: '12px',
+                                color: '#ef4444',
+                                marginTop: '5px',
+                                fontWeight: 'bold',
+                              }}
+                            >
+                              📍 GPS tracking paused (Offline Mode)
+                            </div>
+                          )}
+                          <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                            {isOfflineMode
+                              ? 'Use joystick to explore the map'
+                              : 'Click inside this circle to place drops within ' + expandedRadius + 'm'}
+                          </div>
+                        </div>
+                      </Popup>
+                    </Circle>
+
+                    {[10, 20, 30, 40, 50].map(
+                      (radius) =>
+                        radius <= expandedRadius && (
+                          <Circle
+                            key={`grid-circle-${radius}`}
+                            center={circleCenter}
+                            radius={radius}
+                            pathOptions={{
+                              color: gridColor,
+                              fillColor: 'transparent',
+                              fillOpacity: 0,
+                              weight: 1,
+                              opacity: gridOpacity * 0.5,
+                            }}
+                            interactive={false}
+                          />
+                        )
+                    )}
+                  </>
+                );
+              })()}
 
             {/* GPS Accuracy Circle */}
             {accuracy && accuracy > 50 && (
@@ -3233,12 +2455,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   fillOpacity: 0.05,
                   weight: 1,
                   opacity: 0.3,
-                  dashArray: '5, 5'
-                }}
-                eventHandlers={{
-                  click: (e) => {
-                    handleMapClick(e);
-                  }
+                  dashArray: '5, 5',
                 }}
               >
                 <Popup>
@@ -3255,468 +2472,491 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         )}
 
         {/* Top Players Markers */}
-        {showTopPlayers && topPlayers.map((player, index) => {
-          if (!player.position) return null;
-          
-          // Player card colors based on rank
-          const cardColor = index === 0 ? '#fbbf24' : index === 1 ? '#cbd5e1' : '#d97706';
-          const textColor = index === 0 ? '#7c2d12' : index === 1 ? '#1f2937' : '#7c2d12';
-          
-          // Spray can drip - using emoji for simplicity
-          const sprayCanEmoji = '🎨';
-          
-          const customIcon = typeof window !== 'undefined' ? 
-            new (require('leaflet').DivIcon)({
-              html: `
-                <div style="
-                  position: relative;
-                  width: 40px;
-                  height: 40px;
-                  background-color: ${cardColor};
-                  border: 3px solid white;
-                  border-radius: 50%;
-                  box-shadow: 0 3px 10px rgba(0,0,0,0.4);
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  font-weight: bold;
-                  font-size: 14px;
-                  color: ${textColor};
-                  overflow: hidden;
-                ">
-                  <div style="
-                    position: absolute;
-                    top: -5px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background: ${cardColor};
-                    color: ${textColor};
-                    font-size: 10px;
-                    padding: 1px 6px;
-                    border-radius: 10px;
-                    white-space: nowrap;
-                    font-weight: bold;
-                    border: 1px solid white;
-                    z-index: 2;
-                  ">
-                    #${index + 1}
-                  </div>
-                  ${player.username?.charAt(0).toUpperCase() || 'P'}
-                </div>
-              `,
-              iconSize: [40, 40],
-              iconAnchor: [20, 20],
-              popupAnchor: [0, -20]
-            }) : undefined;
+        {showTopPlayers &&
+          topPlayers.map((player, index) => {
+            if (!player.position) return null;
 
-          return (
-            <Marker 
-              key={`top-player-${player.uid}`}
-              position={player.position}
-              icon={customIcon}
-            >
-              <Popup>
-                <div style={{ 
-                  textAlign: 'center', 
-                  minWidth: '220px',
-                  padding: '10px'
-                }}>
-                  <div style={{
-                    position: 'absolute',
-                    top: '-10px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    background: cardColor,
-                    color: textColor,
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    padding: '4px 12px',
-                    borderRadius: '12px',
-                    border: '2px solid white',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                    whiteSpace: 'nowrap',
-                    zIndex: 10
-                  }}>
-                    {index === 0 ? '🥇 TOP WRITER' : index === 1 ? '🥈 RUNNER-UP' : '🥉 CONTENDER'}
-                  </div>
-                  
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    marginTop: '15px',
-                    marginBottom: '15px'
-                  }}>
-                    {/* Player Avatar with Rectangular Border */}
-                    <div style={{
-                      position: 'relative',
-                      width: '60px',
-                      height: '60px',
-                      borderRadius: '0',
-                      border: `3px solid ${cardColor}`,
-                      overflow: 'visible'
-                    }}>
-                      <img
-                        src={player.profilePicUrl}
-                        alt={player.username}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                          display: 'block'
-                        }}
-                      />
-                      {/* Spray Can Drip in Bottom Left */}
-                      <div style={{
-                        position: 'absolute',
-                        bottom: '-8px',
-                        left: '-8px',
-                        width: '20px',
-                        height: '20px',
-                        zIndex: 5,
-                        fontSize: '16px',
-                        lineHeight: '1'
-                      }}>
-                        {sprayCanEmoji}
+            const cardColor = index === 0 ? '#fbbf24' : index === 1 ? '#cbd5e1' : '#d97706';
+            const textColor = index === 0 ? '#7c2d12' : index === 1 ? '#1f2937' : '#7c2d12';
+            const sprayCanEmoji = '🎨';
+
+            const customIcon =
+              typeof window !== 'undefined'
+                ? new (require('leaflet').DivIcon)({
+                    html: `
+                      <div style="
+                        position: relative;
+                        width: 40px;
+                        height: 40px;
+                        background-color: ${cardColor};
+                        border: 3px solid white;
+                        border-radius: 50%;
+                        box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-weight: bold;
+                        font-size: 14px;
+                        color: ${textColor};
+                        overflow: hidden;
+                      ">
+                        <div style="
+                          position: absolute;
+                          top: -5px;
+                          left: 50%;
+                          transform: translateX(-50%);
+                          background: ${cardColor};
+                          color: ${textColor};
+                          font-size: 10px;
+                          padding: 1px 6px;
+                          border-radius: 10px;
+                          white-space: nowrap;
+                          font-weight: bold;
+                          border: 1px solid white;
+                          z-index: 2;
+                        ">
+                          #${index + 1}
+                        </div>
+                        ${player.username?.charAt(0).toUpperCase() || 'P'}
                       </div>
-                    </div>
-                    <div style={{ textAlign: 'left', flex: 1 }}>
-                      <div style={{ 
-                        fontSize: '16px', 
-                        fontWeight: 'bold',
-                        color: cardColor
-                      }}>
-                        {player.username}
-                      </div>
-                      <div style={{ fontSize: '13px', color: '#666' }}>
-                        {player.rank}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: '8px',
-                    marginBottom: '15px',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{
-                      background: '#f8f9fa',
-                      padding: '8px 4px',
-                      borderRadius: '6px',
-                      border: '1px solid #e5e7eb'
-                    }}>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#10b981' }}>
-                        {player.rep}
-                      </div>
-                      <div style={{ fontSize: '10px', color: '#666' }}>REP</div>
-                    </div>
-                    
-                    <div style={{
-                      background: '#f8f9fa',
-                      padding: '8px 4px',
-                      borderRadius: '6px',
-                      border: '1px solid #e5e7eb'
-                    }}>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#4dabf7' }}>
-                        {player.level}
-                      </div>
-                      <div style={{ fontSize: '10px', color: '#666' }}>LVL</div>
-                    </div>
-                    
-                    <div style={{
-                      background: '#f8f9fa',
-                      padding: '8px 4px',
-                      borderRadius: '6px',
-                      border: '1px solid #e5e7eb'
-                    }}>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#8b5cf6' }}>
-                        {player.totalMarkers}
-                      </div>
-                      <div style={{ fontSize: '10px', color: '#666' }}>TAGS</div>
-                    </div>
-                  </div>
-                  
-                  <div style={{
-                    fontSize: '11px',
-                    color: '#94a3b8',
-                    backgroundColor: '#f1f5f9',
-                    padding: '6px',
-                    borderRadius: '4px',
-                    marginTop: '10px'
-                  }}>
-                    Last active: {player.lastActive.toLocaleDateString()}
-                  </div>
-                  
-                  <button
-                    onClick={() => {
-                      centerMap(player.position!, 15);
-                    }}
+                    `,
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20],
+                    popupAnchor: [0, -20],
+                  })
+                : undefined;
+
+            return (
+              <Marker key={`top-player-${player.uid}`} position={player.position} icon={customIcon}>
+                <Popup>
+                  <div
                     style={{
-                      backgroundColor: cardColor,
-                      color: textColor,
-                      border: 'none',
-                      padding: '8px 12px',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      width: '100%',
-                      marginTop: '10px',
-                      transition: 'transform 0.2s'
+                      textAlign: 'center',
+                      minWidth: '220px',
+                      padding: '10px',
                     }}
-                    onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                    onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                   >
-                    🚀 Go to Writer
-                  </button>
-                </div>
-              </Popup>
-            </Marker>
-          );
-        })}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '-10px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        background: cardColor,
+                        color: textColor,
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        padding: '4px 12px',
+                        borderRadius: '12px',
+                        border: '2px solid white',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                        whiteSpace: 'nowrap',
+                        zIndex: 10,
+                      }}
+                    >
+                      {index === 0 ? '🥇 TOP WRITER' : index === 1 ? '🥈 RUNNER-UP' : '🥉 CONTENDER'}
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        marginTop: '15px',
+                        marginBottom: '15px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: 'relative',
+                          width: '60px',
+                          height: '60px',
+                          borderRadius: '0',
+                          border: `3px solid ${cardColor}`,
+                          overflow: 'visible',
+                        }}
+                      >
+                        <img
+                          src={player.profilePicUrl}
+                          alt={player.username}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            display: 'block',
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: '-8px',
+                            left: '-8px',
+                            width: '20px',
+                            height: '20px',
+                            zIndex: 5,
+                            fontSize: '16px',
+                            lineHeight: '1',
+                          }}
+                        >
+                          {sprayCanEmoji}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'left', flex: 1 }}>
+                        <div
+                          style={{
+                            fontSize: '16px',
+                            fontWeight: 'bold',
+                            color: cardColor,
+                          }}
+                        >
+                          {player.username}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#666' }}>{player.rank}</div>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        gap: '8px',
+                        marginBottom: '15px',
+                        textAlign: 'center',
+                      }}
+                    >
+                      <div
+                        style={{
+                          background: '#f8f9fa',
+                          padding: '8px 4px',
+                          borderRadius: '6px',
+                          border: '1px solid #e5e7eb',
+                        }}
+                      >
+                        <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#10b981' }}>{player.rep}</div>
+                        <div style={{ fontSize: '10px', color: '#666' }}>REP</div>
+                      </div>
+
+                      <div
+                        style={{
+                          background: '#f8f9fa',
+                          padding: '8px 4px',
+                          borderRadius: '6px',
+                          border: '1px solid #e5e7eb',
+                        }}
+                      >
+                        <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#4dabf7' }}>{player.level}</div>
+                        <div style={{ fontSize: '10px', color: '#666' }}>LVL</div>
+                      </div>
+
+                      <div
+                        style={{
+                          background: '#f8f9fa',
+                          padding: '8px 4px',
+                          borderRadius: '6px',
+                          border: '1px solid #e5e7eb',
+                        }}
+                      >
+                        <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#8b5cf6' }}>
+                          {player.totalMarkers}
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#666' }}>TAGS</div>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: '11px',
+                        color: '#94a3b8',
+                        backgroundColor: '#f1f5f9',
+                        padding: '6px',
+                        borderRadius: '4px',
+                        marginTop: '10px',
+                      }}
+                    >
+                      Last active: {player.lastActive.toLocaleDateString()}
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        centerMap(player.position!, 15);
+                      }}
+                      style={{
+                        backgroundColor: cardColor,
+                        color: textColor,
+                        border: 'none',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        width: '100%',
+                        marginTop: '10px',
+                        transition: 'transform 0.2s',
+                      }}
+                      onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                      onMouseOut={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+                    >
+                      🚀 Go to Writer
+                    </button>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
 
         {/* Top Crews Markers */}
-        {showTopCrews && topCrews.map((crew, index) => {
-          if (!crew.leaderProfilePicUrl) return null;
-          
-          // Crew card colors based on rank
-          const cardColor = index === 0 ? '#fbbf24' : index === 1 ? '#cbd5e1' : '#d97706';
-          const textColor = index === 0 ? '#7c2d12' : index === 1 ? '#1f2937' : '#7c2d12';
-          const accentColor = index === 0 ? '#f59e0b' : index === 1 ? '#94a3b8' : '#b45309';
-          
-          // Spray can drip - using emoji for simplicity
-          const sprayCanEmoji = '🎨';
-          
-          const customIcon = typeof window !== 'undefined' ? 
-            new (require('leaflet').DivIcon)({
-              html: `
-                <div style="
-                  position: relative;
-                  width: 45px;
-                  height: 45px;
-                  background: linear-gradient(135deg, ${cardColor}, ${accentColor});
-                  border: 3px solid white;
-                  border-radius: 50%;
-                  box-shadow: 0 3px 10px rgba(0,0,0,0.4);
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  font-weight: bold;
-                  font-size: 14px;
-                  color: ${textColor};
-                  overflow: hidden;
-                ">
-                  <div style="
-                    position: absolute;
-                    top: -5px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background: ${cardColor};
-                    color: ${textColor};
-                    font-size: 10px;
-                    padding: 1px 6px;
-                    border-radius: 10px;
-                    white-space: nowrap;
-                    font-weight: bold;
-                    border: 1px solid white;
-                    z-index: 2;
-                  ">
-                    #${index + 1} CREW
-                  </div>
-                  <div style="
-                    position: absolute;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    font-size: 16px;
-                    font-weight: bold;
-                    text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-                  ">
-                    ${crew.name.charAt(0)}
-                  </div>
-                </div>
-              `,
-              iconSize: [45, 45],
-              iconAnchor: [22, 22],
-              popupAnchor: [0, -22]
-            }) : undefined;
+        {showTopCrews &&
+          topCrews.map((crew, index) => {
+            if (!crew.leaderProfilePicUrl) return null;
 
-          return (
-            <Marker 
-              key={`top-crew-${crew.crewId}`}
-              position={NZ_CENTER} // Use NZ center as default position for now
-              icon={customIcon}
-            >
-              <Popup>
-                <div style={{ 
-                  textAlign: 'center', 
-                  minWidth: '240px',
-                  padding: '10px'
-                }}>
-                  <div style={{
-                    position: 'absolute',
-                    top: '-10px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    background: cardColor,
-                    color: textColor,
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    padding: '4px 12px',
-                    borderRadius: '12px',
-                    border: '2px solid white',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                    whiteSpace: 'nowrap',
-                    zIndex: 10
-                  }}>
-                    {index === 0 ? '🥇 TOP CREW' : index === 1 ? '🥈 RUNNER-UP' : '🥉 CONTENDER'}
-                  </div>
-                  
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    marginTop: '15px',
-                    marginBottom: '15px'
-                  }}>
-                    {/* Crew Leader Avatar with Rectangular Border */}
-                    <div style={{
-                      position: 'relative',
-                      width: '60px',
-                      height: '60px',
-                      borderRadius: '0',
-                      border: `3px solid ${cardColor}`,
-                      overflow: 'visible'
-                    }}>
-                      <img
-                        src={crew.leaderProfilePicUrl}
-                        alt={crew.leaderName}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                          display: 'block'
-                        }}
-                      />
-                      {/* Spray Can Drip in Bottom Left */}
-                      <div style={{
-                        position: 'absolute',
-                        bottom: '-8px',
-                        left: '-8px',
-                        width: '20px',
-                        height: '20px',
-                        zIndex: 5,
-                        fontSize: '16px',
-                        lineHeight: '1'
-                      }}>
-                        {sprayCanEmoji}
+            const cardColor = index === 0 ? '#fbbf24' : index === 1 ? '#cbd5e1' : '#d97706';
+            const textColor = index === 0 ? '#7c2d12' : index === 1 ? '#1f2937' : '#7c2d12';
+            const accentColor = index === 0 ? '#f59e0b' : index === 1 ? '#94a3b8' : '#b45309';
+            const sprayCanEmoji = '🎨';
+
+            const customIcon =
+              typeof window !== 'undefined'
+                ? new (require('leaflet').DivIcon)({
+                    html: `
+                      <div style="
+                        position: relative;
+                        width: 45px;
+                        height: 45px;
+                        background: linear-gradient(135deg, ${cardColor}, ${accentColor});
+                        border: 3px solid white;
+                        border-radius: 50%;
+                        box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-weight: bold;
+                        font-size: 14px;
+                        color: ${textColor};
+                        overflow: hidden;
+                      ">
+                        <div style="
+                          position: absolute;
+                          top: -5px;
+                          left: 50%;
+                          transform: translateX(-50%);
+                          background: ${cardColor};
+                          color: ${textColor};
+                          font-size: 10px;
+                          padding: 1px 6px;
+                          border-radius: 10px;
+                          white-space: nowrap;
+                          font-weight: bold;
+                          border: 1px solid white;
+                          z-index: 2;
+                        ">
+                          #${index + 1} CREW
+                        </div>
+                        <div style="
+                          position: absolute;
+                          top: 50%;
+                          left: 50%;
+                          transform: translate(-50%, -50%);
+                          font-size: 16px;
+                          font-weight: bold;
+                          text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+                        ">
+                          ${crew.name.charAt(0)}
+                        </div>
                       </div>
-                    </div>
-                    <div style={{ textAlign: 'left', flex: 1 }}>
-                      <div style={{ 
-                        fontSize: '16px', 
-                        fontWeight: 'bold',
-                        color: cardColor
-                      }}>
-                        {crew.name}
-                      </div>
-                      <div style={{ fontSize: '13px', color: '#666' }}>
-                        {crew.leaderName} • {crew.memberCount} members
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: '8px',
-                    marginBottom: '15px',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{
-                      background: '#f8f9fa',
-                      padding: '8px 4px',
-                      borderRadius: '6px',
-                      border: '1px solid #e5e7eb'
-                    }}>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#10b981' }}>
-                        {crew.totalRep}
-                      </div>
-                      <div style={{ fontSize: '10px', color: '#666' }}>CREW REP</div>
-                    </div>
-                    
-                    <div style={{
-                      background: '#f8f9fa',
-                      padding: '8px 4px',
-                      borderRadius: '6px',
-                      border: '1px solid #e5e7eb'
-                    }}>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#4dabf7' }}>
-                        {crew.memberCount}
-                      </div>
-                      <div style={{ fontSize: '10px', color: '#666' }}>MEMBERS</div>
-                    </div>
-                    
-                    <div style={{
-                      background: '#f8f9fa',
-                      padding: '8px 4px',
-                      borderRadius: '6px',
-                      border: '1px solid #e5e7eb'
-                    }}>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#8b5cf6' }}>
-                        {crew.description || 'No description'}
-                      </div>
-                      <div style={{ fontSize: '10px', color: '#666' }}>CREW INFO</div>
-                    </div>
-                  </div>
-                  
-                  <div style={{
-                    fontSize: '11px',
-                    color: '#94a3b8',
-                    backgroundColor: '#f1f5f9',
-                    padding: '6px',
-                    borderRadius: '4px',
-                    marginTop: '10px'
-                  }}>
-                    Created: {crew.createdAt ? crew.createdAt.toLocaleDateString() : 'Unknown'}
-                  </div>
-                  
-                  <button
-                    onClick={() => {
-                      // Center map on crew leader's last known position
-                      // For now, we'll center on the crew leader's profile pic URL (placeholder)
-                      // In a real implementation, we'd need actual coordinates
-                      alert('Crew leader location not available yet');
-                    }}
+                    `,
+                    iconSize: [45, 45],
+                    iconAnchor: [22, 22],
+                    popupAnchor: [0, -22],
+                  })
+                : undefined;
+
+            return (
+              <Marker key={`top-crew-${crew.crewId}`} position={NZ_CENTER} icon={customIcon}>
+                <Popup>
+                  <div
                     style={{
-                      backgroundColor: cardColor,
-                      color: textColor,
-                      border: 'none',
-                      padding: '8px 12px',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      width: '100%',
-                      marginTop: '10px',
-                      transition: 'transform 0.2s'
+                      textAlign: 'center',
+                      minWidth: '240px',
+                      padding: '10px',
                     }}
-                    onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                    onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                   >
-                    🚀 Go to Crew
-                  </button>
-                </div>
-              </Popup>
-            </Marker>
-          );
-        })}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '-10px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        background: cardColor,
+                        color: textColor,
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        padding: '4px 12px',
+                        borderRadius: '12px',
+                        border: '2px solid white',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                        whiteSpace: 'nowrap',
+                        zIndex: 10,
+                      }}
+                    >
+                      {index === 0 ? '🥇 TOP CREW' : index === 1 ? '🥈 RUNNER-UP' : '🥉 CONTENDER'}
+                    </div>
 
-        {/* ALL USER MARKERS (including other players') */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        marginTop: '15px',
+                        marginBottom: '15px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: 'relative',
+                          width: '60px',
+                          height: '60px',
+                          borderRadius: '0',
+                          border: `3px solid ${cardColor}`,
+                          overflow: 'visible',
+                        }}
+                      >
+                        <img
+                          src={crew.leaderProfilePicUrl}
+                          alt={crew.leaderName}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            display: 'block',
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: '-8px',
+                            left: '-8px',
+                            width: '20px',
+                            height: '20px',
+                            zIndex: 5,
+                            fontSize: '16px',
+                            lineHeight: '1',
+                          }}
+                        >
+                          {sprayCanEmoji}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'left', flex: 1 }}>
+                        <div
+                          style={{
+                            fontSize: '16px',
+                            fontWeight: 'bold',
+                            color: cardColor,
+                          }}
+                        >
+                          {crew.name}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#666' }}>
+                          {crew.leaderName} • {crew.memberCount} members
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        gap: '8px',
+                        marginBottom: '15px',
+                        textAlign: 'center',
+                      }}
+                    >
+                      <div
+                        style={{
+                          background: '#f8f9fa',
+                          padding: '8px 4px',
+                          borderRadius: '6px',
+                          border: '1px solid #e5e7eb',
+                        }}
+                      >
+                        <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#10b981' }}>
+                          {crew.totalRep}
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#666' }}>CREW REP</div>
+                      </div>
+
+                      <div
+                        style={{
+                          background: '#f8f9fa',
+                          padding: '8px 4px',
+                          borderRadius: '6px',
+                          border: '1px solid #e5e7eb',
+                        }}
+                      >
+                        <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#4dabf7' }}>
+                          {crew.memberCount}
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#666' }}>MEMBERS</div>
+                      </div>
+
+                      <div
+                        style={{
+                          background: '#f8f9fa',
+                          padding: '8px 4px',
+                          borderRadius: '6px',
+                          border: '1px solid #e5e7eb',
+                        }}
+                      >
+                        <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#8b5cf6' }}>
+                          {crew.description || 'No description'}
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#666' }}>CREW INFO</div>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: '11px',
+                        color: '#94a3b8',
+                        backgroundColor: '#f1f5f9',
+                        padding: '6px',
+                        borderRadius: '4px',
+                        marginTop: '10px',
+                      }}
+                    >
+                      Created: {crew.createdAt ? crew.createdAt.toLocaleDateString() : 'Unknown'}
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        alert('Crew leader location not available yet');
+                      }}
+                      style={{
+                        backgroundColor: cardColor,
+                        color: textColor,
+                        border: 'none',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        width: '100%',
+                        marginTop: '10px',
+                        transition: 'transform 0.2s',
+                      }}
+                      onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                      onMouseOut={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+                    >
+                      🚀 Go to Crew
+                    </button>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
+
+        {/* ALL USER MARKERS */}
         {filteredMarkers
-          .filter(marker => !showOnlyMyDrops || marker.userId === user?.uid)
+          .filter((marker) => !showOnlyMyDrops || marker.userId === user?.uid)
           .map((marker) => (
             <MemoizedMarker
               key={marker.id}
@@ -3727,8 +2967,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               activeStyleId={userProfile?.selectedGraffitiStyle || userProfile?.selectedStyleVariant}
               activeUsername={userProfile?.username}
             />
-          ))
-        }
+          ))}
 
         {/* Marker Popup Card */}
         {selectedMarker && (
@@ -3742,75 +2981,80 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           />
         )}
 
-        {/* Drops with photos - Now opens full screen modal */}
-        {drops.filter(drop => drop.photoUrl).map((drop) => {
-          const dropIcon = typeof window !== 'undefined' ?
-            new (require('leaflet').DivIcon)({
-              html: `
-                <div style="
-                  width: 32px;
-                  height: 32px;
-                  background-color: #ef4444;
-                  border: 3px solid white;
-                  border-radius: 50%;
-                  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  color: white;
-                  font-weight: bold;
-                  font-size: 18px;
-                  position: relative;
-                ">
-                  📸
-                  ${drop.likes && drop.likes.length > 0 ? `
-                    <div style="
-                      position: absolute;
-                      top: -5px;
-                      right: -5px;
-                      background-color: #ef4444;
-                      color: white;
-                      border-radius: 50%;
-                      width: 18px;
-                      height: 18px;
-                      display: flex;
-                      align-items: center;
-                      justify-content: center;
-                      font-size: 10px;
-                      font-weight: bold;
-                      border: 2px solid white;
-                    ">
-                      ${drop.likes.length}
-                    </div>
-                  ` : ''}
-                </div>
-              `,
-              iconSize: [32, 32],
-              iconAnchor: [16, 16],
-              popupAnchor: [0, -16]
-            }) : undefined;
+        {/* Drops with photos */}
+        {drops
+          .filter((drop) => drop.photoUrl)
+          .map((drop) => {
+            const dropIcon =
+              typeof window !== 'undefined'
+                ? new (require('leaflet').DivIcon)({
+                    html: `
+                      <div style="
+                        width: 32px;
+                        height: 32px;
+                        background-color: #ef4444;
+                        border: 3px solid white;
+                        border-radius: 50%;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: white;
+                        font-weight: bold;
+                        font-size: 18px;
+                        position: relative;
+                      ">
+                        📸
+                        ${drop.likes && drop.likes.length > 0
+                          ? `
+                            <div style="
+                              position: absolute;
+                              top: -5px;
+                              right: -5px;
+                              background-color: #ef4444;
+                              color: white;
+                              border-radius: 50%;
+                              width: 18px;
+                              height: 18px;
+                              display: flex;
+                              align-items: center;
+                              justify-content: center;
+                              font-size: 10px;
+                              font-weight: bold;
+                              border: 2px solid white;
+                            ">
+                              ${drop.likes.length}
+                            </div>
+                          `
+                          : ''}
+                      </div>
+                    `,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16],
+                    popupAnchor: [0, -16],
+                  })
+                : undefined;
 
-          return (
-            <Marker
-              key={drop.id || drop.firestoreId}
-              position={[drop.lat, drop.lng]}
-              icon={dropIcon}
-              eventHandlers={{
-                click: () => {
-                  setSelectedPhotoDrop(drop);
-                  if (mapRef.current) {
-                    mapRef.current.closePopup();
-                  }
-                }
-              }}
-            />
-          );
-        })}
+            return (
+              <Marker
+                key={drop.id}
+                position={[drop.lat, drop.lng]}
+                icon={dropIcon}
+                eventHandlers={{
+                  click: () => {
+                    setSelectedPhotoDrop(drop);
+                    if (mapRef.current) {
+                      mapRef.current.closePopup();
+                    }
+                  },
+                }}
+              />
+            );
+          })}
 
         {/* Full-Screen Photo Drop Modal */}
         {selectedPhotoDrop && (
           <>
-            {/* Backdrop */}
             <div
               style={{
                 position: 'fixed',
@@ -3823,42 +3067,39 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                 zIndex: 1999,
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
               }}
               onClick={() => setSelectedPhotoDrop(null)}
             >
-              {/* Popup content */}
-              <div
-                onClick={(e) => e.stopPropagation()}
-              >
+              <div onClick={(e) => e.stopPropagation()}>
                 <PhotoDropPopup
                   drop={selectedPhotoDrop}
                   user={user}
                   onLikeUpdate={(dropId, newLikes) => {
-                    setDrops(prev =>
-                      prev.map(d =>
-                        d.firestoreId === dropId ? { ...d, likes: newLikes } : d
-                      )
+                    setDrops((prev) =>
+                      prev.map((d) => (d.firestoreId === dropId ? { ...d, likes: newLikes } : d))
                     );
                   }}
                   onDelete={async (dropId) => {
-                    // Remove drop from local state immediately
-                    setDrops(prev => prev.filter(d => d.firestoreId !== dropId));
+                    setDrops((prev) => prev.filter((d) => d.firestoreId !== dropId));
                     setSelectedPhotoDrop(null);
-                    
-                    // Decrement photosTaken in Firestore and local state
+
                     if (user && userProfile && selectedPhotoDrop?.createdBy === user.uid) {
                       try {
                         const userRef = doc(db, 'users', user.uid);
                         await updateDoc(userRef, {
                           photosTaken: Math.max(0, (userProfile.photosTaken || 1) - 1),
-                          lastActive: Timestamp.now()
+                          lastActive: Timestamp.now(),
                         });
-                        
-                        setUserProfile(prev => prev ? {
-                          ...prev,
-                          photosTaken: Math.max(0, (prev.photosTaken || 1) - 1)
-                        } : null);
+
+                        setUserProfile((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                photosTaken: Math.max(0, (prev.photosTaken || 1) - 1),
+                              }
+                            : null
+                        );
                       } catch (error) {
                         console.error('Error updating photosTaken:', error);
                       }
@@ -3866,8 +3107,12 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   }}
                   onEditComplete={async (updates) => {
                     if (updates) {
-                      setDrops(prev => prev.map(d => d.firestoreId === selectedPhotoDrop?.firestoreId ? { ...d, ...updates } : d));
-                      setSelectedPhotoDrop(prev => prev ? { ...prev, ...updates } : prev);
+                      setDrops((prev) =>
+                        prev.map((d) =>
+                          d.firestoreId === selectedPhotoDrop?.firestoreId ? { ...d, ...updates } : d
+                        )
+                      );
+                      setSelectedPhotoDrop((prev) => (prev ? { ...prev, ...updates } : prev));
                     }
                     await loadDrops();
                   }}
@@ -3879,40 +3124,44 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         )}
 
         {/* Music drops (trackUrl, no photo) */}
-        {drops.filter(drop => drop.trackUrl && !drop.photoUrl).map((drop) => {
-          const musicIcon = typeof window !== 'undefined' ?
-            new (require('leaflet').DivIcon)({
-              html: `
-                <div style="position:relative;width:32px;height:32px;">
-                  <div style="position:absolute;top:2px;left:2px;width:28px;height:28px;background:linear-gradient(135deg,#9333ea,#8b5cf6);border:3px solid white;border-radius:50%;box-shadow:0 0 15px rgba(147,51,234,0.8),0 0 30px rgba(147,51,234,0.5);display:flex;align-items:center;justify-content:center;z-index:10;animation:musicPulse 1.5s ease-in-out infinite;">
-                    <span style="filter:brightness(0) invert(1);font-size:14px;">🎵</span>
-                  </div>
-                  <div style="position:absolute;top:16px;left:16px;width:24px;height:24px;border:3px solid rgba(147,51,234,0.8);border-radius:50%;box-shadow:0 0 10px rgba(147,51,234,0.6);animation:radioWave1 2s ease-out infinite;pointer-events:none;"></div>
-                  <div style="position:absolute;top:16px;left:16px;width:40px;height:40px;border:3px solid rgba(147,51,234,0.6);border-radius:50%;box-shadow:0 0 15px rgba(147,51,234,0.4);animation:radioWave2 2s ease-out infinite;pointer-events:none;"></div>
-                  <div style="position:absolute;top:16px;left:16px;width:56px;height:56px;border:3px solid rgba(147,51,234,0.4);border-radius:50%;box-shadow:0 0 20px rgba(147,51,234,0.3);animation:radioWave3 2s ease-out infinite;pointer-events:none;"></div>
-                </div>`,
-              className: 'music-marker-icon',
-              iconSize: [32, 32],
-              iconAnchor: [16, 16],
-              popupAnchor: [0, -16]
-            }) : undefined;
+        {drops
+          .filter((drop) => drop.trackUrl && !drop.photoUrl)
+          .map((drop) => {
+            const musicIcon =
+              typeof window !== 'undefined'
+                ? new (require('leaflet').DivIcon)({
+                    html: `
+                      <div style="position:relative;width:32px;height:32px;">
+                        <div style="position:absolute;top:2px;left:2px;width:28px;height:28px;background:linear-gradient(135deg,#9333ea,#8b5cf6);border:3px solid white;border-radius:50%;box-shadow:0 0 15px rgba(147,51,234,0.8),0 0 30px rgba(147,51,234,0.5);display:flex;align-items:center;justify-content:center;z-index:10;animation:musicPulse 1.5s ease-in-out infinite;">
+                          <span style="filter:brightness(0) invert(1);font-size:14px;">🎵</span>
+                        </div>
+                        <div style="position:absolute;top:16px;left:16px;width:24px;height:24px;border:3px solid rgba(147,51,234,0.8);border-radius:50%;box-shadow:0 0 10px rgba(147,51,234,0.6);animation:radioWave1 2s ease-out infinite;pointer-events:none;"></div>
+                        <div style="position:absolute;top:16px;left:16px;width:40px;height:40px;border:3px solid rgba(147,51,234,0.6);border-radius:50%;box-shadow:0 0 15px rgba(147,51,234,0.4);animation:radioWave2 2s ease-out infinite;pointer-events:none;"></div>
+                        <div style="position:absolute;top:16px;left:16px;width:56px;height:56px;border:3px solid rgba(147,51,234,0.4);border-radius:50%;box-shadow:0 0 20px rgba(147,51,234,0.3);animation:radioWave3 2s ease-out infinite;pointer-events:none;"></div>
+                      </div>`,
+                    className: 'music-marker-icon',
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16],
+                    popupAnchor: [0, -16],
+                  })
+                : undefined;
 
-          return (
-            <Marker
-              key={drop.id || drop.firestoreId}
-              position={[drop.lat, drop.lng]}
-              icon={musicIcon}
-              eventHandlers={{
-                click: () => {
-                  setSelectedMusicDrop(drop);
-                  if (mapRef.current) {
-                    mapRef.current.closePopup();
-                  }
-                }
-              }}
-            />
-          );
-        })}
+            return (
+              <Marker
+                key={drop.id}
+                position={[drop.lat, drop.lng]}
+                icon={musicIcon}
+                eventHandlers={{
+                  click: () => {
+                    setSelectedMusicDrop(drop);
+                    if (mapRef.current) {
+                      mapRef.current.closePopup();
+                    }
+                  },
+                }}
+              />
+            );
+          })}
 
         {/* Full-Screen Music Drop Modal */}
         {selectedMusicDrop && selectedMusicDrop.trackUrl && (
@@ -3933,14 +3182,12 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               discoveredAt: (selectedMusicDrop as any)?.discoveredAt || new Date(),
               repReward: (selectedMusicDrop as any)?.repReward || 15,
               spawnTime: (selectedMusicDrop as any)?.spawnTime || new Date(),
-              expiresAt: (selectedMusicDrop as any)?.expiresAt || new Date(Date.now() + 30 * 60 * 1000)
+              expiresAt: (selectedMusicDrop as any)?.expiresAt || new Date(Date.now() + 30 * 60 * 1000),
             }}
             onUnlockTrack={async (drop) => {
-              // Handle both Drop and MusicDrop types
               let musicDrop: any;
-              
+
               if ('lat' in drop) {
-                // It's a Drop type, convert to MusicDrop
                 musicDrop = {
                   id: drop.id || '',
                   position: [drop.lat, drop.lng],
@@ -3951,36 +3198,32 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   discoveredAt: new Date(),
                   repReward: 15,
                   spawnTime: drop.timestamp || new Date(),
-                  expiresAt: new Date(Date.now() + 30 * 60 * 1000)
+                  expiresAt: new Date(Date.now() + 30 * 60 * 1000),
                 };
               } else {
-                // It's already a MusicDrop
                 musicDrop = drop;
               }
-              
-              // Call the hook's unlock function
+
               const success = await unlockMusicTrack(musicDrop);
-              
-              if (success) {
-                // Update local unlockedTracks state to sync with Firestore
-                if (userProfile) {
-                  const newTracks = [...(userProfile.unlockedTracks || []), musicDrop.trackUrl || ''];
-                  setUserProfile(prev => prev ? {
-                    ...prev,
-                    unlockedTracks: newTracks
-                  } : null);
-                  setUnlockedTracks(newTracks);
-                  
-                  // Show success notification
-                  setRepNotification({
-                    show: true,
-                    amount: musicDrop.repReward || 15,
-                    message: `🎵 Music Drop Unlocked: ${musicDrop.trackName || 'Unknown Track'}!`
-                  });
-                }
+
+              if (success && userProfile) {
+                const newTracks = [...(userProfile.unlockedTracks || []), musicDrop.trackUrl || ''];
+                setUserProfile((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        unlockedTracks: newTracks,
+                      }
+                    : null
+                );
+                setUnlockedTracks(newTracks);
+
+                setRepNotification({
+                  show: true,
+                  amount: musicDrop.repReward || 15,
+                  message: `🎵 Music Drop Unlocked: ${musicDrop.trackName || 'Unknown Track'}!`,
+                });
               }
-              
-              // Return void as expected by the component
             }}
             onCollectTrack={handleCollectTrack}
             isTrackCollected={userProfile?.unlockedTracks?.includes(selectedMusicDrop.trackUrl) || false}
@@ -3990,81 +3233,83 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         )}
 
         {/* Marker drops (no photo, no track) */}
-        {drops.filter(drop => !drop.photoUrl && !drop.trackUrl).map((drop) => {
-          const markerIcon = typeof window !== 'undefined' ?
-            new (require('leaflet').DivIcon)({
-              html: `
-                <div style="
-                  width: 28px;
-                  height: 28px;
-                  background-color: #10b981;
-                  border: 3px solid white;
-                  border-radius: 50%;
-                  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-                  display: flex;
-                  align-items: center;
-                  justifyContent: 'center';
-                  color: white;
-                  font-weight: bold;
-                  font-size: 16px;
-                  position: relative;
-                ">
-                  📍
-                  ${drop.likes && drop.likes.length > 0 ? `
-                    <div style="
-                      position: absolute;
-                      top: -5px;
-                      right: -5px;
-                      background-color: #10b981;
-                      color: white;
-                      border-radius: 50%;
-                      width: 16px;
-                      height: 16px;
-                      display: flex;
-                      align-items: center;
-                      justifyContent: 'center';
-                      font-size: 9px;
-                      font-weight: bold;
-                      border: 2px solid white;
-                    ">
-                      ${drop.likes.length}
-                    </div>
-                  ` : ''}
-                </div>
-              `,
-              iconSize: [28, 28],
-              iconAnchor: [14, 14],
-              popupAnchor: [0, -14]
-            }) : undefined;
+        {drops
+          .filter((drop) => !drop.photoUrl && !drop.trackUrl)
+          .map((drop) => {
+            const markerIcon =
+              typeof window !== 'undefined'
+                ? new (require('leaflet').DivIcon)({
+                    html: `
+                      <div style="
+                        width: 28px;
+                        height: 28px;
+                        background-color: #10b981;
+                        border: 3px solid white;
+                        border-radius: 50%;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: white;
+                        font-weight: bold;
+                        font-size: 16px;
+                        position: relative;
+                      ">
+                        📍
+                        ${drop.likes && drop.likes.length > 0
+                          ? `
+                            <div style="
+                              position: absolute;
+                              top: -5px;
+                              right: -5px;
+                              background-color: #10b981;
+                              color: white;
+                              border-radius: 50%;
+                              width: 16px;
+                              height: 16px;
+                              display: flex;
+                              align-items: center;
+                              justify-content: center;
+                              font-size: 9px;
+                              font-weight: bold;
+                              border: 2px solid white;
+                            ">
+                              ${drop.likes.length}
+                            </div>
+                          `
+                          : ''}
+                      </div>
+                    `,
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14],
+                    popupAnchor: [0, -14],
+                  })
+                : undefined;
 
-          return (
-            <Marker
-              key={drop.id || drop.firestoreId}
-              position={[drop.lat, drop.lng]}
-              icon={markerIcon}
-            >
-              <Popup>
-                <MarkerDropPopup
-                  drop={drop}
-                  user={user}
-                  onLikeUpdate={(dropId, newLikes) => {
-                    setDrops(prev =>
-                      prev.map(d =>
-                        d.firestoreId === dropId ? { ...d, likes: newLikes } : d
-                      )
-                    );
-                  }}
-                  onEditComplete={async (updates) => {
-                    if (updates) {
-                      setDrops(prev => prev.map(d => d.firestoreId === drop.firestoreId ? { ...d, ...updates } : d));
-                    }
-                    await loadDrops();
-                  }}
-                />
-              </Popup>
-            </Marker>
-          );
-        })}
+            return (
+              <Marker key={drop.id} position={[drop.lat, drop.lng]} icon={markerIcon}>
+                <Popup>
+                  <MarkerDropPopup
+                    drop={drop}
+                    user={user}
+                    onLikeUpdate={(dropId, newLikes) => {
+                      setDrops((prev) =>
+                        prev.map((d) => (d.firestoreId === dropId ? { ...d, likes: newLikes } : d))
+                      );
+                    }}
+                    onEditComplete={async (updates) => {
+                      if (updates) {
+                        setDrops((prev) =>
+                          prev.map((d) => (d.firestoreId === drop.firestoreId ? { ...d, ...updates } : d))
+                        );
+                      }
+                      await loadDrops();
+                    }}
+                  />
+                </Popup>
+              </Marker>
+            );
+          })}
 
         {/* Random Music Drops */}
         {musicDrops.map((drop) => (
@@ -4072,17 +3317,13 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             key={drop.id}
             position={[drop.position[0], drop.position[1]]}
             icon={(() => {
-              // Create a custom icon using the MusicDropMarker component
-              const element = document.createElement('div');
-              // We'll render the MusicDropMarker to this element
-              // For now, use a simple icon
               return new (require('leaflet').DivIcon)({
                 html: `
                   <div style="
                     position: relative;
                     width: 36px;
                     height: 36px;
-                    background: ${drop.discovered 
+                    background: ${drop.discovered
                       ? 'radial-gradient(circle, #8b5cf6 0%, #7c3aed 50%, #6d28d9 100%)'
                       : 'radial-gradient(circle, #64748b 0%, #475569 50%, #334155 100%)'};
                     border: 3px solid white;
@@ -4098,7 +3339,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     filter: ${drop.discovered ? 'grayscale(0%)' : 'grayscale(100%) brightness(0.5)'};
                   ">
                     <span style="font-size: 18px; ${drop.discovered ? '' : 'filter: brightness(0.5);'}">🎵</span>
-                    ${drop.discovered ? `
+                    ${drop.discovered
+                      ? `
                       <div style="
                         position: absolute;
                         top: -8px;
@@ -4116,7 +3358,8 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                       ">
                         ✓
                       </div>
-                    ` : ''}
+                    `
+                      : ''}
                   </div>
                   <style>
                     @keyframes pulseGlow {
@@ -4131,16 +3374,15 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                 `,
                 iconSize: [36, 36],
                 iconAnchor: [18, 18],
-                popupAnchor: [0, -18]
+                popupAnchor: [0, -18],
               });
             })()}
             eventHandlers={{
               click: () => {
                 if (drop.discovered) {
-                  // Open DropTypeModal to replace the discovered drop
-                  setPendingDropPosition({ 
-                    lat: drop.position[0], 
-                    lng: drop.position[1] 
+                  setPendingDropPosition({
+                    lat: drop.position[0],
+                    lng: drop.position[1],
                   });
                   setSelectedMusicDrop({
                     id: drop.id,
@@ -4158,7 +3400,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     discoveredAt: drop.discoveredAt || new Date(),
                     repReward: drop.repReward,
                     spawnTime: drop.spawnTime,
-                    expiresAt: drop.expiresAt
+                    expiresAt: drop.expiresAt,
                   } as any);
                   setShowDropTypeModal(true);
 
@@ -4166,49 +3408,43 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     mapRef.current.closePopup();
                   }
                 }
-                // Undiscovered drops remain unclickable - do nothing
-              }
+              },
             }}
           />
         ))}
-        {(!gpsPosition || !isTracking) && Object.entries(newZealandLocations).map(([name, info]) => (
-          <Marker 
-            key={name} 
-            position={info.coords as [number, number]}
-            opacity={gpsPosition ? 0.7 : 1}
-          >
-            <Popup>
-              <div style={{ textAlign: 'center', minWidth: '150px' }}>
-                <strong>{name}</strong>
-                <br />
-                <small style={{ color: '#666' }}>
-                  {info.description}
-                </small>
-                <br />
-                <button
-                  onClick={() => {
-                    centerMap(info.coords as [number, number], 15);
-                  }}
-                  style={{
-                    marginTop: '8px',
-                    backgroundColor: '#4dabf7',
-                    color: 'white',
-                    border: 'none',
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '12px'
-                  }}
-                >
-                  Go Here
-                </button>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+        {(!gpsPosition || !isTracking) &&
+          Object.entries(NEW_ZEALAND_LOCATIONS).map(([name, info]) => (
+            <Marker key={name} position={info.coords as [number, number]} opacity={gpsPosition ? 0.7 : 1}>
+              <Popup>
+                <div style={{ textAlign: 'center', minWidth: '150px' }}>
+                  <strong>{name}</strong>
+                  <br />
+                  <small style={{ color: '#666' }}>{info.description}</small>
+                  <br />
+                  <button
+                    onClick={() => {
+                      centerMap(info.coords as [number, number], 15);
+                    }}
+                    style={{
+                      marginTop: '8px',
+                      backgroundColor: '#4dabf7',
+                      color: 'white',
+                      border: 'none',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                    }}
+                  >
+                    Go Here
+                  </button>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
       </MapContainer>
 
-              {/* Drop Type Selection Modal */}
+      {/* Drop Type Selection Modal */}
       <DropTypeModal
         isVisible={showDropTypeModal}
         onClose={() => {
@@ -4218,7 +3454,6 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         onMarkerDrop={handleMarkerDrop}
         onPhotoDrop={handlePhotoDrop}
         onMusicDrop={() => {
-          // Open song selection modal instead of direct drop
           setShowSongSelection(true);
         }}
         selectedMarkerType={selectedMarkerType}
@@ -4250,38 +3485,40 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       />
 
       {isCreatingDrop && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0, 0, 0, 0.6)',
-          backdropFilter: 'blur(2px)',
-          zIndex: 10050,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          pointerEvents: 'auto'
-        }}>
-          <div style={{
-            width: '54px',
-            height: '54px',
-            border: '4px solid rgba(255,255,255,0.25)',
-            borderTop: '4px solid #3b82f6',
-            borderRadius: '50%'
-          }} />
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.6)',
+            backdropFilter: 'blur(2px)',
+            zIndex: 10050,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'auto',
+          }}
+        >
+          <div
+            style={{
+              width: '54px',
+              height: '54px',
+              border: '4px solid rgba(255,255,255,0.25)',
+              borderTop: '4px solid #3b82f6',
+              borderRadius: '50%',
+            }}
+          />
           <div style={{ marginTop: '14px', color: '#f1f5f9', fontWeight: 'bold' }}>Creating drop...</div>
           <div style={{ marginTop: '6px', color: '#94a3b8', fontSize: '12px' }}>Please wait</div>
         </div>
       )}
-
-
 
       {/* Profile Stats Display - Top Right */}
       <ProfileStats
         userProfile={userProfile}
         user={user}
         userMarkersCount={userMarkers.length}
-        myMarkersCount={userMarkers.filter(m => m.userId === user?.uid).length}
+        myMarkersCount={userMarkers.filter((m) => m.userId === user?.uid).length}
         onProfileUpdate={(updatedProfile) => setUserProfile(updatedProfile)}
         onLogout={handleLogout}
         onAddRep={(amount: number) => {
@@ -4291,22 +3528,26 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               const newRep = userProfile.rep + amount;
               const newRank = calculateRank(newRep);
               const newLevel = calculateLevel(newRep);
-              
+
               const userRef = doc(db, 'users', user.uid);
               await updateDoc(userRef, {
                 rep: newRep,
                 rank: newRank,
                 level: newLevel,
-                lastActive: Timestamp.now()
+                lastActive: Timestamp.now(),
               });
-              
-              setUserProfile(prev => prev ? {
-                ...prev,
-                rep: newRep,
-                rank: newRank,
-                level: newLevel
-              } : null);
-              
+
+              setUserProfile((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      rep: newRep,
+                      rank: newRank,
+                      level: newLevel,
+                    }
+                  : null
+              );
+
               alert(`✅ Added ${amount} REP! New total: ${newRep}`);
             } catch (error) {
               console.error('Cheat add REP error:', error);
@@ -4319,19 +3560,23 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           if (!user || !userProfile) return;
           const unlockColorsAsync = async () => {
             try {
-              const allColorIds = ALL_COLORS.map(c => c.id);
-              
+              const allColorIds = ALL_COLORS.map((c) => c.id);
+
               const userRef = doc(db, 'users', user.uid);
               await updateDoc(userRef, {
                 unlockedColors: allColorIds,
-                lastActive: Timestamp.now()
+                lastActive: Timestamp.now(),
               });
-              
-              setUserProfile(prev => prev ? {
-                ...prev,
-                unlockedColors: allColorIds
-              } : null);
-              
+
+              setUserProfile((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      unlockedColors: allColorIds,
+                    }
+                  : null
+              );
+
               alert('✅ All colors unlocked!');
             } catch (error) {
               console.error('Cheat unlock colors error:', error);
@@ -4344,19 +3589,23 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           if (!user || !userProfile) return;
           const unlockGraffitiAsync = async () => {
             try {
-              const allGraffitiIds = GRAFFITI_STYLES.map(g => g.id);
-              
+              const allGraffitiIds = GRAFFITI_STYLES.map((g) => g.id);
+
               const userRef = doc(db, 'users', user.uid);
               await updateDoc(userRef, {
                 unlockedGraffitiTypes: allGraffitiIds,
-                lastActive: Timestamp.now()
+                lastActive: Timestamp.now(),
               });
-              
-              setUserProfile(prev => prev ? {
-                ...prev,
-                unlockedGraffitiTypes: allGraffitiIds
-              } : null);
-              
+
+              setUserProfile((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      unlockedGraffitiTypes: allGraffitiIds,
+                    }
+                  : null
+              );
+
               alert('✅ All graffiti styles unlocked!');
             } catch (error) {
               console.error('Cheat unlock graffiti error:', error);
@@ -4371,31 +3620,34 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             try {
               const currentTracks = userProfile.unlockedTracks || [];
               const result = unlockRandomSpotifyTrack(currentTracks);
-              
+
               if (!result.newlyUnlocked) {
                 alert('⚠️ All Spotify tracks already unlocked!');
                 return;
               }
-              
+
               const userRef = doc(db, 'users', user.uid);
               await updateDoc(userRef, {
                 unlockedTracks: result.newTracks,
-                lastActive: Timestamp.now()
+                lastActive: Timestamp.now(),
               });
-              
-              setUserProfile(prev => prev ? {
-                ...prev,
-                unlockedTracks: result.newTracks
-              } : null);
-              
+
+              setUserProfile((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      unlockedTracks: result.newTracks,
+                    }
+                  : null
+              );
+
               setUnlockedTracks(result.newTracks);
-              
-              // Show unlock modal
+
               setSongUnlockModal({
                 isOpen: true,
                 trackUrl: result.newlyUnlocked!.url,
                 trackName: result.newlyUnlocked!.name,
-                source: 'CHEAT MENU'
+                source: 'CHEAT MENU',
               });
             } catch (error) {
               console.error('Cheat unlock Spotify error:', error);
@@ -4410,31 +3662,34 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             try {
               const currentTracks = userProfile.unlockedTracks || [];
               const result = unlockRandomSoundCloudTrack(currentTracks);
-              
+
               if (!result.newlyUnlocked) {
                 alert('⚠️ All SoundCloud tracks already unlocked!');
                 return;
               }
-              
+
               const userRef = doc(db, 'users', user.uid);
               await updateDoc(userRef, {
                 unlockedTracks: result.newTracks,
-                lastActive: Timestamp.now()
+                lastActive: Timestamp.now(),
               });
-              
-              setUserProfile(prev => prev ? {
-                ...prev,
-                unlockedTracks: result.newTracks
-              } : null);
-              
+
+              setUserProfile((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      unlockedTracks: result.newTracks,
+                    }
+                  : null
+              );
+
               setUnlockedTracks(result.newTracks);
-              
-              // Show unlock modal
+
               setSongUnlockModal({
                 isOpen: true,
                 trackUrl: result.newlyUnlocked!.url,
                 trackName: result.newlyUnlocked!.name,
-                source: 'CHEAT MENU'
+                source: 'CHEAT MENU',
               });
             } catch (error) {
               console.error('Cheat unlock SoundCloud error:', error);
@@ -4448,21 +3703,25 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           const resetSongsAsync = async () => {
             try {
               const defaultTracks = getRandomStartTrack();
-              
+
               const userRef = doc(db, 'users', user.uid);
               await updateDoc(userRef, {
                 unlockedTracks: defaultTracks,
-                lastActive: Timestamp.now()
+                lastActive: Timestamp.now(),
               });
-              
-              setUserProfile(prev => prev ? {
-                ...prev,
-                unlockedTracks: defaultTracks
-              } : null);
-              
+
+              setUserProfile((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      unlockedTracks: defaultTracks,
+                    }
+                  : null
+              );
+
               setUnlockedTracks(defaultTracks);
               setCurrentTrackIndex(0);
-              
+
               alert('✅ Songs reset to default!');
             } catch (error) {
               console.error('Reset songs error:', error);
@@ -4478,22 +3737,26 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               const maxRep = 99999;
               const newRank = calculateRank(maxRep);
               const newLevel = calculateLevel(maxRep);
-              
+
               const userRef = doc(db, 'users', user.uid);
               await updateDoc(userRef, {
                 rep: maxRep,
                 rank: newRank,
                 level: newLevel,
-                lastActive: Timestamp.now()
+                lastActive: Timestamp.now(),
               });
-              
-              setUserProfile(prev => prev ? {
-                ...prev,
-                rep: maxRep,
-                rank: newRank,
-                level: newLevel
-              } : null);
-              
+
+              setUserProfile((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      rep: maxRep,
+                      rank: newRank,
+                      level: newLevel,
+                    }
+                  : null
+              );
+
               alert(`✅ MAX REP! Now at ${maxRep} REP!`);
             } catch (error) {
               console.error('Max REP error:', error);
@@ -4506,13 +3769,13 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           if (!user || !userProfile) return;
           const maxEverythingAsync = async () => {
             try {
-              const allColorIds = ALL_COLORS.map(c => c.id);
-              const allGraffitiIds = GRAFFITI_STYLES.map(g => g.id);
+              const allColorIds = ALL_COLORS.map((c) => c.id);
+              const allGraffitiIds = GRAFFITI_STYLES.map((g) => g.id);
               const allTracks = [...SPOTIFY_TRACKS, ...HIPHOP_TRACKS];
               const maxRep = 99999;
               const newRank = calculateRank(maxRep);
               const newLevel = calculateLevel(maxRep);
-              
+
               const userRef = doc(db, 'users', user.uid);
               await updateDoc(userRef, {
                 rep: maxRep,
@@ -4521,21 +3784,25 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                 unlockedColors: allColorIds,
                 unlockedGraffitiTypes: allGraffitiIds,
                 unlockedTracks: allTracks,
-                lastActive: Timestamp.now()
+                lastActive: Timestamp.now(),
               });
-              
-              setUserProfile(prev => prev ? {
-                ...prev,
-                rep: maxRep,
-                rank: newRank,
-                level: newLevel,
-                unlockedColors: allColorIds,
-                unlockedGraffitiTypes: allGraffitiIds,
-                unlockedTracks: allTracks
-              } : null);
-              
+
+              setUserProfile((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      rep: maxRep,
+                      rank: newRank,
+                      level: newLevel,
+                      unlockedColors: allColorIds,
+                      unlockedGraffitiTypes: allGraffitiIds,
+                      unlockedTracks: allTracks,
+                    }
+                  : null
+              );
+
               setUnlockedTracks(allTracks);
-              
+
               alert('🚀 MAX EVERYTHING! All colors, all graffiti, all songs, max REP!');
             } catch (error) {
               console.error('Max everything error:', error);
@@ -4545,19 +3812,21 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           maxEverythingAsync();
         }}
         onResetProfile={async () => {
-          if (!window.confirm('Reset ALL your markers, drops and stats permanently?\n\nThis will:\n• Delete all your markers\n• Delete all your drops\n• Reset REP to 0\n• Reset Rank to TOY\n• Sign you out immediately')) return;
+          if (
+            !window.confirm(
+              'Reset ALL your markers, drops and stats permanently?\n\nThis will:\n• Delete all your markers\n• Delete all your drops\n• Reset REP to 0\n• Reset Rank to TOY\n• Sign you out immediately'
+            )
+          )
+            return;
           if (!user || !userProfile) return;
-          
+
           try {
-            const userMarkersQuery = query(
-              collection(db, 'markers'),
-              where('userId', '==', user.uid)
-            );
+            const userMarkersQuery = query(collection(db, 'markers'), where('userId', '==', user.uid));
             const userMarkersSnapshot = await getDocs(userMarkersQuery);
-            await Promise.all(userMarkersSnapshot.docs.map(doc => deleteDoc(doc.ref)));
-            
+            await Promise.all(userMarkersSnapshot.docs.map((doc) => deleteDoc(doc.ref)));
+
             await deleteUserDrops(user.uid);
-            
+
             const userRef = doc(db, 'users', user.uid);
             await updateDoc(userRef, {
               totalMarkers: 0,
@@ -4569,14 +3838,14 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               markersPlaced: 0,
               collaborations: 0,
               blackoutEventsInvestigated: 0,
-              kaiTiakiEvaluationsReceived: 0
+              kaiTiakiEvaluationsReceived: 0,
             });
-            
+
             setUnlockedTracks(getRandomStartTrack());
             setCurrentTrackIndex(0);
             setIsPlaying(false);
             await loadAllMarkers();
-            
+
             alert('✅ Profile reset! Signing out...');
             setTimeout(() => handleLogout(), 1000);
           } catch (err: any) {
@@ -4589,32 +3858,35 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           const unlockVideoAsync = async () => {
             try {
               const currentVideos = userProfile.unlockedVideos || [];
-              const availableVideos = FACEBOOK_VIDEOS.filter(v => !currentVideos.includes(v));
-              
+              const availableVideos = FACEBOOK_VIDEOS.filter((v) => !currentVideos.includes(v));
+
               if (availableVideos.length === 0) {
                 alert('⚠️ All videos already unlocked!');
                 return;
               }
-              
+
               const randomVideo = availableVideos[Math.floor(Math.random() * availableVideos.length)];
               const newVideos = [...currentVideos, randomVideo];
-              
+
               const userRef = doc(db, 'users', user.uid);
               await updateDoc(userRef, {
                 unlockedVideos: newVideos,
-                lastActive: Timestamp.now()
+                lastActive: Timestamp.now(),
               });
-              
-              setUserProfile(prev => prev ? {
-                ...prev,
-                unlockedVideos: newVideos
-              } : null);
-              
-              // Show video unlock modal
+
+              setUserProfile((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      unlockedVideos: newVideos,
+                    }
+                  : null
+              );
+
               setVideoUnlockModal({
                 isOpen: true,
                 videoUrl: randomVideo,
-                source: 'CHEAT MENU'
+                source: 'CHEAT MENU',
               });
             } catch (error) {
               console.error('Cheat unlock video error:', error);
@@ -4627,19 +3899,23 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           if (!user || !userProfile) return;
           const unlockAllVideosAsync = async () => {
             try {
-              const allVideoUrls = [...FACEBOOK_VIDEOS]; // Already an array of strings
-              
+              const allVideoUrls = [...FACEBOOK_VIDEOS];
+
               const userRef = doc(db, 'users', user.uid);
               await updateDoc(userRef, {
                 unlockedVideos: allVideoUrls,
-                lastActive: Timestamp.now()
+                lastActive: Timestamp.now(),
               });
-              
-              setUserProfile(prev => prev ? {
-                ...prev,
-                unlockedVideos: allVideoUrls
-              } : null);
-              
+
+              setUserProfile((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      unlockedVideos: allVideoUrls,
+                    }
+                  : null
+              );
+
               alert('✅ All videos unlocked!');
             } catch (error) {
               console.error('Cheat unlock all videos error:', error);
@@ -4651,434 +3927,94 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
       />
 
       {/* ========== DUAL CONTROL PANELS ========== */}
-<div style={{
-            position: 'fixed' as const,
-            top: '20px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            display: 'flex',
-            justifyContent: 'center',
-            gap: '15px',
-            zIndex: 1200,
-            maxHeight: '80vh',
-            width: 'min(95vw, 420px)'
-          }}>
-          {showProfilePanel && userProfile && (
-            <div style={{
-              animation: 'slideInLeft 0.3s ease-out'
-            }}>
-              <BlackbookPanel
-                userProfile={userProfile}
-                userMarkers={userMarkers}
-                drops={drops}
-                topPlayers={topPlayers}
-                onClose={() => togglePanel('none')}
-                onProfileUpdate={(updatedProfile) => setUserProfile(updatedProfile)}
-                onCenterMap={centerMap}
-                onRefreshAll={handleRefreshAll}
-                isRefreshing={isRefreshing}
-                showTopPlayers={showTopPlayers}
-                onToggleTopPlayers={() => setShowTopPlayers(!showTopPlayers)}
-                showOnlyMyDrops={showOnlyMyDrops}
-                onToggleFilter={() => setShowOnlyMyDrops(!showOnlyMyDrops)}
-                onLogout={handleLogout}
-                expandedRadius={expandedRadius}
-                onOpenCrewChat={() => {
-                  togglePanel('crewchat');
-                }}
-                selectedColor={selectedMarkerColor}
-                selectedSpecialType={selectedSpecialType}
-                unlockedColors={userProfile.unlockedColors || []}
-                onColorSelect={(colorId, colorHex, specialType) => {
-                  setSelectedMarkerColor(colorHex);
-                  setSelectedSpecialType(specialType || null);
-                  saveFavoriteColor(colorHex);
-                }}
-              />
-            </div>
-          )}
-
-        {/* Right Panel - Photos & Gallery (Camera) */}
-        {showPhotosPanel && (() => {
-          // Get user's photo drops
-          const myPhotoDrops = drops.filter(drop => drop.photoUrl && drop.createdBy === user?.uid);
-          const totalPhotosTaken = userProfile?.photosTaken || myPhotoDrops.length;
-          
-          return (
-          <div style={{
-            ...panelStyle,
-            border: '1px solid #333',
-            display: 'flex',
-            flexDirection: 'column',
-            animation: 'slideInRight 0.3s ease-out',
-            position: 'relative' as const,
-            maxWidth: '350px',
-            maxHeight: '80vh',
-            overflowY: 'auto'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '10px',
-              paddingBottom: '10px',
-              borderBottom: '1px solid rgba(59,130,246,0.3)'
-            }}>
-              <h3 style={{ 
-                margin: 0, 
-                color: '#4dabf7', 
-                fontSize: '18px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <span>📸</span>
-                PHOTO GALLERY
-              </h3>
-              <button
-                onClick={() => togglePanel('none')}
-                style={{
-                  background: 'rgba(59,130,246,0.2)',
-                  border: '1px solid rgba(59,130,246,0.3)',
-                  color: '#4dabf7',
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Upload Section - Profile Picture */}
-            <div style={{
-              marginBottom: '15px',
-              padding: '12px',
-              background: 'rgba(59, 130, 246, 0.1)',
-              borderRadius: '8px',
-              border: '1px solid rgba(59, 130, 246, 0.3)'
-            }}>
-              <div style={{ fontSize: '14px', color: '#4dabf7', fontWeight: 'bold', marginBottom: '8px' }}>
-                📤 Upload Profile Picture
-              </div>
-              <input
-                type="file"
-                accept="image/*"
-                id="profilepic-upload"
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px dashed #4dabf7',
-                  borderRadius: '6px',
-                  color: '#e0e0e0',
-                  marginBottom: '8px',
-                  fontSize: '12px'
-                }}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    handleProfilePicUpload(file);
-                  }
-                }}
-              />
-              <button
-                onClick={() => {
-                  const input = document.getElementById('profilepic-upload') as HTMLInputElement;
-                  if (input?.files?.[0]) {
-                    handleProfilePicUpload(input.files[0]);
-                  } else {
-                    alert('Please select an image first!');
-                  }
-                }}
-                style={{
-                  background: 'linear-gradient(135deg, #4dabf7, #3b82f6)',
-                  color: 'white',
-                  border: 'none',
-                  padding: '8px',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  width: '100%',
-                  fontWeight: 'bold',
-                  fontSize: '12px'
-                }}
-              >
-                📲 Update Profile Pic
-              </button>
-            </div>
-
-            {/* Photo Stats */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: '8px',
-              marginBottom: '15px'
-            }}>
-              <div style={{
-                background: 'rgba(255,255,255,0.05)',
-                padding: '10px',
-                borderRadius: '8px',
-                textAlign: 'center',
-                border: '1px solid #444'
-              }}>
-                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#4dabf7' }}>{totalPhotosTaken}</div>
-                <div style={{ fontSize: '10px', color: '#aaa' }}>Photos Taken</div>
-              </div>
-              <div style={{
-                background: 'rgba(255,255,255,0.05)',
-                padding: '10px',
-                borderRadius: '8px',
-                textAlign: 'center',
-                border: '1px solid #444'
-              }}>
-                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#10b981' }}>{myPhotoDrops.length}</div>
-                <div style={{ fontSize: '10px', color: '#aaa' }}>Photo Drops</div>
-              </div>
-            </div>
-
-            {/* Gallery Section */}
-            <div style={{ marginBottom: '15px' }}>
-              <div style={{
-                fontSize: '14px',
-                color: '#10b981',
-                fontWeight: 'bold',
-                marginBottom: '10px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}>
-                <span>🖼️ Your Photos</span>
-                <span style={{ fontSize: '11px', color: '#aaa' }}>{myPhotoDrops.length} total</span>
-              </div>
-              
-              {myPhotoDrops.length === 0 ? (
-                /* Empty State */
-                <div style={{
-                  textAlign: 'center',
-                  padding: '20px',
-                  background: 'rgba(255,255,255,0.03)',
-                  borderRadius: '8px',
-                  border: '1px dashed #444'
-                }}>
-                  <div style={{ fontSize: '36px', marginBottom: '8px' }}>📸</div>
-                  <div style={{ color: '#aaa', marginBottom: '10px', fontSize: '13px' }}>
-                    No photos yet
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#666' }}>
-                    Tap on the map to place a photo drop!
-                  </div>
-                </div>
-              ) : (
-                /* Photo Grid */
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
-                  gap: '8px',
-                  maxHeight: '200px',
-                  overflowY: 'auto'
-                }}>
-                  {myPhotoDrops.slice(0, 12).map((drop, index) => (
-                    <div
-                      key={drop.id || drop.firestoreId || index}
-                      onClick={() => {
-                        setSelectedPhotoDrop(drop);
-                        togglePanel('none');
-                        if (mapRef.current) {
-                          mapRef.current.setView([drop.lat, drop.lng], 17);
-                        }
-                      }}
-                      style={{
-                        position: 'relative',
-                        aspectRatio: '1',
-                        borderRadius: '6px',
-                        overflow: 'hidden',
-                        cursor: 'pointer',
-                        border: '1px solid #444'
-                      }}
-                    >
-                      <img
-                        src={drop.photoUrl}
-                        alt={`Photo ${index + 1}`}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover'
-                        }}
-                      />
-                      {drop.likes && drop.likes.length > 0 && (
-                        <div style={{
-                          position: 'absolute',
-                          bottom: '4px',
-                          right: '4px',
-                          background: 'rgba(0,0,0,0.7)',
-                          color: '#ef4444',
-                          padding: '2px 5px',
-                          borderRadius: '4px',
-                          fontSize: '9px',
-                          fontWeight: 'bold'
-                        }}>
-                          ❤️ {drop.likes.length}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Camera Controls */}
-            <div style={{ marginBottom: '15px' }}>
-              <div style={{
-                fontSize: '14px',
-                color: '#fbbf24',
-                fontWeight: 'bold',
-                marginBottom: '8px'
-              }}>
-                📱 Camera
-              </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <button
-                  onClick={() => {
-                    // Open photo selection modal for dropping
-                    if (!gpsPosition) {
-                      alert('GPS location not available. Please enable location services.');
-                      return;
-                    }
-                    setPendingDropPosition({ lat: gpsPosition[0], lng: gpsPosition[1] });
-                    setShowPhotoModal(true);
-                    togglePanel('none');
-                  }}
-                  style={{
-                    background: 'rgba(16, 185, 129, 0.2)',
-                    color: '#10b981',
-                    border: '1px solid #10b981',
-                    padding: '10px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    fontWeight: 'bold'
-                  }}
-                >
-                  <span style={{ fontSize: '18px' }}>📸</span>
-                  Take / Upload Photo
-                </button>
-                
-                <button
-                  onClick={() => {
-                    // Browse all photo drops on map
-                    const allPhotoDrops = drops.filter(d => d.photoUrl);
-                    if (allPhotoDrops.length === 0) {
-                      alert('No photo drops found on the map yet!');
-                      return;
-                    }
-                    if (mapRef.current && allPhotoDrops.length > 0) {
-                      const bounds = allPhotoDrops.map(d => [d.lat, d.lng] as [number, number]);
-                      const minLat = Math.min(...bounds.map(b => b[0]));
-                      const maxLat = Math.max(...bounds.map(b => b[0]));
-                      const minLng = Math.min(...bounds.map(b => b[1]));
-                      const maxLng = Math.max(...bounds.map(b => b[1]));
-                      mapRef.current.fitBounds([[minLat, minLng], [maxLat, maxLng]], { padding: [50, 50] });
-                    }
-                    togglePanel('none');
-                  }}
-                  style={{
-                    background: 'rgba(139, 92, 246, 0.1)',
-                    color: '#8b5cf6',
-                    border: '1px solid #8b5cf6',
-                    padding: '10px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px'
-                  }}
-                >
-                  <span style={{ fontSize: '18px' }}>🗺️</span>
-                  View All Photo Drops
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div style={{ paddingTop: '10px', borderTop: '1px solid #444' }}>
-              <div style={{
-                fontSize: '12px',
-                color: '#ec4899',
-                fontWeight: 'bold',
-                marginBottom: '8px'
-              }}>
-                ⚡ Quick Actions
-              </div>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
-                <button
-                  onClick={() => {
-                    const photoCount = myPhotoDrops.length;
-                    if (photoCount === 0) {
-                      alert('You have no photos to share yet!');
-                      return;
-                    }
-                    // Copy shareable text to clipboard
-                    const shareText = `Check out my ${photoCount} photo${photoCount > 1 ? 's' : ''} on Blackout NZ! 📸`;
-                    navigator.clipboard?.writeText(shareText);
-                    alert('Share link copied to clipboard!');
-                  }}
-                  style={{
-                    background: 'rgba(236, 72, 153, 0.1)',
-                    color: '#ec4899',
-                    border: '1px solid #ec4899',
-                    padding: '8px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '11px'
-                  }}
-                >
-                  🔗 Share
-                </button>
-                
-                <button
-                  onClick={handleRefreshAll}
-                  style={{
-                    background: 'rgba(16, 185, 129, 0.1)',
-                    color: '#10b981',
-                    border: '1px solid #10b981',
-                    padding: '8px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '11px'
-                  }}
-                >
-                  🔄 Refresh
-                </button>
-              </div>
-            </div>
+      <div
+        style={{
+          position: 'fixed',
+          top: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          justifyContent: 'center',
+          gap: '15px',
+          zIndex: 1200,
+          maxHeight: '80vh',
+          width: 'min(95vw, 420px)',
+        }}
+      >
+        {showProfilePanel && userProfile && (
+          <div
+            style={{
+              animation: 'slideInLeft 0.3s ease-out',
+            }}
+          >
+            <BlackbookPanel
+              userProfile={userProfile}
+              userMarkers={userMarkers}
+              drops={drops}
+              topPlayers={topPlayers}
+              onClose={() => togglePanel('none')}
+              onProfileUpdate={(updatedProfile) => setUserProfile(updatedProfile)}
+              onCenterMap={centerMap}
+              onRefreshAll={handleRefreshAll}
+              isRefreshing={isRefreshing}
+              showTopPlayers={showTopPlayers}
+              onToggleTopPlayers={() => setShowTopPlayers(!showTopPlayers)}
+              showOnlyMyDrops={showOnlyMyDrops}
+              onToggleFilter={() => setShowOnlyMyDrops(!showOnlyMyDrops)}
+              onLogout={handleLogout}
+              expandedRadius={expandedRadius}
+              onOpenCrewChat={() => {
+                togglePanel('crewchat');
+              }}
+              selectedColor={selectedMarkerColor}
+              selectedSpecialType={selectedSpecialType}
+              unlockedColors={userProfile.unlockedColors || []}
+              onColorSelect={(colorId, colorHex, specialType) => {
+                setSelectedMarkerColor(colorHex);
+                setSelectedSpecialType(specialType || null);
+                saveFavoriteColor(colorHex);
+              }}
+            />
           </div>
-          );
-        })()}
+        )}
+
+        {/* Photos Panel */}
+        {showPhotosPanel && (
+          <PhotosPanel
+            user={user}
+            userProfile={userProfile}
+            drops={drops}
+            gpsPosition={gpsPosition}
+            mapRef={mapRef}
+            panelStyle={panelStyle}
+            togglePanel={togglePanel}
+            handleProfilePicUpload={handleProfilePicUpload}
+            setPendingDropPosition={setPendingDropPosition}
+            setShowPhotoModal={setShowPhotoModal}
+            setSelectedPhotoDrop={setSelectedPhotoDrop}
+            handleRefreshAll={handleRefreshAll}
+          />
+        )}
 
         {/* Map Control Panel */}
         {showMapPanel && (
-          <div style={{
-            ...panelStyle,
-            animation: 'slideInLeft 0.3s ease-out',
-            position: 'relative' as 'relative'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '20px',
-              borderBottom: '1px solid rgba(255,255,255,0.1)',
-              paddingBottom: '12px'
-            }}>
+          <div
+            style={{
+              ...panelStyle,
+              animation: 'slideInLeft 0.3s ease-out',
+              position: 'relative',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '20px',
+                borderBottom: '1px solid rgba(255,255,255,0.1)',
+                paddingBottom: '12px',
+              }}
+            >
               <h3 style={{ margin: 0, color: '#4dabf7', fontSize: '18px' }}>🗺️ MAP CONTROL</h3>
               <button
                 onClick={() => togglePanel('none')}
@@ -5089,7 +4025,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   cursor: 'pointer',
                   fontSize: '20px',
                   padding: '4px',
-                  borderRadius: '4px'
+                  borderRadius: '4px',
                 }}
               >
                 ×
@@ -5097,7 +4033,6 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-
               {/* Legend Toggle */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                 <button
@@ -5111,7 +4046,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     cursor: 'pointer',
                     fontSize: '14px',
                     width: '100%',
-                    transition: 'all 0.2s ease'
+                    transition: 'all 0.2s ease',
                   }}
                 >
                   📋 Legend {showLegend ? 'ON' : 'OFF'}
@@ -5134,7 +4069,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     cursor: 'pointer',
                     fontSize: '14px',
                     width: '100%',
-                    transition: 'all 0.2s ease'
+                    transition: 'all 0.2s ease',
                   }}
                 >
                   🎯 50m Radius {show50mRadius ? 'ON' : 'OFF'}
@@ -5157,7 +4092,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     cursor: 'pointer',
                     fontSize: '14px',
                     width: '100%',
-                    transition: 'all 0.2s ease'
+                    transition: 'all 0.2s ease',
                   }}
                 >
                   🏆 Top Players {showTopPlayers ? 'ON' : 'OFF'}
@@ -5166,7 +4101,6 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   Show/hide leaderboard markers
                 </span>
               </div>
-
 
               {/* Refresh Drops */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
@@ -5183,7 +4117,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     fontSize: '14px',
                     width: '100%',
                     transition: 'all 0.2s ease',
-                    opacity: isRefreshing ? 0.7 : 1
+                    opacity: isRefreshing ? 0.7 : 1,
                   }}
                 >
                   {isRefreshing ? '🔄 Refreshing...' : '🔄 Refresh Drops'}
@@ -5206,7 +4140,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     cursor: 'pointer',
                     fontSize: '14px',
                     width: '100%',
-                    transition: 'all 0.2s ease'
+                    transition: 'all 0.2s ease',
                   }}
                 >
                   🛰️ Satellite {showSatelliteView ? 'ON' : 'OFF'}
@@ -5236,7 +4170,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                     cursor: 'pointer',
                     fontSize: '14px',
                     width: '100%',
-                    transition: 'all 0.2s ease'
+                    transition: 'all 0.2s ease',
                   }}
                 >
                   👁️ Show All Drops
@@ -5245,50 +4179,59 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   Fit map to all markers
                 </span>
               </div>
-
             </div>
 
             {/* ⚙️ PERFORMANCE SETTINGS SECTION */}
-            <div style={{
-              marginTop: '20px',
-              paddingTop: '20px',
-              borderTop: '1px solid rgba(255,255,255,0.1)'
-            }}>
-              <div style={{
-                fontSize: '16px',
-                fontWeight: 'bold',
-                color: '#fbbf24',
-                marginBottom: '15px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
+            <div
+              style={{
+                marginTop: '20px',
+                paddingTop: '20px',
+                borderTop: '1px solid rgba(255,255,255,0.1)',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  color: '#fbbf24',
+                  marginBottom: '15px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
                 ⚙️ PERFORMANCE
               </div>
 
               {/* Crew Detection Toggle */}
-              <div style={{
-                marginBottom: '15px',
-                padding: '12px',
-                background: 'rgba(255,255,255,0.03)',
-                borderRadius: '8px',
-                border: '1px solid #444'
-              }}>
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '8px'
-                }}>
-                  <label style={{
-                    fontSize: '13px',
-                    fontWeight: 'bold',
-                    color: '#cbd5e1',
-                    cursor: 'pointer',
+              <div
+                style={{
+                  marginBottom: '15px',
+                  padding: '12px',
+                  background: 'rgba(255,255,255,0.03)',
+                  borderRadius: '8px',
+                  border: '1px solid #444',
+                }}
+              >
+                <div
+                  style={{
                     display: 'flex',
+                    justifyContent: 'space-between',
                     alignItems: 'center',
-                    gap: '8px'
-                  }}>
+                    marginBottom: '8px',
+                  }}
+                >
+                  <label
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 'bold',
+                      color: '#cbd5e1',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    }}
+                  >
                     👥 Crew Detection
                     <input
                       type="checkbox"
@@ -5297,37 +4240,41 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                       style={{ cursor: 'pointer' }}
                     />
                   </label>
-                  <span style={{
-                    fontSize: '11px',
-                    color: crewDetectionEnabled ? '#10b981' : '#ef4444'
-                  }}>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      color: crewDetectionEnabled ? '#10b981' : '#ef4444',
+                    }}
+                  >
                     {crewDetectionEnabled ? 'ON' : 'OFF'}
                   </span>
                 </div>
                 <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                  {crewDetectionEnabled 
-                    ? '✓ Scans crew members every 10s'
-                    : '✗ Disabled (faster, less CPU)'}
+                  {crewDetectionEnabled ? '✓ Scans crew members every 10s' : '✗ Disabled (faster, less CPU)'}
                 </div>
               </div>
 
               {/* Marker Quality Selector */}
-              <div style={{
-                marginBottom: '15px',
-                padding: '12px',
-                background: 'rgba(255,255,255,0.03)',
-                borderRadius: '8px',
-                border: '1px solid #444'
-              }}>
-                <div style={{
-                  fontSize: '13px',
-                  fontWeight: 'bold',
-                  color: '#cbd5e1',
-                  marginBottom: '10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
+              <div
+                style={{
+                  marginBottom: '15px',
+                  padding: '12px',
+                  background: 'rgba(255,255,255,0.03)',
+                  borderRadius: '8px',
+                  border: '1px solid #444',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 'bold',
+                    color: '#cbd5e1',
+                    marginBottom: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
                   🎨 Marker Quality
                 </div>
                 <div style={{ display: 'flex', gap: '6px' }}>
@@ -5338,32 +4285,30 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                       style={{
                         flex: 1,
                         padding: '8px',
-                        background: markerQuality === quality 
-                          ? 'rgba(77, 171, 247, 0.3)' 
-                          : 'rgba(255,255,255,0.05)',
-                        border: markerQuality === quality 
-                          ? '1px solid #4dabf7' 
-                          : '1px solid #555',
+                        background: markerQuality === quality ? 'rgba(77, 171, 247, 0.3)' : 'rgba(255,255,255,0.05)',
+                        border: markerQuality === quality ? '1px solid #4dabf7' : '1px solid #555',
                         color: markerQuality === quality ? '#4dabf7' : '#cbd5e1',
                         borderRadius: '6px',
                         cursor: 'pointer',
                         fontSize: '12px',
                         fontWeight: 'bold',
                         transition: 'all 0.2s ease',
-                        textTransform: 'uppercase'
+                        textTransform: 'uppercase',
                       }}
                     >
                       {quality === 'low' ? '⚡ Low' : quality === 'medium' ? '⭐ Med' : '🔥 Max'}
                     </button>
                   ))}
                 </div>
-                <div style={{
-                  fontSize: '11px',
-                  color: '#94a3b8',
-                  marginTop: '8px',
-                  paddingTop: '8px',
-                  borderTop: '1px solid #444'
-                }}>
+                <div
+                  style={{
+                    fontSize: '11px',
+                    color: '#94a3b8',
+                    marginTop: '8px',
+                    paddingTop: '8px',
+                    borderTop: '1px solid #444',
+                  }}
+                >
                   {markerQuality === 'low' && '⚡ 25 markers (fastest)'}
                   {markerQuality === 'medium' && '⭐ 50 markers (balanced)'}
                   {markerQuality === 'high' && '🔥 100+ markers (slower)'}
@@ -5371,31 +4316,37 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               </div>
 
               {/* Performance Status */}
-              <div style={{
-                padding: '10px',
-                background: 'rgba(16, 185, 129, 0.1)',
-                border: '1px solid rgba(16, 185, 129, 0.3)',
-                borderRadius: '6px',
-                fontSize: '11px',
-                color: '#10b981'
-              }}>
+              <div
+                style={{
+                  padding: '10px',
+                  background: 'rgba(16, 185, 129, 0.1)',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  borderRadius: '6px',
+                  fontSize: '11px',
+                  color: '#10b981',
+                }}
+              >
                 <strong>💚 Performance Status</strong>
                 <div style={{ marginTop: '6px', fontSize: '10px', color: '#cbd5e1' }}>
-                  {crewDetectionEnabled ? '✓' : '✗'} Crew detection {crewDetectionEnabled ? 'ON' : 'OFF'}<br/>
-                  {markerQuality === 'low' ? '⚡' : markerQuality === 'medium' ? '⭐' : '🔥'} {markerQuality.charAt(0).toUpperCase() + markerQuality.slice(1)} quality mode
+                  {crewDetectionEnabled ? '✓' : '✗'} Crew detection {crewDetectionEnabled ? 'ON' : 'OFF'}
+                  <br />
+                  {markerQuality === 'low' ? '⚡' : markerQuality === 'medium' ? '⭐' : '🔥'}{' '}
+                  {markerQuality.charAt(0).toUpperCase() + markerQuality.slice(1)} quality mode
                 </div>
               </div>
             </div>
 
             {/* Status Info */}
-            <div style={{
-              marginTop: '20px',
-              padding: '12px',
-              backgroundColor: 'rgba(255,255,255,0.05)',
-              borderRadius: '8px',
-              fontSize: '12px',
-              color: '#cbd5e1'
-            }}>
+            <div
+              style={{
+                marginTop: '20px',
+                padding: '12px',
+                backgroundColor: 'rgba(255,255,255,0.05)',
+                borderRadius: '8px',
+                fontSize: '12px',
+                color: '#cbd5e1',
+              }}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                 <span>Drops visible:</span>
                 <span style={{ color: '#4dabf7' }}>{userMarkers.length}</span>
@@ -5406,13 +4357,17 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span>GPS status:</span>
-                <span style={{
-                  color: gpsStatus === 'tracking' ? '#10b981' :
-                        gpsStatus === 'acquiring' ? '#f59e0b' : '#ef4444'
-                }}>
-                  {gpsStatus === 'tracking' ? 'Active' :
-                  gpsStatus === 'acquiring' ? 'Acquiring...' :
-                  gpsStatus === 'error' ? 'Error' : 'Initializing'}
+                <span
+                  style={{
+                    color:
+                      gpsStatus === 'tracking'
+                        ? '#10b981'
+                        : gpsStatus === 'acquiring'
+                        ? '#f59e0b'
+                        : '#ef4444',
+                  }}
+                >
+                  {gpsStatus === 'tracking' ? 'Active' : gpsStatus === 'acquiring' ? 'Acquiring...' : gpsStatus === 'error' ? 'Error' : 'Initializing'}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
@@ -5423,308 +4378,336 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           </div>
         )}
 
-{/* Music Panel - Always rendered, dynamic z-index */}
-            <div
-              key={`music-panel-${userProfile?.unlockedTracks?.length || unlockedTracks.length}`}
-              ref={(el) => {
-                // Force re-render when userProfile tracks change
-                if (el && userProfile?.unlockedTracks) {
-                  const tracks = userProfile.unlockedTracks;
-                  console.log('🎵 Music Panel rendering with tracks:', tracks);
-                }
-              }}
+        {/* Music Panel */}
+        <div
+          key={`music-panel-${userProfile?.unlockedTracks?.length || unlockedTracks.length}`}
+          ref={(el) => {
+            if (el && userProfile?.unlockedTracks) {
+              console.log('🎵 Music Panel rendering with tracks:', userProfile.unlockedTracks);
+            }
+          }}
+          style={{
+            ...panelStyle,
+            border: '1px solid #333',
+            display: 'flex',
+            flexDirection: 'column',
+            animation: showMusicPanel ? 'slideInRight 0.3s ease-out' : 'none',
+            minWidth: isMobile ? '280px' : '350px',
+            maxWidth: isMobile ? '95vw' : '400px',
+            position: 'absolute',
+            zIndex: showMusicPanel ? 1500 : 900,
+            opacity: showMusicPanel ? 1 : 0,
+            pointerEvents: showMusicPanel ? 'auto' : 'none',
+            transition: 'opacity 0.3s ease, z-index 0s',
+            WebkitOverflowScrolling: 'touch',
+            touchAction: 'auto',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '10px',
+              paddingBottom: '10px',
+              borderBottom: '1px solid rgba(138, 43, 226, 0.3)',
+            }}
+          >
+            <h3
               style={{
-                ...panelStyle,
-                border: '1px solid #333',
+                margin: 0,
+                color: '#8a2be2',
+                fontSize: '18px',
                 display: 'flex',
-                flexDirection: 'column',
-                animation: showMusicPanel ? 'slideInRight 0.3s ease-out' : 'none',
-                minWidth: isMobile ? '280px' : '350px',
-                maxWidth: isMobile ? '95vw' : '400px',
-                position: 'absolute' as const,
-                zIndex: showMusicPanel ? 1500 : 900,
-                opacity: showMusicPanel ? 1 : 0,
-                pointerEvents: showMusicPanel ? 'auto' : 'none',
-                transition: 'opacity 0.3s ease, z-index 0s',
-                WebkitOverflowScrolling: 'touch',
-                touchAction: 'auto'
-              }}>
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '10px',
-                  paddingBottom: '10px',
-                  borderBottom: '1px solid rgba(138, 43, 226, 0.3)'
-                }}>
-                  <h3 style={{
-                    margin: 0,
-                    color: '#8a2be2',
-                    fontSize: '18px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                  }}>
-                    <span>🎵</span>
-                    MUSIC COLLECTION
-                  </h3>
-                  <button
-                    onClick={() => togglePanel('none')}
-                    style={{
-                      background: 'rgba(138, 43, 226, 0.2)',
-                      border: '1px solid rgba(138, 43, 226, 0.3)',
-                      color: '#8a2be2',
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '50%',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                  >
-                    ✕
-                  </button>
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <span>🎵</span>
+              MUSIC COLLECTION
+            </h3>
+            <button
+              onClick={() => togglePanel('none')}
+              style={{
+                background: 'rgba(138, 43, 226, 0.2)',
+                border: '1px solid rgba(138, 43, 226, 0.3)',
+                color: '#8a2be2',
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                cursor: 'pointer',
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Music Player Section */}
+          <div
+            style={{
+              marginBottom: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '15px',
+            }}
+          ></div>
+
+          {/* Unlocked Videos Section */}
+          <div style={{ marginBottom: '15px' }}>
+            <div
+              style={{
+                fontSize: '14px',
+                color: '#ec4899',
+                marginBottom: '10px',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <span>🎬</span>
+              VIDEO COLLECTION
+              <span style={{ fontSize: '11px', color: '#666', fontWeight: 'normal' }}>
+                ({userProfile?.unlockedVideos?.length || 0}/{FACEBOOK_VIDEOS.length})
+              </span>
+            </div>
+
+            {(userProfile?.unlockedVideos?.length || 0) === 0 ? (
+              <div
+                style={{
+                  textAlign: 'center',
+                  padding: '20px',
+                  background: 'rgba(255,255,255,0.03)',
+                  borderRadius: '8px',
+                  border: '1px dashed #444',
+                }}
+              >
+                <div style={{ fontSize: '28px', marginBottom: '8px' }}>🎬</div>
+                <div style={{ color: '#aaa', fontSize: '12px' }}>No videos unlocked yet</div>
+                <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                  Use cheat menu to unlock videos!
                 </div>
-                
-                {/* Music Player Section */}
-                <div style={{
-                  marginBottom: '20px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '15px'
-                }}>
-                </div>
-
-
-                {/* Unlocked Videos Section */}
-                <div style={{ marginBottom: '15px' }}>
-                  <div style={{ fontSize: '14px', color: '#ec4899', marginBottom: '10px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span>🎬</span>
-                    VIDEO COLLECTION
-                    <span style={{ fontSize: '11px', color: '#666', fontWeight: 'normal' }}>
-                      ({userProfile?.unlockedVideos?.length || 0}/{FACEBOOK_VIDEOS.length})
-                    </span>
-                  </div>
-
-                  {(userProfile?.unlockedVideos?.length || 0) === 0 ? (
-                    <div style={{
-                      textAlign: 'center',
-                      padding: '20px',
-                      background: 'rgba(255,255,255,0.03)',
-                      borderRadius: '8px',
-                      border: '1px dashed #444'
-                    }}>
-                      <div style={{ fontSize: '28px', marginBottom: '8px' }}>🎬</div>
-                      <div style={{ color: '#aaa', fontSize: '12px' }}>
-                        No videos unlocked yet
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                        Use cheat menu to unlock videos!
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      {(userProfile?.unlockedVideos || []).map((videoUrl, index) => {
-                        const videoName = getVideoName(videoUrl);
-                        return (
-                          <div
-                            key={index}
-                            onClick={() => {
-                              setVideoUnlockModal({
-                                isOpen: true,
-                                videoUrl: videoUrl,
-                                source: 'COLLECTION'
-                              });
-                            }}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '10px',
-                              padding: '10px',
-                              background: 'rgba(236, 72, 153, 0.1)',
-                              borderRadius: '6px',
-                              border: '1px solid rgba(236, 72, 153, 0.3)',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s ease'
-                            }}
-                          >
-                            <div style={{
-                              fontSize: '18px',
-                              minWidth: '24px',
-                              textAlign: 'center'
-                            }}>
-                              🎬
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{
-                                fontSize: '13px',
-                                fontWeight: 'bold',
-                                color: '#ec4899'
-                              }}>
-                                {videoName}
-                              </div>
-                              <div style={{
-                                fontSize: '11px',
-                                color: '#1877f2',
-                                marginTop: '2px'
-                              }}>
-                                Facebook Video
-                              </div>
-                            </div>
-                            <div style={{
-                              fontSize: '12px',
-                              color: '#ec4899'
-                            }}>
-                              ▶️
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Unlocked Tracks List */}
-                <div style={{ flex: 1, overflowY: 'auto', marginBottom: '15px' }}>
-                  <div style={{ fontSize: '14px', color: '#cbd5e1', marginBottom: '10px', fontWeight: 'bold' }}>
-                    🎵 Your Collection
-                  </div>
-
-                  {unlockedTracks.length === 0 ? (
-                    <div style={{
-                      textAlign: 'center',
-                      padding: '30px 20px',
-                      background: 'rgba(255,255,255,0.03)',
-                      borderRadius: '8px',
-                      border: '1px dashed #444'
-                    }}>
-                      <div style={{ fontSize: '32px', marginBottom: '10px' }}>🎵</div>
-                      <div style={{ color: '#aaa' }}>
-                        No tracks unlocked yet
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-                        Place drops to unlock music!
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {(Array.isArray(userProfile?.unlockedTracks) ? userProfile.unlockedTracks : (Array.isArray(unlockedTracks) ? unlockedTracks : [])).map((track, index) => {
-                        const trackName = getTrackNameFromUrlHelper(track);
-                        const isCurrentlyPlaying = index === currentTrackIndex;
-
-                        return (
-                          <div
-                            key={index}
-                            onClick={() => {
-                              if (isCurrentlyPlaying) {
-                                togglePlay();
-                              } else {
-                                setCurrentTrackIndex(index);
-                                setShowSpotifyWidget(true);
-                                setIsPlaying(true);
-                              }
-                            }}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '10px',
-                              padding: '10px',
-                              background: isCurrentlyPlaying ? 'rgba(138, 43, 226, 0.2)' : 'rgba(255,255,255,0.03)',
-                              borderRadius: '6px',
-                              border: isCurrentlyPlaying ? '1px solid rgba(138, 43, 226, 0.4)' : '1px solid #333',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s ease'
-                            }}
-                          >
-                            <div style={{
-                              fontSize: '18px',
-                              minWidth: '24px',
-                              textAlign: 'center'
-                            }}>
-                              🎵
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{
-                                fontSize: '13px',
-                                fontWeight: isCurrentlyPlaying ? 'bold' : 'normal',
-                                color: isCurrentlyPlaying ? '#8a2be2' : 'white'
-                              }}>
-                                {trackName}
-                                {isCurrentlyPlaying && (
-                                  <span style={{
-                                    marginLeft: '8px',
-                                    fontSize: '11px',
-                                    color: '#10b981',
-                                    animation: 'pulse 1s infinite'
-                                  }}>
-                                    ● NOW PLAYING
-                                  </span>
-                                )}
-                              </div>
-                              <div style={{
-                                fontSize: '11px',
-                                color: track.includes('soundcloud.com') ? '#ff6b6b' : '#1DB954',
-                                marginTop: '2px'
-                              }}>
-                                {track.includes('soundcloud.com') ? 'SoundCloud' : 'Spotify'}
-                              </div>
-                            </div>
-                            <div style={{
-                              fontSize: '12px',
-                              color: '#ff6b6b'
-                            }}>
-                              🎧
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-
               </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {(userProfile?.unlockedVideos || []).map((videoUrl, index) => {
+                  const videoName = getVideoName(videoUrl);
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => {
+                        setVideoUnlockModal({
+                          isOpen: true,
+                          videoUrl: videoUrl,
+                          source: 'COLLECTION',
+                        });
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '10px',
+                        background: 'rgba(236, 72, 153, 0.1)',
+                        borderRadius: '6px',
+                        border: '1px solid rgba(236, 72, 153, 0.3)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: '18px',
+                          minWidth: '24px',
+                          textAlign: 'center',
+                        }}
+                      >
+                        🎬
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: 'bold',
+                            color: '#ec4899',
+                          }}
+                        >
+                          {videoName}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            color: '#1877f2',
+                            marginTop: '2px',
+                          }}
+                        >
+                          Facebook Video
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '12px',
+                          color: '#ec4899',
+                        }}
+                      >
+                        ▶️
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
+          {/* Unlocked Tracks List */}
+          <div style={{ flex: 1, overflowY: 'auto', marginBottom: '15px' }}>
+            <div style={{ fontSize: '14px', color: '#cbd5e1', marginBottom: '10px', fontWeight: 'bold' }}>
+              🎵 Your Collection
+            </div>
+
+            {unlockedTracks.length === 0 ? (
+              <div
+                style={{
+                  textAlign: 'center',
+                  padding: '30px 20px',
+                  background: 'rgba(255,255,255,0.03)',
+                  borderRadius: '8px',
+                  border: '1px dashed #444',
+                }}
+              >
+                <div style={{ fontSize: '32px', marginBottom: '10px' }}>🎵</div>
+                <div style={{ color: '#aaa' }}>No tracks unlocked yet</div>
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                  Place drops to unlock music!
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {(Array.isArray(userProfile?.unlockedTracks) ? userProfile.unlockedTracks : (Array.isArray(unlockedTracks) ? unlockedTracks : [])).map(
+                  (track, index) => {
+                    const trackName = getTrackNameFromUrlHelper(track);
+                    const isCurrentlyPlaying = index === currentTrackIndex;
+
+                    return (
+                      <div
+                        key={index}
+                        onClick={() => {
+                          if (isCurrentlyPlaying) {
+                            togglePlay();
+                          } else {
+                            setCurrentTrackIndex(index);
+                            setShowSpotifyWidget(true);
+                            setIsPlaying(true);
+                          }
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '10px',
+                          background: isCurrentlyPlaying ? 'rgba(138, 43, 226, 0.2)' : 'rgba(255,255,255,0.03)',
+                          borderRadius: '6px',
+                          border: isCurrentlyPlaying ? '1px solid rgba(138, 43, 226, 0.4)' : '1px solid #333',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: '18px',
+                            minWidth: '24px',
+                            textAlign: 'center',
+                          }}
+                        >
+                          🎵
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div
+                            style={{
+                              fontSize: '13px',
+                              fontWeight: isCurrentlyPlaying ? 'bold' : 'normal',
+                              color: isCurrentlyPlaying ? '#8a2be2' : 'white',
+                            }}
+                          >
+                            {trackName}
+                            {isCurrentlyPlaying && (
+                              <span
+                                style={{
+                                  marginLeft: '8px',
+                                  fontSize: '11px',
+                                  color: '#10b981',
+                                  animation: 'pulse 1s infinite',
+                                }}
+                              >
+                                ● NOW PLAYING
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: '11px',
+                              color: track.includes('soundcloud.com') ? '#ff6b6b' : '#1DB954',
+                              marginTop: '2px',
+                            }}
+                          >
+                            {track.includes('soundcloud.com') ? 'SoundCloud' : 'Spotify'}
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            color: '#ff6b6b',
+                          }}
+                        >
+                          🎧
+                        </div>
+                      </div>
+                    );
+                  }
+                )}
+              </div>
+            )}
+          </div>
         </div>
+      </div>
 
       {/* ========== END DUAL CONTROL PANELS ========== */}
 
+      {/* Direct Messaging Panel */}
+      {showMessagesPanel && userProfile && (
+        <DirectMessaging
+          isOpen={showMessagesPanel}
+          onClose={() => togglePanel('none')}
+          userProfile={userProfile}
+          gpsPosition={gpsPosition}
+        />
+      )}
 
+      {/* Crew Chat Panel */}
+      {showCrewChat && userProfile?.crewId && user && (
+        <CrewChatPanel
+          crewId={userProfile.crewId}
+          onClose={() => {
+            togglePanel('none');
+            markCrewChatAsRead();
+          }}
+          userProfile={userProfile}
+          markMessagesAsRead={markCrewChatAsRead}
+        />
+      )}
 
-        {/* Direct Messaging Panel */}
-        {showMessagesPanel && userProfile && (
-          <DirectMessaging
-            isOpen={showMessagesPanel}
-            onClose={() => togglePanel('none')}
-            userProfile={userProfile}
-            gpsPosition={gpsPosition}
-          />
-        )}
+      {/* Story/Crew Bio Panel */}
+      {showStoryPanel && (
+        <CrewBioPanel
+          userCrewId={userProfile?.crewId}
+          onClose={() => togglePanel('none')}
+        />
+      )}
 
-        {/* Crew Chat Panel */}
-        {showCrewChat && userProfile?.crewId && user && (
-          <CrewChatPanel 
-            crewId={userProfile.crewId} 
-            onClose={() => {
-              togglePanel('none');
-              markCrewChatAsRead(); // Mark as read when closing
-            }}
-            userProfile={userProfile}
-            markMessagesAsRead={markCrewChatAsRead} // Pass down the function
-          />
-        )}
-
-        {/* Story/Crew Bio Panel - Separate from other panels */}
-        {showStoryPanel && (
-          <CrewBioPanel
-            userCrewId={userProfile?.crewId}
-            onClose={() => togglePanel('none')}
-          />
-        )}
-
-      {/* Bottom Navigation - Crew Themed */}
+      {/* Bottom Navigation */}
       <BottomNavigation
         showMapPanel={showMapPanel}
         showProfilePanel={showProfilePanel}
@@ -5740,22 +4723,24 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         crewId={userProfile?.crewId}
       />
 
-      {/* Secondary Controls - Under Online Button */}
-      <div style={{
-        position: 'fixed',
-        bottom: '80px', // Positioned above the main nav bar
-        left: '50%',
-        transform: 'translateX(-50%)',
-        display: 'flex',
-        flexDirection: 'row',
-        gap: '8px',
-        zIndex: 1100
-      }}>
+      {/* Secondary Controls */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: '80px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          flexDirection: 'row',
+          gap: '8px',
+          zIndex: 1100,
+        }}
+      >
         {/* Story Button */}
         <button
           onClick={() => {
             togglePanel('story');
-            markStoryContentAsViewed(); // Mark as viewed when opening
+            markStoryContentAsViewed();
           }}
           style={{
             background: showStoryPanel ? 'rgba(139, 92, 246, 0.2)' : 'rgba(15, 23, 42, 0.9)',
@@ -5772,33 +4757,36 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             transition: 'all 0.3s ease',
             minWidth: '60px',
             boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            position: 'relative' // Added for badge positioning
+            position: 'relative',
           }}
         >
-          {/* Unread Story Notification Badge */}
           {hasNewStoryContent && !showStoryPanel && (
-            <div style={{
-              position: 'absolute',
-              top: '2px',
-              right: '2px',
-              backgroundColor: '#ef4444', // Red for notification
-              color: 'white',
-              borderRadius: '50%',
-              width: '12px',
-              height: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '8px',
-              fontWeight: 'bold',
-              zIndex: 1,
-              boxShadow: '0 0 5px rgba(239, 68, 68, 0.7)'
-            }} />
+            <div
+              style={{
+                position: 'absolute',
+                top: '2px',
+                right: '2px',
+                backgroundColor: '#ef4444',
+                color: 'white',
+                borderRadius: '50%',
+                width: '12px',
+                height: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '8px',
+                fontWeight: 'bold',
+                zIndex: 1,
+                boxShadow: '0 0 5px rgba(239, 68, 68, 0.7)',
+              }}
+            />
           )}
-          <div style={{
-            fontSize: '20px',
-            transform: showStoryPanel ? 'scale(1.1)' : 'scale(1)'
-          }}>
+          <div
+            style={{
+              fontSize: '20px',
+              transform: showStoryPanel ? 'scale(1.1)' : 'scale(1)',
+            }}
+          >
             📖
           </div>
           Story
@@ -5821,13 +4809,15 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             borderRadius: '8px',
             transition: 'all 0.3s ease',
             minWidth: '60px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
           }}
         >
-          <div style={{
-            fontSize: '20px',
-            transform: showMusicPanel ? 'scale(1.1)' : 'scale(1)'
-          }}>
+          <div
+            style={{
+              fontSize: '20px',
+              transform: showMusicPanel ? 'scale(1.1)' : 'scale(1)',
+            }}
+          >
             🎵
           </div>
           Music
@@ -5849,21 +4839,22 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             borderRadius: '8px',
             transition: 'all 0.3s ease',
             minWidth: '60px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
           }}
         >
-          <div style={{
-            fontSize: '20px'
-          }}>
+          <div
+            style={{
+              fontSize: '20px',
+            }}
+          >
             📍
           </div>
           GPS
         </button>
 
-        {/* Time/Weather - Shows current time and day/night status */}
+        {/* Time/Weather */}
         <button
           onClick={() => {
-            // Toggle satellite view as a quick day/night visual override
             setShowSatelliteView(!showSatelliteView);
           }}
           style={{
@@ -5880,17 +4871,17 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             borderRadius: '8px',
             transition: 'all 0.3s ease',
             minWidth: '60px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
           }}
         >
-          <div style={{
-            fontSize: '20px'
-          }}>
+          <div
+            style={{
+              fontSize: '20px',
+            }}
+          >
             {isNight ? '🌙' : '☀️'}
           </div>
-          <div style={{ fontSize: '9px', fontWeight: 'bold' }}>
-            {timeString}
-          </div>
+          <div style={{ fontSize: '9px', fontWeight: 'bold' }}>{timeString}</div>
         </button>
 
         {/* Online/Offline Mode Toggle */}
@@ -5929,63 +4920,110 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
             borderRadius: '8px',
             transition: 'all 0.3s ease',
             minWidth: '60px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
           }}
         >
-          <div style={{
-            fontSize: '20px'
-          }}>
+          <div
+            style={{
+              fontSize: '20px',
+            }}
+          >
             {isOfflineMode ? '🔴' : '🟢'}
           </div>
-          <div style={{ fontSize: '9px', fontWeight: 'bold' }}>
-            {isOfflineMode ? 'OFFLINE' : 'ONLINE'}
-          </div>
+          <div style={{ fontSize: '9px', fontWeight: 'bold' }}>{isOfflineMode ? 'OFFLINE' : 'ONLINE'}</div>
         </button>
       </div>
 
-        {/* Legend */}
-        <LegendPanel
-          isVisible={showLegend}
-          isOfflineMode={isOfflineMode}
-          showTopPlayers={showTopPlayers}
-          selectedMarkerColor={selectedMarkerColor}
-          userMarkersCount={userMarkers.length}
-          unlockedTracksCount={unlockedTracks.length}
-          gpsStatus={gpsStatus}
-          gpsPosition={gpsPosition}
-          gpsError={gpsError}
-          userProfile={userProfile}
+      {/* Legend */}
+      <LegendPanel
+        isVisible={showLegend}
+        isOfflineMode={isOfflineMode}
+        showTopPlayers={showTopPlayers}
+        selectedMarkerColor={selectedMarkerColor}
+        userMarkersCount={userMarkers.length}
+        unlockedTracksCount={unlockedTracks.length}
+        gpsStatus={gpsStatus}
+        gpsPosition={gpsPosition}
+        gpsError={gpsError}
+        userProfile={userProfile}
+      />
+
+      {/* Offline Joystick - Only show when in offline mode */}
+      {isOfflineMode && (
+        <OfflineJoystick
+          onMove={(direction: 'up' | 'down' | 'left' | 'right') => {
+            if (mapRef.current && lastKnownPosition) {
+              const [lat, lng] = lastKnownPosition;
+              const moveDistance = 0.001; // ~111 meters per 0.001 degrees
+              
+              let newLat = lat;
+              let newLng = lng;
+              
+              switch (direction) {
+                case 'up':
+                  newLat += moveDistance;
+                  break;
+                case 'down':
+                  newLat -= moveDistance;
+                  break;
+                case 'left':
+                  newLng -= moveDistance;
+                  break;
+                case 'right':
+                  newLng += moveDistance;
+                  break;
+              }
+              
+              // Ensure new position stays within NZ bounds
+              const clampedLat = Math.max(NZ_BOUNDS[0][0], Math.min(NZ_BOUNDS[1][0], newLat));
+              const clampedLng = Math.max(NZ_BOUNDS[0][1], Math.min(NZ_BOUNDS[1][1], newLng));
+              
+              setLastKnownPosition([clampedLat, clampedLng]);
+              setMapCenter([clampedLat, clampedLng]);
+              mapRef.current.setView([clampedLat, clampedLng], zoom);
+            }
+          }}
+          onCenter={() => {
+            if (mapRef.current && lastKnownPosition) {
+              mapRef.current.setView(lastKnownPosition, zoom);
+            }
+          }}
         />
+      )}
 
       {/* 🔮 FUTURISTIC GPS SCAN ANIMATION */}
       {isScanning && gpsPosition && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          pointerEvents: 'none',
-          zIndex: 9999,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden'
-        }}>
-          {/* Grid Overlay */}
-          <div style={{
-            position: 'absolute',
+        <div
+          style={{
+            position: 'fixed',
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            background: `
-              linear-gradient(rgba(0, 255, 200, 0.03) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(0, 255, 200, 0.03) 1px, transparent 1px)
-            `,
-            backgroundSize: '40px 40px',
-            animation: 'gridMove 2s linear infinite'
-          }} />
+            pointerEvents: 'none',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Grid Overlay */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: `
+                linear-gradient(rgba(0, 255, 200, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 200, 0.03) 1px, transparent 1px)
+              `,
+              backgroundSize: '40px 40px',
+              animation: 'gridMove 2s linear infinite',
+            }}
+          />
 
           {/* Expanding Rings */}
           {[1, 2, 3, 4, 5].map((i) => (
@@ -5999,80 +5037,90 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                 height: `${i * 80}px`,
                 animation: `expandRing 2s ease-out infinite`,
                 animationDelay: `${i * 0.2}s`,
-                boxShadow: `0 0 20px rgba(0, 255, 200, 0.3), inset 0 0 20px rgba(0, 255, 200, 0.1)`
+                boxShadow: `0 0 20px rgba(0, 255, 200, 0.3), inset 0 0 20px rgba(0, 255, 200, 0.1)`,
               }}
             />
           ))}
 
           {/* Rotating Scanner */}
-          <div style={{
-            position: 'absolute',
-            width: '300px',
-            height: '300px',
-            animation: 'rotateScanner 3s linear infinite'
-          }}>
-            {/* Scanner Beam */}
-            <div style={{
+          <div
+            style={{
               position: 'absolute',
-              top: '50%',
-              left: '50%',
-              width: '150px',
-              height: '3px',
-              background: 'linear-gradient(90deg, transparent, rgba(0, 255, 200, 0.8), rgba(0, 255, 200, 1))',
-              transformOrigin: 'left center',
-              boxShadow: '0 0 20px rgba(0, 255, 200, 0.8), 0 0 40px rgba(0, 255, 200, 0.4)'
-            }} />
+              width: '300px',
+              height: '300px',
+              animation: 'rotateScanner 3s linear infinite',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                width: '150px',
+                height: '3px',
+                background: 'linear-gradient(90deg, transparent, rgba(0, 255, 200, 0.8), rgba(0, 255, 200, 1))',
+                transformOrigin: 'left center',
+                boxShadow: '0 0 20px rgba(0, 255, 200, 0.8), 0 0 40px rgba(0, 255, 200, 0.4)',
+              }}
+            />
           </div>
 
           {/* Center Crosshair */}
-          <div style={{
-            position: 'absolute',
-            width: '60px',
-            height: '60px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            {/* Horizontal Line */}
-            <div style={{
+          <div
+            style={{
               position: 'absolute',
               width: '60px',
-              height: '2px',
-              background: 'rgba(0, 255, 200, 0.6)',
-              boxShadow: '0 0 10px rgba(0, 255, 200, 0.8)'
-            }} />
-            {/* Vertical Line */}
-            <div style={{
-              position: 'absolute',
-              width: '2px',
               height: '60px',
-              background: 'rgba(0, 255, 200, 0.6)',
-              boxShadow: '0 0 10px rgba(0, 255, 200, 0.8)'
-            }} />
-            {/* Center Dot */}
-            <div style={{
-              width: '12px',
-              height: '12px',
-              borderRadius: '50%',
-              background: 'rgba(0, 255, 200, 0.9)',
-              boxShadow: '0 0 20px rgba(0, 255, 200, 1), 0 0 40px rgba(0, 255, 200, 0.6)',
-              animation: 'pulseGlow 0.5s ease-in-out infinite'
-            }} />
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                width: '60px',
+                height: '2px',
+                background: 'rgba(0, 255, 200, 0.6)',
+                boxShadow: '0 0 10px rgba(0, 255, 200, 0.8)',
+              }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                width: '2px',
+                height: '60px',
+                background: 'rgba(0, 255, 200, 0.6)',
+                boxShadow: '0 0 10px rgba(0, 255, 200, 0.8)',
+              }}
+            />
+            <div
+              style={{
+                width: '12px',
+                height: '12px',
+                borderRadius: '50%',
+                background: 'rgba(0, 255, 200, 0.9)',
+                boxShadow: '0 0 20px rgba(0, 255, 200, 1), 0 0 40px rgba(0, 255, 200, 0.6)',
+                animation: 'pulseGlow 0.5s ease-in-out infinite',
+              }}
+            />
           </div>
 
           {/* HUD Text */}
-          <div style={{
-            position: 'absolute',
-            top: '20%',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            fontFamily: 'monospace',
-            fontSize: '14px',
-            color: 'rgba(0, 255, 200, 0.9)',
-            textShadow: '0 0 10px rgba(0, 255, 200, 0.8)',
-            textAlign: 'center',
-            animation: 'flicker 0.1s infinite'
-          }}>
+          <div
+            style={{
+              position: 'absolute',
+              top: '20%',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              fontFamily: 'monospace',
+              fontSize: '14px',
+              color: 'rgba(0, 255, 200, 0.9)',
+              textShadow: '0 0 10px rgba(0, 255, 200, 0.8)',
+              textAlign: 'center',
+              animation: 'flicker 0.1s infinite',
+            }}
+          >
             <div style={{ fontSize: '12px', opacity: 0.7 }}>▶ SCANNING</div>
             <div style={{ fontSize: '18px', fontWeight: 'bold', marginTop: '5px' }}>
               {gpsPosition[0].toFixed(6)}, {gpsPosition[1].toFixed(6)}
@@ -6085,7 +5133,7 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
               topLeft: { top: '20%', left: '15%' },
               topRight: { top: '20%', right: '15%', transform: 'scaleX(-1)' },
               bottomLeft: { bottom: '20%', left: '15%', transform: 'scaleY(-1)' },
-              bottomRight: { bottom: '20%', right: '15%', transform: 'scale(-1, -1)' }
+              bottomRight: { bottom: '20%', right: '15%', transform: 'scale(-1, -1)' },
             };
             return (
               <div
@@ -6094,27 +5142,31 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
                   position: 'absolute',
                   ...positions[corner],
                   width: '40px',
-                  height: '40px'
+                  height: '40px',
                 }}
               >
-                <div style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '20px',
-                  height: '3px',
-                  background: 'rgba(0, 255, 200, 0.8)',
-                  boxShadow: '0 0 10px rgba(0, 255, 200, 0.6)'
-                }} />
-                <div style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '3px',
-                  height: '20px',
-                  background: 'rgba(0, 255, 200, 0.8)',
-                  boxShadow: '0 0 10px rgba(0, 255, 200, 0.6)'
-                }} />
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '20px',
+                    height: '3px',
+                    background: 'rgba(0, 255, 200, 0.8)',
+                    boxShadow: '0 0 10px rgba(0, 255, 200, 0.6)',
+                  }}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '3px',
+                    height: '20px',
+                    background: 'rgba(0, 255, 200, 0.8)',
+                    boxShadow: '0 0 10px rgba(0, 255, 200, 0.6)',
+                  }}
+                />
               </div>
             );
           })}
@@ -6159,7 +5211,6 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
           `}</style>
         </div>
       )}
-
 
       <style>{`
         @keyframes popIn {
@@ -6267,10 +5318,9 @@ const loadUserProfile = async (currentUser: FirebaseUser): Promise<boolean> => {
         .leaflet-control-zoom a {
           display: none !important;
         }
-      `}
-      </style>
+      `}</style>
 
-      {/* ========== UNIFIED MUSIC PLAYER - Shows Spotify or SoundCloud based on track ========== */}
+      {/* ========== UNIFIED MUSIC PLAYER ========== */}
       {showSpotifyWidget && unlockedTracks.length > 0 && (
         <>
           {isSpotifyUrl(unlockedTracks[currentTrackIndex]) ? (
@@ -6300,7 +5350,6 @@ export default React.memo(() => {
   return (
     <EnhancedErrorBoundary
       onReset={() => {
-        // Clear any cached errors and reload
         window.location.reload();
       }}
     >
@@ -6308,31 +5357,3 @@ export default React.memo(() => {
     </EnhancedErrorBoundary>
   );
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

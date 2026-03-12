@@ -33,7 +33,7 @@ const LegendPanel: React.FC<LegendPanelProps> = ({
   return (
     <div style={{
       position: 'absolute',
-      bottom: 20,
+      bottom: 150,
       left: 20,
       background: 'rgba(0,0,0,0.65)',
       color: 'white',

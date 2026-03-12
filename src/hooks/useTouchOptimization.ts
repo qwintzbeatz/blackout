@@ -1,24 +1,24 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // Touch optimization hook with enhanced gesture support
 const useTouchOptimization = () => {
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
   const [lastTap, setLastTap] = useState<number>(0);
-  const [swipeGesture, setSwipeGesture] = useState<'none' | 'left' | 'right' | 'up' | 'down'>(null);
+  const [swipeGesture, setSwipeGesture] = useState<'none' | 'left' | 'right' | 'up' | 'down'>('none');
 
   // Configure optimal touch targets for mobile
   const configureTouchTargets = (element: HTMLElement) => {
     element.style.touchAction = 'manipulation';
     element.style.userSelect = 'none';
     element.style.webkitUserSelect = 'none';
-    element.style.webkitTapHighlightColor = 'transparent';
+    (element.style as any).webkitTapHighlightColor = 'transparent';
   };
 
   useEffect(() => {
     const element = document.querySelector('.navigation-container');
-    if (element) {
+    if (element && element instanceof HTMLElement) {
       configureTouchTargets(element);
       
       const handleTouchStart = (e: TouchEvent) => {
@@ -29,7 +29,10 @@ const useTouchOptimization = () => {
       };
 
       const handleTouchEnd = (e: TouchEvent) => {
-        if (!touchStart || !touch) return;
+        if (!touchStart) return;
+        
+        const touch = e.changedTouches[0];
+        if (!touch) return;
         
         const deltaX = touch.clientX - touchStart.x;
         const deltaY = touch.clientY - touchStart.y;

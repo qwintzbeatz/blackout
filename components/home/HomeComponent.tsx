@@ -56,7 +56,7 @@ import BlackbookPanel from '@/src/components/panels/BlackbookPanel';
 import PhotosPanel from '@/src/components/panels/PhotosPanel';
 import { useFirebaseAuth } from '@/hooks/useFirebaseAuth';
 import { useMarkers } from '@/hooks/useMarkers';
-import { Crew } from '@/lib/types/blackout';
+import { CrewId as CrewIdType } from '@/lib/types/blackout';
 import { CREWS } from '@/data/crews';
 import { useGPSTracker } from '@/hooks/useGPSTracker';
 import { useMusicDrops } from '@/hooks/useMusicDrops';
@@ -66,7 +66,7 @@ import { useErrorHandler } from '@/src/hooks/useErrorHandler';
 import ErrorTest from '@/components/ui/ErrorTest';
 import AuthOverlay from '@/src/components/ui/AuthOverlay';
 import BottomNavigation from '@/src/components/ui/BottomNavigation';
-import SVGBottomNavigation from '@/src/components/ui/SVGBottomNavigation';
+import SVGBottomNavigation from '@/src/components/ui/BottomNavigation';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import StatusPanel from '@/components/ui/StatusPanel';
 import ColorPickerPanel from '@/components/ui/ColorPickerPanel';
@@ -1087,7 +1087,6 @@ const HomeComponent = () => {
             center={mapCenter}
             zoom={mapZoom}
             userMarkers={userMarkers}
-                        drops={drops}
             gpsPosition={gpsPosition}
             accuracy={accuracy}
             isTracking={isTracking}
@@ -1095,11 +1094,6 @@ const HomeComponent = () => {
             onMapClick={handleMapClick}
             onMapCreated={handleMapCreated}
             userRank={userProfile?.rank || 'TOY'}
-                        onDropClick={(drop) => {
-                          // Handle drop click - could open a modal, panel, etc.
-                          console.log('Drop clicked:', drop);
-                          // You can add custom logic here to handle the drop interaction
-                        }}
             onAddMarkerAtPosition={async (position) => {
               if (user && userProfile) {
                 const newMarkerData = {
@@ -1116,7 +1110,6 @@ const HomeComponent = () => {
                 });
               }
             }}
-            userProfile={userProfile || undefined}
             // Music drops props
             musicDrops={musicDrops}
             onMusicDropClick={(drop) => {
@@ -1452,9 +1445,7 @@ const HomeComponent = () => {
             }}
             unreadCounts={{
               messages: unreadCounts.messages,
-              crew: unreadCounts.crew,
-              photos: 0, // TODO: Add photo notification logic
-              blackbook: 0 // TODO: Add new marker notification logic
+              crew: unreadCounts.crew
             }}
             notificationCount={notificationCount}
           />
@@ -1473,10 +1464,10 @@ const HomeComponent = () => {
         {/* PANELS */}
         {activePanel === 'profile' && (
           <ProfilePanel
-            user={user}
+            user={user as any}
             userProfile={userProfile}
             onClose={() => setActivePanel(null)}
-            onProfileUpdate={updateUserProfile}
+            onProfileUpdate={(profile) => updateUserProfile(profile as any)}
           />
         )}
 
@@ -1576,6 +1567,7 @@ const HomeComponent = () => {
             crewId={userProfile?.crewId || null}
             onClose={() => setActivePanel(null)}
             userProfile={userProfile}
+            markMessagesAsRead={() => Promise.resolve()}
           />
         )}
 
