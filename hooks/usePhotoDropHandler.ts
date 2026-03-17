@@ -5,7 +5,7 @@
 
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, updateDoc, Timestamp, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { User as FirebaseUser } from 'firebase/auth';
 import { uploadImageToImgBB } from '@/lib/services/imgbb';
@@ -149,14 +149,24 @@ export const usePhotoDropHandler = ({
         const unlockResult = unlockRandomSoundCloudTrack(currentTracks);
         const newTracks = unlockResult.newTracks;
 
-        await updateDoc(doc(db, 'users', user.uid), {
+        // 🔧 PERFORMANCE: Use batch writes to reduce write operations
+        const batch = writeBatch(db);
+        const userRef = doc(db, 'users', user.uid);
+        
+        // Only update fields that have changed
+        const userUpdates: any = {
+          lastActive: Timestamp.now(),
           rep: newRep,
           rank: newRank,
           level: newLevel,
           unlockedTracks: newTracks,
-          lastActive: Timestamp.now(),
-          photosTaken: (userProfile.photosTaken || 0) + 1,
-        });
+          photosTaken: (userProfile.photosTaken || 0) + 1
+        };
+
+        batch.update(userRef, userUpdates);
+
+        // Commit the batch
+        await batch.commit();
 
         setUserProfile((prev) =>
           prev ? { ...prev, rep: newRep, rank: newRank, level: newLevel, unlockedTracks: newTracks, photosTaken: (prev.photosTaken || 0) + 1 } : prev

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ref, push, onValue, query, orderByChild, limitToLast, remove } from 'firebase/database';
+import { ref, push, onValue, query, orderByChild, limitToLast, remove, set } from 'firebase/database';
 import { realtimeDb } from '@/lib/firebase';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
@@ -36,9 +36,14 @@ interface DirectMessagingProps {
   onClose: () => void;
   userProfile: any;
   gpsPosition: [number, number] | null;
+  initialChatTarget?: {
+    uid: string;
+    username: string;
+    profilePicUrl: string;
+  } | null;
 }
 
-export default function DirectMessaging({ isOpen, onClose, userProfile, gpsPosition }: DirectMessagingProps) {
+export default function DirectMessaging({ isOpen, onClose, userProfile, gpsPosition, initialChatTarget }: DirectMessagingProps) {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [threads, setThreads] = useState<ChatThread[]>([]);
@@ -46,7 +51,62 @@ export default function DirectMessaging({ isOpen, onClose, userProfile, gpsPosit
   const [messageText, setMessageText] = useState('');
   const [loading, setLoading] = useState(true);
   const [messagesSent, setMessagesSent] = useState(0);
-  
+
+  // Handle initial chat target - start a conversation with the specified user
+  useEffect(() => {
+    if (initialChatTarget && isOpen && currentUser) {
+      const targetUid = initialChatTarget.uid;
+      const targetUsername = initialChatTarget.username;
+      const targetProfilePic = initialChatTarget.profilePicUrl;
+      
+      // Create a consistent chat ID based on the two user IDs
+      const chatId = [currentUser.uid, targetUid].sort().join('_');
+      
+      // Check if thread already exists in our threads list
+      const existingThread = threads.find(t => t.participantIds.includes(targetUid));
+      
+      if (existingThread) {
+        setActiveChat(existingThread.chatId);
+      } else {
+        // Create new chat thread in database for both users
+        const createChatThread = async () => {
+          const currentUserName = userProfile?.username || 'Unknown';
+          const currentUserPic = userProfile?.profilePicUrl || '';
+          
+          // Set chat for current user
+          await set(ref(realtimeDb, `direct-chats/${currentUser.uid}/${chatId}`), {
+            participantIds: [currentUser.uid, targetUid],
+            participantNames: [currentUserName, targetUsername],
+            participantProfilePics: [currentUserPic, targetProfilePic],
+            lastMessage: '',
+            lastMessageTime: Date.now(),
+            unreadCount: 0
+          });
+          
+          // Set chat for target user
+          await set(ref(realtimeDb, `direct-chats/${targetUid}/${chatId}`), {
+            participantIds: [currentUser.uid, targetUid],
+            participantNames: [currentUserName, targetUsername],
+            participantProfilePics: [currentUserPic, targetProfilePic],
+            lastMessage: '',
+            lastMessageTime: Date.now(),
+            unreadCount: 0
+          });
+        };
+        
+        createChatThread();
+        setActiveChat(chatId);
+      }
+    }
+  }, [initialChatTarget, isOpen, currentUser, threads, userProfile]);
+
+  // Auto-select first conversation if no active chat
+  useEffect(() => {
+    if (!activeChat && threads.length > 0 && !initialChatTarget) {
+      setActiveChat(threads[0].chatId);
+    }
+  }, [threads, activeChat, initialChatTarget]);
+
   // Get mission triggers for messaging events
   const { triggerMessagingEvent } = useMissionTriggers({
     userMarkers: [],
@@ -306,97 +366,6 @@ export default function DirectMessaging({ isOpen, onClose, userProfile, gpsPosit
       </div>
 
       <div style={{ display: 'flex', flex: 1, gap: '15px' }}>
-        {/* Threads sidebar */}
-        <div style={{
-          width: '200px',
-          borderRight: '1px solid rgba(255,255,255,0.1)',
-          paddingRight: '15px',
-          overflowY: 'auto'
-        }}>
-          <div style={{
-            fontSize: '14px',
-            color: '#ec4899',
-            fontWeight: 'bold',
-            marginBottom: '15px'
-          }}>
-            Chat Threads ({threads.length})
-          </div>
-
-          {threads.length === 0 ? (
-            <div style={{
-              textAlign: 'center',
-              padding: '20px',
-              color: '#666',
-              fontSize: '12px'
-            }}>
-              No conversations yet
-            </div>
-          ) : (
-            threads.map((thread) => {
-              const otherParticipantIndex = thread.participantIds.findIndex(id => id !== currentUser?.uid);
-              const otherName = thread.participantNames[otherParticipantIndex] || 'Unknown';
-              const otherPic = thread.participantProfilePics[otherParticipantIndex];
-              
-              return (
-                <div
-                  key={thread.chatId}
-                  onClick={() => setActiveChat(thread.chatId)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '10px',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    background: activeChat === thread.chatId ? 
-                      'rgba(236, 72, 153, 0.2)' : 'transparent',
-                    marginBottom: '8px',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <img
-                    src={otherPic}
-                    alt={otherName}
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '50%',
-                      border: '2px solid #ec4899'
-                    }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '13px', fontWeight: 'bold' }}>
-                      {otherName}
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#aaa', marginTop: '2px' }}>
-                      {thread.lastMessage}
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#666' }}>
-                      {new Date(thread.lastMessageTime).toLocaleDateString()}
-                    </div>
-                  </div>
-                  {thread.unreadCount > 0 && (
-                    <div style={{
-                      background: '#ec4899',
-                      color: 'white',
-                      borderRadius: '50%',
-                      width: '20px',
-                      height: '20px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '10px',
-                      fontWeight: 'bold'
-                    }}>
-                      {thread.unreadCount}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-
         {/* Messages area */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {!activeChat ? (

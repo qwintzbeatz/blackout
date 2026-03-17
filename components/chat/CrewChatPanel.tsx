@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { auth, realtimeDb } from '@/lib/firebase/config';
+import { auth, realtimeDb, db } from '@/lib/firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref, onValue, push, remove } from 'firebase/database';
+import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore';
 import { UserProfile, CrewChatMessage, UserMarker, Drop, TopPlayer } from '@/lib/types/blackout';
 import { panelStyle } from '@/lib/constants';
 import { generateAvatarUrl } from '@/lib/utils/avatarGenerator';
@@ -11,6 +12,18 @@ import { User as FirebaseUser } from 'firebase/auth';
 import { getCrewTheme } from '@/utils/crewTheme';
 
 import { CrewId } from '@/lib/types/story';
+
+interface CrewMember {
+  uid: string;
+  username: string;
+  profilePicUrl: string;
+  rank: string;
+  crewRank: string;
+  crewRep: number;
+  lastActive: Date | null;
+  isOnline: boolean;
+  unreadMessages: number;
+}
 
 interface CrewChatPanelProps { 
   crewId: CrewId | null, 
@@ -24,7 +37,8 @@ interface CrewChatPanelProps {
   showOnlyMyDrops?: boolean,
   onToggleFilter?: () => void,
   showTopPlayers?: boolean,
-  onToggleTopPlayers?: () => void
+  onToggleTopPlayers?: () => void,
+  onStartDirectMessage?: (targetUserId: string, targetUsername: string, targetProfilePic: string) => void
 }
 
 export default function CrewChatPanel({ 
@@ -39,16 +53,22 @@ export default function CrewChatPanel({
   showOnlyMyDrops = false,
   onToggleFilter,
   showTopPlayers = false,
-  onToggleTopPlayers
+  onToggleTopPlayers,
+  onStartDirectMessage
 }: CrewChatPanelProps) {
   const [messages, setMessages] = useState<CrewChatMessage[]>([]);
   const [text, setText] = useState('');
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'chat' | 'feed' | 'stats'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'members'>('chat');
+  const [crewMembers, setCrewMembers] = useState<CrewMember[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<CrewMember | null>(null);
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  // Get crew theme
   const crewTheme = getCrewTheme(crewId);
   const crewDisplayColor = crewTheme.primary === '#000000' ? '#808080' : crewTheme.primary;
 
@@ -61,6 +81,146 @@ export default function CrewChatPanel({
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     return myMarkers.filter(m => new Date(m.timestamp).getTime() > sevenDaysAgo).length;
   }, [myMarkers]);
+
+  // Load crew members from Firestore
+  const loadCrewMembers = async () => {
+    if (!crewId) return;
+    
+    setLoadingMembers(true);
+    try {
+      // Query crew by 'id' field (not document ID)
+      const crewsRef = collection(db, 'crews');
+      const crewQuery = query(crewsRef, where('id', '==', crewId));
+      const crewSnapshot = await getDocs(crewQuery);
+      
+      if (!crewSnapshot.empty) {
+        const crewDoc = crewSnapshot.docs[0];
+        const crewData = crewDoc.data();
+        const memberIds = crewData.members || [];
+        
+        console.log('Found crew:', crewData.name, 'with members:', memberIds);
+        
+        const membersData: CrewMember[] = [];
+        
+        for (const memberId of memberIds) {
+          try {
+            const userRef = doc(db, 'users', memberId);
+            const userSnap = await getDoc(userRef);
+            
+            if (userSnap.exists()) {
+              const userData = userSnap.data();
+              let lastActiveDate: Date | null = null;
+              if (userData.lastActive) {
+                if (typeof userData.lastActive.toDate === 'function') {
+                  lastActiveDate = userData.lastActive.toDate();
+                } else if (userData.lastActive instanceof Date) {
+                  lastActiveDate = userData.lastActive;
+                } else {
+                  lastActiveDate = new Date(userData.lastActive);
+                }
+              }
+              membersData.push({
+                uid: userData.uid || memberId,
+                username: userData.username || 'Unknown',
+                profilePicUrl: userData.profilePicUrl || generateAvatarUrl(memberId, userData.username || 'User'),
+                rank: userData.rank || 'TOY',
+                crewRank: userData.crewRank || 'RECRUIT',
+                crewRep: userData.crewRep || 0,
+                lastActive: lastActiveDate,
+                isOnline: false,
+                unreadMessages: 0
+              });
+            } else {
+              console.log('User not found:', memberId);
+            }
+          } catch (err) {
+            console.error('Error loading member:', memberId, err);
+          }
+        }
+        
+        console.log('Loaded crew members:', membersData);
+        setCrewMembers(membersData);
+      } else {
+        console.log('No crew found with id:', crewId);
+      }
+    } catch (error) {
+      console.error('Error loading crew members:', error);
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
+
+  // Track online users based on lastActive in Firestore (last 5 mins = online)
+  useEffect(() => {
+    if (!crewId || crewMembers.length === 0) return;
+
+    const checkOnlineStatus = () => {
+      const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+      
+      setCrewMembers(prev => prev.map(member => {
+        const lastActiveMs = member.lastActive ? new Date(member.lastActive).getTime() : 0;
+        const isOnline = lastActiveMs > fiveMinutesAgo;
+        console.log('Member:', member.username, 'lastActive:', member.lastActive, 'isOnline:', isOnline);
+        return {
+          ...member,
+          isOnline
+        };
+      }));
+    };
+
+    // Check immediately
+    setTimeout(checkOnlineStatus, 1000);
+
+    // Then check every 30 seconds
+    const interval = setInterval(checkOnlineStatus, 30000);
+    return () => clearInterval(interval);
+  }, [crewId, crewMembers.length]);
+
+  // Track unread DM messages for each crew member
+  useEffect(() => {
+    if (!crewId || crewMembers.length === 0 || !currentUser) return;
+
+    const unsubscribes: (() => void)[] = [];
+
+    crewMembers.forEach(member => {
+      // Look for direct chat threads with this member
+      const chatRef = ref(realtimeDb, `direct-chats/${currentUser.uid}`);
+      
+      const unsubscribe = onValue(chatRef, (snapshot) => {
+        if (snapshot.exists()) {
+          snapshot.forEach((child) => {
+            const chatData = child.val();
+            const participantIds = chatData.participantIds || [];
+            
+            // Check if this chat is with the current member
+            if (participantIds.includes(member.uid) && member.uid !== currentUser.uid) {
+              const unreadCount = chatData.unreadCount || 0;
+              
+              // Update the member's unread count
+              setCrewMembers(prev => prev.map(m => 
+                m.uid === member.uid 
+                  ? { ...m, unreadMessages: unreadCount }
+                  : m
+              ));
+            }
+          });
+        }
+      });
+      
+      unsubscribes.push(unsubscribe);
+    });
+
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
+  }, [crewId, crewMembers.length, currentUser]);
+
+  // Load members when panel opens or when switching to members tab
+  useEffect(() => {
+    if (crewId && crewMembers.length === 0) {
+      loadCrewMembers();
+    }
+  }, [crewId]);
 
   // Call markMessagesAsRead when the chat is opened
   useEffect(() => {
@@ -167,22 +327,46 @@ export default function CrewChatPanel({
 
   // Scroll to bottom when messages update
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+
   useEffect(() => {
+    if (autoScroll) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, autoScroll]);
+
+  const handleScroll = () => {
+    if (messagesContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+      setShowScrollButton(!isAtBottom);
+      setAutoScroll(isAtBottom);
+    }
+  };
+
+  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    setAutoScroll(true);
+    setShowScrollButton(false);
+  };
 
   // Render Chat Tab
   const renderChatTab = () => (
     <>
-      <div style={{ 
-        flex: 1, 
-        overflowY: 'auto', 
-        padding: '15px',
-        backgroundColor: 'rgba(255,255,255,0.03)',
-        borderRadius: '6px',
-        marginBottom: '15px',
-        maxHeight: '300px'
-      }}>
+      <div 
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
+        style={{ 
+          flex: 1, 
+          overflowY: 'auto', 
+          padding: '15px',
+          backgroundColor: 'rgba(255,255,255,0.03)',
+          borderRadius: '6px',
+          marginBottom: '15px',
+          maxHeight: '300px',
+          position: 'relative'
+        }}
+      >
         {messages.length === 0 ? (
           <div style={{ 
             textAlign: 'center', 
@@ -334,6 +518,31 @@ export default function CrewChatPanel({
         )}
       </div>
 
+      {/* Scroll to bottom button */}
+      {showScrollButton && (
+        <button
+          onClick={scrollToBottom}
+          style={{
+            position: 'absolute',
+            bottom: '70px',
+            right: '20px',
+            background: crewDisplayColor,
+            border: 'none',
+            borderRadius: '50%',
+            width: '40px',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            zIndex: 5
+          }}
+        >
+          <span style={{ color: 'white', fontSize: '18px' }}>↓</span>
+        </button>
+      )}
+
       <div style={{ 
         display: 'flex', 
         padding: '10px 0 0',
@@ -413,258 +622,270 @@ export default function CrewChatPanel({
     </>
   );
 
-  // Render Feed Tab
-  const renderFeedTab = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {/* Filter Toggle */}
-      {onToggleFilter && (
-        <button
-          onClick={onToggleFilter}
-          style={{
-            background: showOnlyMyDrops ? crewDisplayColor : '#6b7280',
-            color: 'white',
-            border: 'none',
-            padding: '10px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: 'bold'
-          }}
-        >
-          {showOnlyMyDrops ? '👤 Showing Only YOUR Drops' : '🌍 Showing ALL Drops'}
-        </button>
-      )}
+  // Render Members Tab
+  const renderMembersTab = () => {
+    const formatLastActive = (lastActive: Date | null) => {
+      if (!lastActive) return 'Unknown';
+      const now = new Date();
+      const lastActiveDate = new Date(lastActive);
+      const diffMs = now.getTime() - lastActiveDate.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
 
-      {/* Top Players */}
-      {topPlayers.length > 0 && (
-        <div style={{ marginBottom: '16px' }}>
-          <div style={{
-            fontSize: '15px',
-            fontWeight: 'bold',
-            color: '#fbbf24',
-            marginBottom: '8px',
-            borderBottom: '1px solid #444',
-            paddingBottom: '4px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <span>👑 TOP WRITERS</span>
-            {onToggleTopPlayers && (
-              <button
-                onClick={onToggleTopPlayers}
-                style={{
-                  background: showTopPlayers ? '#10b981' : '#6b7280',
-                  color: 'white',
-                  border: 'none',
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '10px'
-                }}
-              >
-                {showTopPlayers ? 'ON' : 'OFF'}
-              </button>
-            )}
+      if (diffMins < 1) return 'Online now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      return lastActiveDate.toLocaleDateString();
+    };
+
+    // Sort: unread messages first, then by lastActive
+    const sortedMembers = [...crewMembers].sort((a, b) => {
+      // First sort by unread messages (more unread = higher)
+      if (b.unreadMessages !== a.unreadMessages) {
+        return b.unreadMessages - a.unreadMessages;
+      }
+      // Then sort by lastActive
+      const aTime = a.lastActive ? new Date(a.lastActive).getTime() : 0;
+      const bTime = b.lastActive ? new Date(b.lastActive).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    const handleMemberClick = (member: CrewMember) => {
+      setSelectedMember(member);
+    };
+
+    const handleSendMessage = () => {
+      if (selectedMember && onStartDirectMessage) {
+        onStartDirectMessage(selectedMember.uid, selectedMember.username, selectedMember.profilePicUrl);
+        setSelectedMember(null);
+      }
+    };
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '400px', overflowY: 'auto' }}>
+        {loadingMembers ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
+            <div style={{ fontSize: '24px', marginBottom: '10px' }}>⏳</div>
+            Loading members...
           </div>
-          
-          {showTopPlayers && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {topPlayers.map((player, index) => (
-                <div 
-                  key={player.uid}
-                  onClick={() => player.position && onCenterMap && onCenterMap(player.position, 15)}
+        ) : crewMembers.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
+            <div style={{ fontSize: '24px', marginBottom: '10px' }}>👥</div>
+            No members found
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {sortedMembers.map(member => {
+              const lastSeenText = formatLastActive(member.lastActive);
+              const isRecentlyActive = member.lastActive && (Date.now() - new Date(member.lastActive).getTime() < 5 * 60 * 1000);
+              
+              return (
+                <div
+                  key={member.uid}
+                  onClick={() => handleMemberClick(member)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '10px',
-                    padding: '8px',
-                    background: 'rgba(255,255,255,0.04)',
-                    borderRadius: '6px',
-                    border: '1px solid #444',
-                    cursor: player.position ? 'pointer' : 'default',
-                    opacity: player.position ? 1 : 0.6
+                    gap: '12px',
+                    padding: '10px',
+                    background: selectedMember?.uid === member.uid ? `${crewDisplayColor}20` : 'rgba(255,255,255,0.04)',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    border: selectedMember?.uid === member.uid ? `1px solid ${crewDisplayColor}40` : '1px solid transparent',
+                    transition: 'all 0.2s ease'
                   }}
                 >
-                  <div style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    background: index === 0 ? '#fbbf24' : index === 1 ? '#cbd5e1' : '#d97706',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '14px'
-                  }}>
-                    {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                  <div style={{ position: 'relative' }}>
+                    <img
+                      src={member.profilePicUrl}
+                      alt={member.username}
+                      style={{
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '50%',
+                        border: isRecentlyActive ? `2px solid ${crewDisplayColor}` : '2px solid #444',
+                        objectFit: 'cover'
+                      }}
+                    />
+                    {isRecentlyActive && (
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '0',
+                        right: '0',
+                        width: '12px',
+                        height: '12px',
+                        background: '#10b981',
+                        borderRadius: '50%',
+                        border: '2px solid #1a1a1a'
+                      }}></div>
+                    )}
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '13px', fontWeight: 'bold' }}>{player.username}</div>
-                    <div style={{ fontSize: '10px', color: '#aaa' }}>
-                      {player.rank} • {player.rep} REP
+                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {member.username}
+                      {member.unreadMessages > 0 && (
+                        <div style={{
+                          background: '#0084ff',
+                          color: 'white',
+                          fontSize: '10px',
+                          fontWeight: 'bold',
+                          minWidth: '18px',
+                          height: '18px',
+                          borderRadius: '9px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '0 5px'
+                        }}>
+                          {member.unreadMessages}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '11px', color: isRecentlyActive ? crewDisplayColor : '#888' }}>
+                      {member.crewRank} • {isRecentlyActive ? 'Active now' : `Last seen ${lastSeenText}`}
                     </div>
                   </div>
+                  <div style={{ fontSize: '18px' }}>💬</div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Recent Activity */}
-      <div style={{
-        background: 'rgba(255,255,255,0.05)',
-        padding: '12px',
-        borderRadius: '8px',
-        border: '1px solid #444'
-      }}>
-        <h4 style={{ margin: '0 0 10px 0', color: '#4dabf7', fontSize: '14px' }}>
-          📰 Recent Activity
-        </h4>
-        {myMarkers.length === 0 ? (
-          <div style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center', padding: '20px' }}>
-            No drops yet. Place your first marker!
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {myMarkers.slice(0, 5).map((marker, i) => (
-              <div key={i} style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px',
-                background: 'rgba(255,255,255,0.03)',
-                borderRadius: '6px'
-              }}>
-                <span style={{ fontSize: '16px' }}>📍</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '12px', fontWeight: 'bold' }}>
-                    {marker.name || 'Location Drop'}
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#94a3b8' }}>
-                    {new Date(marker.timestamp).toLocaleDateString()}
-                  </div>
-                </div>
-                <div style={{
-                  fontSize: '11px',
-                  color: '#10b981',
-                  fontWeight: 'bold'
-                }}>
-                  +{marker.repEarned || 5} REP
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
-      </div>
-    </div>
-  );
 
-  // Render Stats Tab
-  const renderStatsTab = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {/* Detailed Stats */}
-      <div style={{
-        background: 'rgba(255,255,255,0.05)',
-        padding: '14px',
-        borderRadius: '10px',
-        border: '1px solid #444'
-      }}>
-        <h4 style={{ margin: '0 0 12px 0', color: '#4dabf7', fontSize: '15px' }}>
-          📊 Your Statistics
-        </h4>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-          <div>
-            <div style={{ fontSize: '11px', color: '#888' }}>Total Markers</div>
-            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#ff6b6b' }}>{myMarkers.length}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: '#888' }}>Photo Drops</div>
-            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#4dabf7' }}>
-              {drops.filter(d => d.photoUrl && d.createdBy === userProfile?.uid).length}
+        {/* Member Profile Modal */}
+        {selectedMember && (() => {
+          const isRecentlyActive = selectedMember.lastActive && (Date.now() - new Date(selectedMember.lastActive).getTime() < 5 * 60 * 1000);
+          return (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.85)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10,
+              borderRadius: '12px'
+            }}>
+              <div style={{
+                background: '#1a1a1a',
+                borderRadius: '16px',
+                padding: '24px',
+                width: '90%',
+                maxWidth: '320px',
+                border: `1px solid ${crewDisplayColor}40`
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ position: 'relative' }}>
+                      <img
+                        src={selectedMember.profilePicUrl}
+                        alt={selectedMember.username}
+                        style={{
+                          width: '70px',
+                          height: '70px',
+                          borderRadius: '50%',
+                          border: `3px solid ${isRecentlyActive ? crewDisplayColor : '#444'}`,
+                          objectFit: 'cover'
+                        }}
+                      />
+                      {isRecentlyActive && (
+                        <div style={{
+                          position: 'absolute',
+                          bottom: '2px',
+                          right: '2px',
+                          width: '14px',
+                          height: '14px',
+                          background: '#10b981',
+                          borderRadius: '50%',
+                          border: '2px solid #1a1a1a'
+                        }}></div>
+                      )}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {selectedMember.username}
+                        {selectedMember.unreadMessages > 0 && (
+                          <div style={{
+                            background: '#0084ff',
+                            color: 'white',
+                            fontSize: '10px',
+                            fontWeight: 'bold',
+                            minWidth: '18px',
+                            height: '18px',
+                            borderRadius: '9px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '0 5px'
+                          }}>
+                            {selectedMember.unreadMessages} new
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '13px', color: crewDisplayColor, fontWeight: 'bold' }}>
+                        {selectedMember.crewRank}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+                        {selectedMember.rank} • {selectedMember.crewRep} Crew REP
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedMember(null)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#888',
+                      fontSize: '20px',
+                      cursor: 'pointer',
+                      padding: '4px'
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  gap: '10px',
+                  marginTop: '16px'
+                }}>
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={selectedMember.uid === userProfile?.uid}
+                    style={{
+                      flex: 1,
+                      padding: '12px',
+                      background: selectedMember.uid === userProfile?.uid ? '#444' : crewDisplayColor,
+                      border: 'none',
+                      borderRadius: '8px',
+                      color: '#fff',
+                      fontSize: '14px',
+                      fontWeight: 'bold',
+                      cursor: selectedMember.uid === userProfile?.uid ? 'not-allowed' : 'pointer',
+                      opacity: selectedMember.uid === userProfile?.uid ? 0.5 : 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <span>💬</span>
+                    Send Message
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: '#888' }}>Music Drops</div>
-            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#8b5cf6' }}>
-              {drops.filter(d => d.trackUrl && d.createdBy === userProfile?.uid).length}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: '#888' }}>This Week</div>
-            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#10b981' }}>{recentActivity}</div>
-          </div>
-        </div>
+          );
+        })()}
       </div>
-
-      {/* Rank Progress */}
-      <div style={{
-        background: 'rgba(255,255,255,0.05)',
-        padding: '14px',
-        borderRadius: '10px',
-        border: '1px solid #444'
-      }}>
-        <h4 style={{ margin: '0 0 12px 0', color: '#fbbf24', fontSize: '15px' }}>
-          🏆 Rank Progress
-        </h4>
-        <div style={{ marginBottom: '8px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-            <span style={{ color: '#aaa' }}>Current Rank</span>
-            <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>{userProfile?.rank}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-            <span style={{ color: '#aaa' }}>Next Rank</span>
-            <span style={{ color: '#10b981' }}>{100 - (currentRep % 100)} REP to go</span>
-          </div>
-        </div>
-        <div style={{
-          height: '8px',
-          background: '#333',
-          borderRadius: '4px',
-          overflow: 'hidden'
-        }}>
-          <div style={{
-            width: `${Math.min(currentRep % 100, 100)}%`,
-            height: '100%',
-            background: 'linear-gradient(90deg, #fbbf24, #10b981)',
-            borderRadius: '4px'
-          }} />
-        </div>
-      </div>
-
-      {/* Unlocked Content */}
-      <div style={{
-        background: 'rgba(255,255,255,0.05)',
-        padding: '14px',
-        borderRadius: '10px',
-        border: '1px solid #444'
-      }}>
-        <h4 style={{ margin: '0 0 12px 0', color: '#8b5cf6', fontSize: '15px' }}>
-          🎵 Unlocked Music
-        </h4>
-        <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#8b5cf6' }}>
-          {userProfile?.unlockedTracks?.length || 1}
-        </div>
-        <div style={{ fontSize: '11px', color: '#888' }}>tracks unlocked</div>
-      </div>
-
-      {/* Graffiti Styles Unlocked */}
-      <div style={{
-        background: 'rgba(255,255,255,0.05)',
-        padding: '14px',
-        borderRadius: '10px',
-        border: '1px solid #444'
-      }}>
-        <h4 style={{ margin: '0 0 12px 0', color: '#ff6b6b', fontSize: '15px' }}>
-          🎨 Graffiti Styles
-        </h4>
-        <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ff6b6b' }}>
-          {(userProfile?.unlockedGraffitiTypes?.length || 2)}
-        </div>
-        <div style={{ fontSize: '11px', color: '#888' }}>styles unlocked</div>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div style={{
@@ -680,52 +901,59 @@ export default function CrewChatPanel({
       flexDirection: 'column',
       animation: 'slideInRight 0.3s ease-out'
     }}>
-      {/* Header */}
+      {/* Header - WhatsApp Style */}
       <div style={{
         display: 'flex',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '15px',
+        marginBottom: '12px',
         borderBottom: `1px solid ${crewDisplayColor}30`,
-        paddingBottom: '10px'
+        paddingBottom: '10px',
+        gap: '12px'
       }}>
-        <h3 style={{ 
-          margin: 0, 
-          color: crewDisplayColor, 
-          fontSize: '18px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}>
-          <span>👥</span>
-          {crewId?.toUpperCase()}
-          <span style={{
-            fontSize: '12px',
-            backgroundColor: `${crewDisplayColor}20`,
-            padding: '2px 8px',
-            borderRadius: '10px'
-          }}>
-            {messages.length} msgs
-          </span>
-        </h3>
         <button
           onClick={onClose}
           style={{
-            background: `${crewDisplayColor}20`,
-            border: `1px solid ${crewDisplayColor}30`,
+            background: 'transparent',
+            border: 'none',
             color: crewDisplayColor,
-            width: '40px',
-            height: '40px',
-            borderRadius: '50%',
             cursor: 'pointer',
-            fontSize: '18px',
+            fontSize: '20px',
+            padding: '4px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}
         >
-          ✕
+          ←
         </button>
+        <div style={{
+          width: '44px',
+          height: '44px',
+          borderRadius: '50%',
+          background: crewDisplayColor,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '20px',
+          boxShadow: `0 2px 8px ${crewDisplayColor}40`
+        }}>
+          👥
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ 
+            color: '#fff', 
+            fontSize: '16px',
+            fontWeight: 'bold'
+          }}>
+            {crewId?.toUpperCase()} CREW
+          </div>
+          <div style={{ 
+            color: '#888', 
+            fontSize: '12px'
+          }}>
+            {crewMembers.length > 0 ? `${crewMembers.length} members` : 'Loading...'}
+          </div>
+        </div>
       </div>
 
       {/* Tab Navigation */}
@@ -735,9 +963,8 @@ export default function CrewChatPanel({
         marginBottom: '12px'
       }}>
         {[
-          { id: 'chat', label: '💬 Chat', icon: '💬' },
-          { id: 'feed', label: '📰 Feed', icon: '📰' },
-          { id: 'stats', label: '📊 Stats', icon: '📊' }
+          { id: 'chat', label: `💬 Chat`, icon: '💬' },
+          { id: 'members', label: `👥 Members${crewMembers.length > 0 ? ` (${crewMembers.length})` : ''}`, icon: '👥' }
         ].map(tab => (
           <button
             key={tab.id}
@@ -766,8 +993,7 @@ export default function CrewChatPanel({
 
       {/* Tab Content */}
       {activeTab === 'chat' && renderChatTab()}
-      {activeTab === 'feed' && renderFeedTab()}
-      {activeTab === 'stats' && renderStatsTab()}
+      {activeTab === 'members' && renderMembersTab()}
 
       <style>{`
         @keyframes spin {

@@ -22,7 +22,8 @@ import {
   orderBy,
   limit,
 } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase/config';
+import { auth, db, realtimeDb } from '@/lib/firebase/config';
+import { ref, onValue } from 'firebase/database';
 import { characters } from '@/data/characters';
 import {
   signInWithEmailAndPassword,
@@ -61,6 +62,7 @@ import DirectMessaging from '@/components/DirectMessaging';
 import { uploadImageToImgBB } from '@/lib/services/imgbb';
 import { saveDropToFirestore, loadAllDrops, deleteUserDrops } from '@/lib/firebase/drops';
 import CrewChatPanel from '@/components/chat/CrewChatPanel';
+import MessengerHeads from '@/components/MessengerHeads';
 
 import { BlackbookPanel } from '@/components/blackbook/BlackbookPanel';
 import { useMarkers } from '@/hooks/useMarkers';
@@ -78,6 +80,7 @@ import { useErrorHandler } from '@/src/hooks/useErrorHandler';
 import ProfileSetupSticker from '@/components/ProfileSetupSticker';
 import { SurfaceGraffitiSelector } from '@/components/ui/SurfaceGraffitiSelector';
 import { RepNotification } from '@/components/ui/RepNotification';
+import DMNotification from '@/components/ui/DMNotification';
 import SongUnlockModal from '@/components/ui/SongUnlockModal';
 import VideoUnlockModal from '@/components/ui/VideoUnlockModal';
 import RadarScanner from '@/components/map/RadarScanner';
@@ -217,6 +220,15 @@ const HomeComponent = () => {
     breakdown?: RepResult['breakdown'];
   } | null>(null);
 
+  // DM Notification state
+  const [dmNotification, setDmNotification] = useState<{
+    show: boolean;
+    senderName: string;
+    senderPic: string;
+    message: string;
+    senderId: string;
+  } | null>(null);
+
   // Drop states
   const [drops, setDrops] = useState<Drop[]>([]);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
@@ -258,6 +270,14 @@ const HomeComponent = () => {
   const [showMusicPanel, setShowMusicPanel] = useState(false);
   const [showBlackbookPanel, setShowBlackbookPanel] = useState(false);
   const [showSatelliteView, setShowSatelliteView] = useState(false);
+  const [initialChatTarget, setInitialChatTarget] = useState<{ uid: string; username: string; profilePicUrl: string } | null>(null);
+  const [messengerConversations, setMessengerConversations] = useState<{
+    chatId: string;
+    participantId: string;
+    participantName: string;
+    participantProfilePic: string;
+    unreadCount: number;
+  }[]>([]);
 
   // Mobile detection state
   const [isMobile, setIsMobile] = useState(false);
@@ -1257,6 +1277,95 @@ const HomeComponent = () => {
         }
       }, [userProfile?.unlockedTracks]);
 
+      // Listen to direct messages for messenger heads
+      useEffect(() => {
+        if (!user) return;
+
+        const chatsRef = ref(realtimeDb, `direct-chats/${user.uid}`);
+        const unsubscribe = onValue(chatsRef, (snapshot) => {
+          const conversations: {
+            chatId: string;
+            participantId: string;
+            participantName: string;
+            participantProfilePic: string;
+            unreadCount: number;
+          }[] = [];
+
+          if (snapshot.exists()) {
+            snapshot.forEach((child) => {
+              const chatData = child.val();
+              const participantIds = chatData.participantIds || [];
+              const participantNames = chatData.participantNames || [];
+              const participantProfilePics = chatData.participantProfilePics || [];
+              
+              // Find the other participant (not the current user)
+              const otherIndex = participantIds.findIndex((id: string) => id !== user.uid);
+              
+              if (otherIndex !== -1) {
+                conversations.push({
+                  chatId: child.key || '',
+                  participantId: participantIds[otherIndex] || '',
+                  participantName: participantNames[otherIndex] || 'Unknown',
+                  participantProfilePic: participantProfilePics[otherIndex] || '',
+                  unreadCount: chatData.unreadCount || 0
+                });
+              }
+            });
+
+            // Filter to only show conversations with unread messages
+            const unreadConversations = conversations.filter(c => c.unreadCount > 0);
+            setMessengerConversations(unreadConversations);
+          } else {
+            setMessengerConversations([]);
+          }
+        });
+
+        return () => unsubscribe();
+      }, [user]);
+
+      // Listen to new DM messages for notifications
+      useEffect(() => {
+        if (!user || !userProfile) return;
+
+        // Keep track of the last message timestamp we've seen
+        let lastSeenTimestamp = Date.now();
+
+        // Listen to all direct message threads for the user
+        const chatsRef = ref(realtimeDb, `direct-chats/${user.uid}`);
+        
+        const unsubscribe = onValue(chatsRef, (snapshot) => {
+          if (snapshot.exists()) {
+            snapshot.forEach((child) => {
+              const chatData = child.val();
+              const participantIds = chatData.participantIds || [];
+              const participantNames = chatData.participantNames || [];
+              const participantProfilePics = chatData.participantProfilePics || [];
+              const lastMessageTime = chatData.lastMessageTime || 0;
+              
+              // If there's a new message (timestamp > last seen) and it's not from us
+              const otherIndex = participantIds.findIndex((id: string) => id !== user.uid);
+              if (otherIndex !== -1 && lastMessageTime > lastSeenTimestamp && chatData.lastMessage) {
+                // Show notification
+                setDmNotification({
+                  show: true,
+                  senderName: participantNames[otherIndex] || 'Unknown',
+                  senderPic: participantProfilePics[otherIndex] || '',
+                  message: chatData.lastMessage || 'New message',
+                  senderId: participantIds[otherIndex] || ''
+                });
+              }
+              
+              // Update last seen timestamp
+              if (lastMessageTime > lastSeenTimestamp) {
+                lastSeenTimestamp = lastMessageTime;
+              }
+            });
+          }
+        });
+
+        return () => unsubscribe();
+      }, [user, userProfile]);
+
   const handleCollectTrack = useCallback(
     async (trackUrl: string, trackName: string) => {
       if (!user || !userProfile) {
@@ -2129,6 +2238,26 @@ const HomeComponent = () => {
         message={repNotification?.message || ''}
         breakdown={repNotification?.breakdown}
         onClose={() => setRepNotification(null)}
+      />
+
+      {/* DM Notification */}
+      <DMNotification
+        show={dmNotification?.show || false}
+        senderName={dmNotification?.senderName || ''}
+        senderPic={dmNotification?.senderPic || ''}
+        message={dmNotification?.message || ''}
+        onClose={() => setDmNotification(null)}
+        onClick={() => {
+          if (dmNotification?.senderId) {
+            setInitialChatTarget({
+              uid: dmNotification.senderId,
+              username: dmNotification.senderName,
+              profilePicUrl: dmNotification.senderPic
+            });
+            setShowMessagesPanel(true);
+            setDmNotification(null);
+          }
+        }}
       />
 
       {/* 🎵 Song Unlock Modal */}
@@ -4680,9 +4809,31 @@ const HomeComponent = () => {
       {showMessagesPanel && userProfile && (
         <DirectMessaging
           isOpen={showMessagesPanel}
-          onClose={() => togglePanel('none')}
+          onClose={() => {
+            togglePanel('none');
+            setInitialChatTarget(null);
+          }}
           userProfile={userProfile}
           gpsPosition={gpsPosition}
+          initialChatTarget={initialChatTarget}
+        />
+      )}
+
+      {/* Messenger Heads - Floating Chat Bubbles */}
+      {!showMessagesPanel && messengerConversations.length > 0 && (
+        <MessengerHeads
+          conversations={messengerConversations}
+          onSelectConversation={(chatId, participantId) => {
+            setInitialChatTarget({
+              uid: participantId,
+              username: messengerConversations.find(c => c.chatId === chatId)?.participantName || 'Unknown',
+              profilePicUrl: messengerConversations.find(c => c.chatId === chatId)?.participantProfilePic || ''
+            });
+            setShowMessagesPanel(true);
+          }}
+          onCloseConversation={(chatId) => {
+            setMessengerConversations(prev => prev.filter(c => c.chatId !== chatId));
+          }}
         />
       )}
 
@@ -4696,6 +4847,18 @@ const HomeComponent = () => {
           }}
           userProfile={userProfile}
           markMessagesAsRead={markCrewChatAsRead}
+          onStartDirectMessage={(targetUserId, targetUsername, targetProfilePic) => {
+            setInitialChatTarget({
+              uid: targetUserId,
+              username: targetUsername,
+              profilePicUrl: targetProfilePic
+            });
+            togglePanel('none');
+            setShowCrewChat(false);
+            setTimeout(() => {
+              setShowMessagesPanel(true);
+            }, 100);
+          }}
         />
       )}
 

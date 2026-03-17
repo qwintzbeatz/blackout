@@ -4,7 +4,7 @@
  */
 
 import { useCallback } from 'react';
-import { doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, updateDoc, Timestamp, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { User as FirebaseUser } from 'firebase/auth';
 import { saveDropToFirestore } from '@/lib/firebase/drops';
@@ -29,7 +29,7 @@ interface UseMarkerDropHandlerParams {
   userProfileRef: React.MutableRefObject<UserProfile | null>;
   isCreatingDrop: boolean;
   pendingDropPosition: { lat: number; lng: number } | null;
-  selectedMusicDrop: Drop | null;
+  selectedMusicDrop: (Drop & { discovered?: boolean }) | null;
   selectedMarkerType: MarkerDescription;
   selectedMarkerColor: string;
   selectedSurface: SurfaceType;
@@ -37,15 +37,15 @@ interface UseMarkerDropHandlerParams {
   selectedSpecialType: 'rainbow' | 'glow' | 'metallic' | null;
 
   setIsCreatingDrop: (v: boolean) => void;
-  setUserProfile: (updater: (prev: UserProfile | null) => UserProfile | null) => void;
+  setUserProfile: React.Dispatch<React.SetStateAction<UserProfile | null>>;
   setUnlockedTracks: (tracks: string[]) => void;
   setShowDropTypeModal: (v: boolean) => void;
   setPendingDropPosition: (v: null) => void;
   setSelectedMusicDrop: (v: null) => void;
   setSongUnlockModal: (v: { isOpen: boolean; trackUrl: string; trackName: string; source: string }) => void;
   setRecentlyUnlocked: (v: { url: string; name: string; source: 'Spotify' | 'SoundCloud' }) => void;
-  setRepNotification: (v: RepNotificationPayload) => void;
-  setNpcWelcomeNotification: (v: NpcNotificationPayload) => void;
+  setRepNotification: React.Dispatch<React.SetStateAction<RepNotificationPayload | null>>;
+  setNpcWelcomeNotification: React.Dispatch<React.SetStateAction<NpcNotificationPayload | null>>;
 
   saveMarkerToFirestore: (marker: UserMarker) => Promise<string | null>;
   handleMusicDropReplacement: (dropId: string, type: 'marker') => Promise<any>;
@@ -88,7 +88,7 @@ export const useMarkerDropHandler = ({
 
     // If replacing a discovered music drop
     if (selectedMusicDrop && selectedMusicDrop.discovered) {
-      await handleMusicDropReplacement(selectedMusicDrop.id, 'marker');
+      await handleMusicDropReplacement(selectedMusicDrop.id!, 'marker');
       setSelectedMusicDrop(null);
       setShowDropTypeModal(false);
       return;
@@ -153,19 +153,30 @@ export const useMarkerDropHandler = ({
         const unlockResult = unlockRandomSpotifyTrack(currentTracks);
         const newTracks = unlockResult.newTracks;
 
-        await updateDoc(doc(db, 'users', user.uid), {
+        // 🔧 PERFORMANCE: Use batch writes to reduce write operations
+        const batch = writeBatch(db);
+        const userRef = doc(db, 'users', user.uid);
+        
+        // Only update fields that have changed
+        const userUpdates: any = {
+          lastActive: Timestamp.now(),
           rep: newRep,
           level: newLevel,
           rank: newRank,
-          unlockedTracks: newTracks,
-          ...(isFirstTag
-            ? {
-                selectedGraffitiStyle: forcedFirstTagStyleId,
-                selectedStyleVariant: forcedFirstTagStyleId,
-                activeGraffitiStyle: 'tag',
-              }
-            : {}),
-        });
+          unlockedTracks: newTracks
+        };
+
+        // Add first tag style updates only if this is the first tag
+        if (isFirstTag) {
+          userUpdates.selectedGraffitiStyle = forcedFirstTagStyleId;
+          userUpdates.selectedStyleVariant = forcedFirstTagStyleId;
+          userUpdates.activeGraffitiStyle = 'tag';
+        }
+
+        batch.update(userRef, userUpdates);
+
+        // Commit the batch
+        await batch.commit();
 
         setUserProfile((prev) =>
           prev

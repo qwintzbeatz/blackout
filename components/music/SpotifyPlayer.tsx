@@ -153,7 +153,7 @@ export default function SpotifyPlayer({
     return (
       <div style={{
         position: 'fixed',
-        bottom: '68px',
+        bottom: '0',
         left: '0',
         right: '0',
         backgroundColor: 'rgba(20, 20, 30, 0.98)',
@@ -199,7 +199,7 @@ export default function SpotifyPlayer({
   return (
     <div style={{
       position: 'fixed',
-      bottom: '68px',
+      bottom: '0',
       left: '0',
       right: '0',
       backgroundColor: 'rgba(20, 20, 30, 0.98)',

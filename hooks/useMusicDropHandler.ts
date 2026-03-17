@@ -4,7 +4,7 @@
  */
 
 import { useCallback } from 'react';
-import { doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, updateDoc, Timestamp, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { User as FirebaseUser } from 'firebase/auth';
 import { saveDropToFirestore } from '@/lib/firebase/drops';
@@ -27,14 +27,14 @@ interface UseMusicDropHandlerParams {
   unlockedTracks: string[];
 
   setIsCreatingDrop: (v: boolean) => void;
-  setUserProfile: (updater: (prev: UserProfile | null) => UserProfile | null) => void;
+  setUserProfile: React.Dispatch<React.SetStateAction<UserProfile | null>>;
   setUnlockedTracks: (tracks: string[]) => void;
   setSelectedTrackForMusicDrop: (v: null) => void;
   setShowDropTypeModal: (v: boolean) => void;
   setPendingDropPosition: (v: null) => void;
   setSelectedMusicDrop: (v: null) => void;
-  setRepNotification: (v: RepNotificationPayload) => void;
-  setNpcWelcomeNotification: (v: NpcNotificationPayload) => void;
+  setRepNotification: React.Dispatch<React.SetStateAction<RepNotificationPayload | null>>;
+  setNpcWelcomeNotification: React.Dispatch<React.SetStateAction<NpcNotificationPayload | null>>;
 
   handleMusicDropReplacement: (dropId: string, type: 'music') => Promise<any>;
   loadDrops: () => Promise<void>;
@@ -96,12 +96,23 @@ export const useMusicDropHandler = ({
 
         const newTracks = tracks.filter((t) => t !== trackToDrop);
 
-        // Update Firestore + local state
-        setUserProfile((prev) => (prev ? { ...prev, unlockedTracks: newTracks } : null));
-        await updateDoc(doc(db, 'users', user.uid), {
-          unlockedTracks: newTracks,
+        // 🔧 PERFORMANCE: Use batch writes to reduce write operations
+        const batch = writeBatch(db);
+        const userRef = doc(db, 'users', user.uid);
+        
+        // Only update fields that have changed
+        const userUpdates: any = {
           lastActive: Timestamp.now(),
-        });
+          unlockedTracks: newTracks
+        };
+
+        batch.update(userRef, userUpdates);
+
+        // Commit the batch
+        await batch.commit();
+
+        // Update local state
+        setUserProfile((prev) => (prev ? { ...prev, unlockedTracks: newTracks } : null));
         setUnlockedTracks(newTracks);
         setSelectedTrackForMusicDrop(null);
 

@@ -187,6 +187,8 @@ const HIPHOP_TRACKS = [
 const ENABLE_SOUNDCLOUD = true;
 
 // ========== TYPE DEFINITIONS ==========
+// MONITORING: Keep an eye on Firestore usage in Firebase Console (Usage tab).
+// If reads exceed 50K/day, consider further optimizations or upgrade to Blaze plan.
 type CrewId = 'bqc' | 'sps' | 'lzt' | 'dgc' | null;
 type Gender = 'male' | 'female' | 'other' | 'prefer-not-to-say';
 
@@ -381,6 +383,7 @@ const panelStyle = {
 };
 
 // 🔧 PERFORMANCE: Custom throttle function to prevent infinite loops
+// MONITORING: Throttle GPS updates to every 2 seconds to prevent excessive Firestore reads
 const throttle = <T extends (...args: any[]) => any>(
   func: T,
   delay: number
@@ -396,6 +399,7 @@ const throttle = <T extends (...args: any[]) => any>(
 };
 
 // 🔧 PERFORMANCE: Custom debounce function for GPS position updates
+// MONITORING: Debounce map updates to prevent excessive Firestore queries during rapid panning
 const debounce = <T extends (...args: any[]) => any>(
   func: T,
   delay: number
@@ -1040,7 +1044,8 @@ const HomeComponent = () => {
           <div style={{
             position: 'fixed',
             top: '20px',
-            right: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
             backgroundColor: '#10b981',
             color: 'white',
             padding: '12px 20px',
@@ -1048,7 +1053,8 @@ const HomeComponent = () => {
             boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
             zIndex: 2000,
             fontSize: '14px',
-            maxWidth: '300px'
+            maxWidth: '300px',
+            animation: 'slideInCenter 0.3s ease-out'
           }}>
             <div style={{ marginBottom: '8px', fontWeight: 'bold' }}>
               🎯 Reputation Increased!

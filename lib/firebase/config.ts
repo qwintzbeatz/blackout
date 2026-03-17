@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { connectAuthEmulator, getAuth } from 'firebase/auth';
-import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
+import { initializeFirestore, connectFirestoreEmulator, persistentLocalCache } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getDatabase, connectDatabaseEmulator } from 'firebase/database';
 
@@ -17,8 +17,12 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
+// MONITORING: Keep an eye on Firestore usage in Firebase Console (Usage tab).
+// If reads exceed 50K/day, consider further optimizations or upgrade to Blaze plan.
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache()
+});
 export const storage = getStorage(app);
 export const realtimeDb = getDatabase(app);
 

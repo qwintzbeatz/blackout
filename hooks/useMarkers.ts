@@ -66,6 +66,9 @@ export const useMarkers = (user: User | null, userProfile: UserProfile | null) =
     const newMarker: UserMarker = {
       id: `user-marker-${Date.now()}`,
       position: data.position,
+      // 🔧 PERFORMANCE: Add separate lat/lng fields for efficient geographic queries
+      lat: data.position[0],
+      lng: data.position[1],
       name: 'Pole',
       description: 'Sticker/Slap',
       color: userProfile.selectedColor || userProfile.favoriteColor || '#' + Math.floor(Math.random()*16777215).toString(16),
@@ -74,15 +77,15 @@ export const useMarkers = (user: User | null, userProfile: UserProfile | null) =
       userId: user.uid,
       username: userProfile.username,
       userProfilePic: userProfile.profilePicUrl,
-      // CRITICAL FIX: Include all style info for font rendering
+      // Style information for rendering
       styleId: selectedStyle,
-      styleType: userProfile.selectedGraffitiStyle?.includes('svg') ? 'svg' : 'font',
-      playerTagName: userProfile.username || null,
-      surface: userProfile.selectedSurface || 'wall',
-      graffitiType: graffitiType || userProfile.selectedGraffitiType || 'tag',
-      crewId: crewId || userProfile.crewId || 'bqc',
-      // Include variant info if available
-      variant: userProfile.selectedStyleVariant || selectedStyle
+      surface: 'wall', // Default surface
+      graffitiType: graffitiType || 'tag',
+      // Additional fields for geographic queries
+      repEarned: 15, // Default rep for marker placement
+      createdAt: new Date(),
+      likes: [],
+      comments: []
     };
 
     console.log('Marker created with style:', {

@@ -122,54 +122,151 @@ edit constants/graffitiTypes.ts → Update difficulty values
 # 36. Modify performance settings:
 edit hooks/useLoadingManager.ts → Update performance thresholds
 
+# 37. Add new story missions:
+edit data/storyMissions.ts → Add new mission objects
+
+# 38. Modify story progression:
+edit hooks/useStoryManager.ts → Update story logic
+
+# 39. Add error handling:
+edit components/ui/EnhancedErrorBoundary.tsx → Update error recovery
+
+# 40. Modify offline mode:
+edit components/ui/OfflineJoystick.tsx → Update offline navigation
+
+## 🚨 ERROR HANDLING & RECOVERY
+
+# 41. Modify error boundary:
+edit components/ui/EnhancedErrorBoundary.tsx → Update error recovery logic
+
+# 42. Add error recovery actions:
+edit components/ui/ErrorRecoveryPanel.tsx → Add new recovery options
+
+# 43. Modify error notifications:
+edit components/ui/RepNotification.tsx → Update error display
+
+# 44. Add custom error types:
+edit lib/types/blackout.ts → Add new error interfaces
+
+## 🎵 MUSIC SYSTEM ENHANCEMENTS
+
+# 45. Add new unlock modals:
+edit components/ui/SongUnlockModal.tsx → Update modal styling
+
+# 46. Add video unlock system:
+edit components/ui/VideoUnlockModal.tsx → Update video player
+
+# 47. Modify music player controls:
+edit hooks/useMusicPlayerControls.ts → Update player logic
+
+# 48. Add music drop replacement:
+edit hooks/useMusicDropReplacement.ts → Update replacement logic
+
+# 49. Modify Spotify player:
+edit components/music/SpotifyPlayer.tsx → Update player interface
+
+# 50. Modify SoundCloud player:
+edit components/music/SoundCloudPlayer.tsx → Update player interface
+
+## 🎮 PERFORMANCE OPTIMIZATION
+
+# 51. Modify graphics quality settings:
+edit hooks/usePerformanceMonitor.ts → Update quality detection
+
+# 52. Add performance settings panel:
+edit components/ui/PerformanceSettingsPanel.tsx → Update settings UI
+
+# 53. Modify marker quality limits:
+edit hooks/useLoadingManager.ts → Update marker limits
+
+# 54. Add crew detection toggle:
+edit hooks/useCrewChatUnreadTracker.ts → Update detection logic
+
+# 55. Optimize map rendering:
+edit components/map/MapComponent.tsx → Update rendering settings
+
+## 📱 OFFLINE MODE & NAVIGATION
+
+# 56. Modify offline joystick:
+edit components/ui/OfflineJoystick.tsx → Update joystick controls
+
+# 57. Add offline state management:
+edit app/page.tsx → Update offline mode logic
+
+# 58. Modify GPS tracking:
+edit hooks/useGPSTracker.ts → Update offline behavior
+
+# 59. Add offline map caching:
+edit components/map/MapComponent.tsx → Update caching logic
+
+# 60. Modify radar scanner:
+edit components/map/RadarScanner.tsx → Update scanning animation
+
+## 🎨 UI ENHANCEMENTS
+
+# 61. Add surface graffiti selector:
+edit components/ui/SurfaceGraffitiSelector.tsx → Update selector UI
+
+# 62. Modify dual panel system:
+edit app/page.tsx → Update panel toggle logic
+
+# 63. Add enhanced legend:
+edit components/ui/LegendPanel.tsx → Update legend display
+
+# 64. Modify bottom navigation:
+edit components/navigation/BottomNavigation.tsx → Update navigation buttons
+
+# 65. Add story panel:
+edit components/panels/StoryPanel.tsx → Update story display
+
 ## 🔧 PERFORMANCE & OPTIMIZATION
 
-# 37. Optimize marker rendering:
+# 66. Optimize marker rendering:
 edit components/map/MemoizedMarker.tsx → Update memoization logic
 
-# 38. Modify loading states:
+# 67. Modify loading states:
 edit hooks/useLoadingManager.ts → Update loading thresholds
 
-# 39. Optimize map performance:
+# 68. Optimize map performance:
 edit components/map/MapComponent.tsx → Update clustering settings
 
-# 40. Modify image compression:
+# 69. Modify image compression:
 edit utils/index.ts → Update compression settings
 
 ## 📱 MOBILE & RESPONSIVE
 
-# 41. Modify mobile styles:
+# 70. Modify mobile styles:
 edit app/globals.css → Update @media queries
 
-# 42. Change touch behavior:
+# 71. Change touch behavior:
 edit app/globals.css → Update touch-action properties
 
-# 43. Optimize for mobile:
+# 72. Optimize for mobile:
 edit next.config.ts → Update mobile optimization settings
 
 ## 🔐 AUTHENTICATION & SECURITY
 
-# 44. Modify login flow:
+# 73. Modify login flow:
 edit components/auth/LoginSignup.tsx → Update authentication logic
 
-# 45. Change profile setup:
+# 74. Change profile setup:
 edit components/auth/ProfileSetup.tsx → Update setup process
 
-# 46. Modify permissions:
+# 75. Modify permissions:
 edit lib/firebase/config.ts → Update security rules
 
 ## 📊 DATA & ANALYTICS
 
-# 47. Add new analytics:
+# 76. Add new analytics:
 edit lib/utils.ts → Add tracking functions
 
-# 48. Modify database structure:
+# 77. Modify database structure:
 edit lib/types/blackout.ts → Update interfaces
 
-# 49. Add new data migrations:
+# 78. Add new data migrations:
 edit utils/migration.ts → Add migration functions
 
-# 50. Change data persistence:
+# 79. Change data persistence:
 edit hooks/useOptimizedFirestore.ts → Update caching logic
 
 ## ⚠️ SAFE EDITING RULES
